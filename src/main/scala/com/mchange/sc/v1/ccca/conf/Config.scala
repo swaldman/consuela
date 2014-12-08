@@ -1,4 +1,4 @@
-package com.mchange.sc.v1.ccca.conf;
+package com.mchange.sc.v1.consuela.conf;
 
 import com.typesafe.config.{Config => TSConfig, ConfigFactory => TSConfigFactory};
 
@@ -6,7 +6,7 @@ import com.mchange.sc.v1.log._;
 import MLevel._;
 
 object Config {
-  val ConfigName = "ccca";
+  val ConfigName = "consuela";
 
   lazy val _inner : TSConfig = TRACE.attempt( Try( TSConfigFactory.load().getConfig( ConfigName ) ) ).getOrElse( TSConfigFactory.empty("Default settings.") );
 

@@ -1,4 +1,4 @@
-package com.mchange.sc.v1.ccca.trie;
+package com.mchange.sc.v1.consuela.trie;
 
 trait PMTrie[L,V,H,N] extends Trie[L,V] {
   def root : H;

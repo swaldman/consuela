@@ -1,3 +1,3 @@
-package com.mchange.sc.v1.ccca.jce;
+package com.mchange.sc.v1.consuela.jce;
 
 case class Provider( code : String )

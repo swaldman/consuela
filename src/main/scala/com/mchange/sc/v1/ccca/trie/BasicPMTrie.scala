@@ -1,4 +1,4 @@
-package com.mchange.sc.v1.ccca.trie;
+package com.mchange.sc.v1.consuela.trie;
 
 import scala.reflect.ClassTag;
 

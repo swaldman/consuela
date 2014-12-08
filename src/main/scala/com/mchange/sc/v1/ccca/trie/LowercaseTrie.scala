@@ -1,4 +1,4 @@
-package com.mchange.sc.v1.ccca.trie;
+package com.mchange.sc.v1.consuela.trie;
 
 import com.mchange.sc.v1.log.MLogger;
 import com.mchange.sc.v1.log.MLevel._;
