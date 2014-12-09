@@ -1,39 +1,38 @@
 package com.mchange.sc.v1.consuela.trie;
 
+import com.mchange.sc.v1.consuela.hash.Hash;
+
 import com.mchange.sc.v1.log.MLogger;
 import com.mchange.sc.v1.log.MLevel._;
-
-import com.mchange.sc.v1.akkonsensus.crypto.QuickCryptosystem;
-import com.mchange.sc.v1.akkonsensus.crypto.QuickCryptosystem._;
 
 import scala.reflect._;
 
 object LowercaseTrie {
-  implicit val logger = MLogger( "com.mchange.sc.v1.akkonsensus.reretrie.LowercaseTrie" );
+  implicit val logger = MLogger( this );
 
   val alphabet : IndexedSeq[Char] = IndexedSeq( 'a' to 'z' : _* );
-  val Zero : QuickHash = QuickHash( IndexedSeq.fill(32)(0) );
+  val Zero : Hash.SHA3_256 = Hash.SHA3_256.Zero;
 
-  type Node      = BasicPMTrie.Node[Char,String,QuickHash];
-  type Branch    = BasicPMTrie.Branch[Char,String,QuickHash];
-  type Extension = BasicPMTrie.Extension[Char,String,QuickHash];
+  type Node      = BasicPMTrie.Node[Char,String,Hash.SHA3_256];
+  type Branch    = BasicPMTrie.Branch[Char,String,Hash.SHA3_256];
+  type Extension = BasicPMTrie.Extension[Char,String,Hash.SHA3_256];
 
   val Empty = BasicPMTrie.Empty;
 
-  class MapDatabase extends BasicPMTrie.Database[Char,String,QuickHash] {
+  class MapDatabase extends BasicPMTrie.Database[Char,String,Hash.SHA3_256] {
 
-    private[this] val _map = scala.collection.mutable.Map.empty[QuickHash,Node];
+    private[this] val _map = scala.collection.mutable.Map.empty[Hash.SHA3_256,Node];
     _map += ( LowercaseTrie.Zero -> Empty );
 
-    private[this] val _roots = scala.collection.mutable.Set.empty[QuickHash];
+    private[this] val _roots = scala.collection.mutable.Set.empty[Hash.SHA3_256];
 
-    def roots : Set[QuickHash] = this.synchronized( _roots.toSet );
-    def markRoot( root : QuickHash ) : Unit = this.synchronized( _roots += root );
-    def knowsRoot( h : QuickHash ) : Boolean = this.synchronized{ _roots.contains( h) } 
+    def roots : Set[Hash.SHA3_256] = this.synchronized( _roots.toSet );
+    def markRoot( root : Hash.SHA3_256 ) : Unit = this.synchronized( _roots += root );
+    def knowsRoot( h : Hash.SHA3_256 ) : Boolean = this.synchronized{ _roots.contains( h) } 
 
-    val Zero : QuickHash                = LowercaseTrie.Zero;
-    def apply( h : QuickHash ) : Node   = this.synchronized( _map(h) ); 
-    def hash( node : Node ) : QuickHash = {
+    val Zero : Hash.SHA3_256                = LowercaseTrie.Zero;
+    def apply( h : Hash.SHA3_256 ) : Node   = this.synchronized( _map(h) ); 
+    def hash( node : Node ) : Hash.SHA3_256 = {
       import java.io._;
       import com.mchange.sc.v2.lang.borrow;
 
@@ -47,7 +46,7 @@ object LowercaseTrie {
               extension.value.foreach( dos.writeUTF(_) );
             }
             val bytes = baos.toByteArray;
-            QuickCryptosystem.hash( bytes )
+            Hash.SHA3_256( bytes )
           }
         }
         case branch : Branch => {
@@ -58,12 +57,12 @@ object LowercaseTrie {
               branch.value.foreach( dos.writeUTF(_) );
             }
             val bytes = baos.toByteArray;
-            QuickCryptosystem.hash( bytes )
+            Hash.SHA3_256( bytes )
           }
         }
       }
     }
-    def put( h : QuickHash, node : Node ) : Unit = {
+    def put( h : Hash.SHA3_256, node : Node ) : Unit = {
       assert( h != null && node != null, s"${this} doesn't accept nulls. [ h -> ${h}, node -> ${node} ]" );
       TRACE.log( s"${this} -- put( ${h}, ${node} )" );
       this.synchronized {
@@ -72,22 +71,22 @@ object LowercaseTrie {
       }
     }
 
-    def gc( roots : Set[QuickHash], checkpoints : Set[String] = Set.empty[String] ) : Unit = ???;
+    def gc( roots : Set[Hash.SHA3_256], checkpoints : Set[String] = Set.empty[String] ) : Unit = ???;
     def checkpoint( name : String ) : Unit = ???;       
     def checkpoints : Set[String] = ???;
   }
 }
 
-class LowercaseTrie( val mdb : LowercaseTrie.MapDatabase = new LowercaseTrie.MapDatabase, r : QuickHash = LowercaseTrie.Zero ) extends {
+class LowercaseTrie( val mdb : LowercaseTrie.MapDatabase = new LowercaseTrie.MapDatabase, r : Hash.SHA3_256 = LowercaseTrie.Zero ) extends {
   val earlyInit = ( mdb, r );
-} with BasicPMTrie[Char,String,QuickHash] {
+} with BasicPMTrie[Char,String,Hash.SHA3_256] {
   import LowercaseTrie._;
 
-  val hashTypeClassTag : ClassTag[QuickHash] = classTag[QuickHash];
+  val hashTypeClassTag : ClassTag[Hash.SHA3_256] = classTag[Hash.SHA3_256];
 
   val alphabet = LowercaseTrie.alphabet;
 
-  def instantiateSuccessor( newRootHash : QuickHash ) : LowercaseTrie = {
+  def instantiateSuccessor( newRootHash : Hash.SHA3_256 ) : LowercaseTrie = {
     new LowercaseTrie( mdb, newRootHash );
   }
   override def excluding( key : IndexedSeq[Char] ) : LowercaseTrie = super.excluding( key ).asInstanceOf[LowercaseTrie];
