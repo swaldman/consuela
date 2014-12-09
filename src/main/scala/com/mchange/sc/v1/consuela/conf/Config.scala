@@ -1,5 +1,8 @@
 package com.mchange.sc.v1.consuela.conf;
 
+import java.security.Provider;
+import java.security.Security;
+
 import com.mchange.sc.v1.consuela.jce;
 
 import com.typesafe.config.{Config => TSConfig, ConfigFactory => TSConfigFactory};
@@ -28,12 +31,13 @@ object Config {
     def get  : T;
   }
   private[this] case class StringItem( path : String, dflt : String ) extends Item[String] {
-    def get : String = { 
-      TRACE.attempt{ _inner.getString( path ) }.getOrElse( dflt );
-    }
+    def get : String = TRACE.attempt( _inner.getString( path ) ).getOrElse( dflt );
   }
   private[this] case class StringListItem( path : String, dflt : List[String] ) extends Item[List[String]] {
     import scala.collection.JavaConverters._;
     def get : List[String] =  TRACE.attempt( _inner.getStringList( path ).asScala.toList ).getOrElse( dflt );
   }
+
+  // bring in the JCE providers.
+  Item.JceProviderClassNames.get.foreach( name => FINER.attempt( Security.addProvider( Class.forName( name ).newInstance().asInstanceOf[Provider] ) ) )
 }
