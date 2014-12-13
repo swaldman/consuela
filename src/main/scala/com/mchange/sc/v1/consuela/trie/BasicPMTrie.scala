@@ -9,22 +9,34 @@ object BasicPMTrie {
   class DuplicateHashException[H]( h : H, t : Throwable = null) extends Exception(s"The hash '${h}' has already been placed in the database. Cannot update immutable bindings", t);
 
   trait Database[L,V,H] {
-    def roots : Set[H];
-    def markRoot( root : H ) : Unit;
-    def knowsRoot( h : H ) : Boolean; 
-
     def Zero : H;                       // a lookup on zero should always return Empty 
     def hash( node : Node[L,V,H] ) : H;
 
     def apply( h : H ) : Node[L,V,H];   // throws UnknownHashException              
     def put( h : H, node : Node[L,V,H] ) : Unit;
 
-    def checkpoint( name : String ) : Unit;       
-    def checkpoints : Set[String];
-    def gc( roots : Set[H], checkpoints : Set[String] = Set.empty[String] ) : Unit;
+    def gc( roots : Set[H] ) : Unit;
+  }
 
+  // TODO: Trait HistoryTracking or LineTracking where roots are annotated by 
+  //       successive hashes of past roots to distinguish identical trees with
+  //       different histories.
 
+  trait RootTracking[H] {
+    self : Database[_, _, H] =>
 
+    def roots : Set[H];
+    def markRoot( root : H ) : Unit;
+    def knowsRoot( h : H ) : Boolean; 
+  }
+
+  trait Savepointing[H] {
+    self : Database[_, _, H] =>
+
+    def savepoint( name : String ) : Unit;
+    def savepoints : Set[String];
+
+    def gc( roots : Set[H], savepoints : Set[String] ) : Unit;
   }
 
   sealed trait Node[+L,+V,+H] {
@@ -136,7 +148,8 @@ trait BasicPMTrie[L,V,H] extends PMTrie[L,V,H, BasicPMTrie.Node[L,V,H]] {
   }
 
   private[this] def newTrie( newRootHash : H ) : Trie[L,V] = {
-    db.markRoot( newRootHash );
+    if ( db.isInstanceOf[BasicPMTrie.RootTracking[H]] )
+      db.asInstanceOf[BasicPMTrie.RootTracking[H]].markRoot( newRootHash );
     instantiateSuccessor( newRootHash : H ) : Trie[L,V]
   }
 

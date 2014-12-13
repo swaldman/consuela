@@ -7,6 +7,10 @@ import com.mchange.sc.v1.log.MLevel._;
 
 import scala.reflect._;
 
+import BasicPMTrie.Database;
+import BasicPMTrie.Empty;
+import BasicPMTrie.RootTracking;
+
 object LowercaseTrie {
   implicit val logger = MLogger( this );
 
@@ -19,7 +23,7 @@ object LowercaseTrie {
 
   val Empty = BasicPMTrie.Empty;
 
-  class MapDatabase extends BasicPMTrie.Database[Char,String,Hash.SHA3_256] {
+  class MapDatabase extends Database[Char,String,Hash.SHA3_256] with RootTracking[Hash.SHA3_256] {
 
     private[this] val _map = scala.collection.mutable.Map.empty[Hash.SHA3_256,Node];
     _map += ( LowercaseTrie.Zero -> Empty );
@@ -71,9 +75,7 @@ object LowercaseTrie {
       }
     }
 
-    def gc( roots : Set[Hash.SHA3_256], checkpoints : Set[String] = Set.empty[String] ) : Unit = ???;
-    def checkpoint( name : String ) : Unit = ???;       
-    def checkpoints : Set[String] = ???;
+    def gc( roots : Set[Hash.SHA3_256] ) : Unit = ???;
   }
 }
 
