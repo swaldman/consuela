@@ -24,7 +24,7 @@ trait Hash[T <: Hash[T]] {
   def toByteArray : Array[Byte] = _bytes.clone();
   def toBigInt : BigInt = BigInt( _bytes );
 
-  lazy val hexbytes = com.mchange.lang.ByteUtils.toHexAscii( bytes.toArray ).toLowerCase; //ok. we should add a lowercase switch to ByteUtils. but for now...
+  lazy val hexbytes = com.mchange.lang.ByteUtils.toLowercaseHexAscii( bytes.toArray );
 
   override def equals( other : Any ) : Boolean = {
     if (! sameClass( other ))
