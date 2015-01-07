@@ -96,8 +96,8 @@ s2"""
      pass the ethereum RLP test suite in reverse  ${ e2 }
 """;
 
-  def e1 = RLPSpec.EthereumRLPTest.items.forall( _.verboseTest )
-  def e2 = RLPSpec.EthereumRLPTest.items.forall( _.verboseReverseTest )
+  def e1 = RLPSpec.EthereumRLPTest.items.forall( /* _.verboseTest */ _.test )
+  def e2 = RLPSpec.EthereumRLPTest.items.forall( /* _.verboseReverseTest */ _.reverseTest )
 
   def printEval[T]( expr : =>T ) : T = { val out = expr; println( "===> " + out ); out }
 }
