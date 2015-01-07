@@ -27,30 +27,6 @@ object RLP {
     }
     val EmptyByteSeq = ByteSeq( Nil );
     val EmptySeq = Seq( Nil );
-
-    /*
-    // maybe more trouble than it's worth.
-    def coerce( a : Any )( implicit charset : Charset ) : Encodable = {
-      def coerceSeq( seq : scala.Seq[_] ) : Encodable = {
-        if ( seq.length == 0 )
-          throw new IllegalArgumentException("Cannot distinguish empty Seq[Byte] from Seq[_] to coerce. Please define as Encodable.ByteSeq or Encodable.Seq first.");
-        else if ( seq.forall( _.isInstanceOf[Byte] ) )
-          Encodable.ByteSeq( seq.asInstanceOf[scala.Seq[Byte]] ) 
-        else 
-          Encodable.Seq( seq.map( coerce ) )
-      }
-
-      a match {
-        case enc : Encodable       => enc;
-        case seq : scala.Seq[_]    => coerceSeq( seq );
-        case b   : Byte            => Encodable.ByteSeq( scala.Seq(b) );
-        case i   : scala.Int       => Encodable.Int(i);
-        case bi  : scala.BigInt    => Encodable.BigInt(bi);
-        case str : String          => Encodable.ByteSeq( str.getBytes( charset ) )
-        case _                     => throw new AssertionError( s"Unexpected target type for RLP encoding: ${a}" );
-      }
-    }
-  */
   }
   sealed trait Encodable {
     def isSimple : Boolean;
@@ -114,39 +90,7 @@ object RLP {
     } else {
       splitOut(bytes, 1)
     }
-
-    /*
-    else {
-      val discriminibble = discriminator >>> 4;
-      discriminibble match {
-        case 8 => {
-          val eatLen = discriminator - 128;
-          splitOut( bytes.tail, eatLen )
-        }
-        case 11 => {
-          val eatLenBytesLen = discriminator - 183;
-          val (eatLenBytes, rest) = bytes.tail.splitAt( eatLenBytesLen );
-          val eatLen = decodeLengthBytes( eatLenBytes );
-          splitOut( rest, eatLen )
-        }
-        case 12 => {
-          val seqLen = discriminator - 192;
-          splitOutSeq( bytes.tail, seqLen )
-        }
-        case 15 => {
-          val seqLenBytesLen = discriminator - 247;
-          val (seqLenBytes, rest) = bytes.tail.splitAt( seqLenBytesLen );
-          val seqLen = decodeLengthBytes( seqLenBytes );
-          splitOutSeq( rest, seqLen )
-        }
-        case _ => {
-          throw new AssertionError( s"Invalid first byte: ${discriminator} (with first nibble ${discriminibble}, legal values: 8, 11, 12, 15)." )
-        }
-      }
-     }
-     */
   }
-  //def encode( a : Any )( implicit charset : Charset ) : Seq[Byte] = encode( Encodable.coerce( a )( charset ) );
   def encode( encodable : Encodable ) : Seq[Byte] = {
     def rb( bs : Seq[Byte] ) : Seq[Byte] = {
 
