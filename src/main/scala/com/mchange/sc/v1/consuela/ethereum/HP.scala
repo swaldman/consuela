@@ -22,5 +22,17 @@ object HP {
       reverseBuild( headerByte :: Nil, 1 ).reverse
     }
   }
+  def decode( bytes : Seq[Int] ) : ( Seq[Int], Boolean ) = {
+    val headerByte = bytes(0);
+    val headerNibble = (headerByte >>> 4);
+    val flag = ( headerNibble & 2 ) != 0
+    val even = ( headerNibble & 1 ) == 0;
+    def toNibbles( byte : Int ) : Array[Int] = Array( byte >>> 4, byte & 0x0F )
+    val nibbles = {
+      val nonheader = bytes.drop(1).flatMap( toNibbles(_) );
+      if ( even ) (nonheader) else ((headerByte & 0x0F) +: nonheader);
+    }
+    ( nibbles, flag )
+  }
 }
 
