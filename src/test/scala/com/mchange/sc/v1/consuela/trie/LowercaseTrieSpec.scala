@@ -32,6 +32,8 @@ s2"""
          previous condensed to one extension by removing root node value                          ${ eI } 
          root extension rearranged to branch                                                      ${ eJ }
          root branch deleted down to empty                                                        ${ eK }
+         consense new element into truncated path and not blow up                                 ${ eL }
+
 """;
 
   val tt0 = new LowercaseTrie();
@@ -157,6 +159,11 @@ s2"""
   def eI : Boolean = checkTrie( ttI, Set("book") )
   def eJ : Boolean = checkTrie( ttJ, Set("book","hi") )
   def eK : Boolean = checkEmpty( ttK )
+
+  def eL : Boolean = {
+    tt0.including("dog","puppy").including("horse","stallion").including("do","verb").including("doge","coin") /*.dumpTrie*/
+    true;
+  }
 
 }
 

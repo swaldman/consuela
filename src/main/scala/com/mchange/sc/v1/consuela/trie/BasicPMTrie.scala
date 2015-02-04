@@ -458,6 +458,7 @@ trait BasicPMTrie[L,V,H] extends PMTrie[L,V,H, BasicPMTrie.Node[L,V,H]] {
         val newElements : NewElements = {
           val naiveValueHolder = Extension( unhandled, Zero, Some( value ) );
           val nvhHash = db.hash( naiveValueHolder );
+          val nvhElement = Element( nvhHash, naiveValueHolder );
 
           def insertRootBranch = {
             val rootNode = db( root );
@@ -473,10 +474,10 @@ trait BasicPMTrie[L,V,H] extends PMTrie[L,V,H, BasicPMTrie.Node[L,V,H]] {
 
           elements match {
             case Element( _, Extension( EmptyKey, _, None ) )                :: Nil => aerr( "An EmptyKey node should exist only at root and only when the EmptyKey is associated with a value." )
-            case Element( _, Extension( EmptyKey, Zero, lastValue ) )        :: Nil => attemptCondenseToNewElements( Extension( EmptyKey, nvhHash, lastValue ) );
+            case Element( _, Extension( EmptyKey, Zero, lastValue ) )        :: Nil => attemptCondenseToNewElements( Extension( EmptyKey, nvhHash, lastValue ), Some(nvhElement) );
             case Element( _, Extension( EmptyKey, lastChild, lastValue ) )   :: Nil => splitToBranched( EmptyKey, lastChild, lastValue, nvhHash, naiveValueHolder );
             case Element( _, Extension( EmptyKey, _, _ ) )                   :: _   => aerr( "EmptyKey is only a valid subkey on an element at root!" );
-            case Element( _, Extension( lastSubkey, Zero, lastValue ) )      :: _   => attemptCondenseToNewElements( Extension( lastSubkey, nvhHash, lastValue ) );
+            case Element( _, Extension( lastSubkey, Zero, lastValue ) )      :: _   => attemptCondenseToNewElements( Extension( lastSubkey, nvhHash, lastValue ), Some(nvhElement) );
             case Element( _, Extension( lastSubkey, lastChild, lastValue ) ) :: _   => splitToBranched( lastSubkey, lastChild, lastValue, nvhHash, naiveValueHolder );
             case Element( _, Branch( lastLetter, lastChildren, lastValue ) ) :: _   => augmentedBranch( lastLetter, lastChildren, lastValue, nvhHash, naiveValueHolder );
             case Nil if (root == Zero)                                              => NewElements( Element( nvhHash, naiveValueHolder ) );
@@ -495,10 +496,15 @@ trait BasicPMTrie[L,V,H] extends PMTrie[L,V,H, BasicPMTrie.Node[L,V,H]] {
     /* 
      * Note that we include the argument extension in NewElements object; it has not been and will need to be persisted.
      */
-    def attemptCondenseToNewElements( extension : Extension ) : NewElements = {
-      val condensed : Extension = attemptCondense( extension );
+    def attemptCondenseToNewElements( extension : Extension, knownChild : Option[Element] = None ) : NewElements = {
+      val condensed : Extension = attemptCondense( extension, knownChild );
       val condensedHash = db.hash( condensed );
-      NewElements( Element( condensedHash, condensed ) )
+      knownChild.fold( NewElements( Element( condensedHash, condensed ) ) ) { innerChildElement =>
+        if ( condensed.child == innerChildElement.hash )
+          NewElements( Element( condensedHash, condensed ), Set( innerChildElement ) )
+        else
+          NewElements( Element( condensedHash, condensed ) )
+      }
     }
     /*
      * Note that we include newExtension in NewElements object; it has not been and will need to be persisted.
@@ -659,7 +665,7 @@ trait BasicPMTrie[L,V,H] extends PMTrie[L,V,H, BasicPMTrie.Node[L,V,H]] {
       val childElement = {
         knownChild.getOrElse{
           val childHash = parent.child;
-          val childNode = db( childHash );
+          val childNode = db( childHash ); // if this blows up, you probably needed to supply a knownChild!
           Element( childHash, childNode )
         }
       }
