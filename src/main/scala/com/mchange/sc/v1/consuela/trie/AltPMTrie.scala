@@ -3,41 +3,6 @@ package com.mchange.sc.v1.consuela.trie;
 import scala.reflect.ClassTag;
 
 object AltPMTrie {
-  class Exception( message : String, t : Throwable = null ) extends java.lang.Exception( message, t )
-  class FutureDatabaseException[H]( r : H ) extends Exception(s"This database has been garbage collected against a future root, and may no longer contain data for root ${r}.")
-  class UnknownHashException[H]( h : H, t : Throwable = null ) extends Exception(s"Looked up but failed to find node for hash '${h}'", t);
-  class DuplicateHashException[H]( h : H, t : Throwable = null) extends Exception(s"The hash '${h}' has already been placed in the database. Cannot update immutable bindings", t);
-
-  trait Database[L,V,H] {
-    def Zero : H;                       // a lookup on zero should always return Empty 
-    def hash( node : Node[L,V,H] ) : H;
-
-    def apply( h : H ) : Node[L,V,H];   // throws UnknownHashException              
-    def put( h : H, node : Node[L,V,H] ) : Unit;
-
-    def gc( roots : Set[H] ) : Unit;
-  }
-
-  // TODO: Trait HistoryTracking or LineTracking where roots are annotated by 
-  //       successive hashes of past roots to distinguish identical trees with
-  //       different histories.
-
-  trait RootTracking[H] {
-    self : Database[_, _, H] =>
-
-    def roots : Set[H];
-    def markRoot( root : H ) : Unit;
-    def knowsRoot( h : H ) : Boolean; 
-  }
-
-  trait Savepointing[H] {
-    self : Database[_, _, H] =>
-
-    def savepoint( name : String ) : Unit;
-    def savepoints : Set[String];
-
-    def gc( roots : Set[H], savepoints : Set[String] ) : Unit;
-  }
 
   sealed trait Node[+L,+V,+H] {
     def subkey   : IndexedSeq[L];
@@ -55,6 +20,8 @@ object AltPMTrie {
     def children = IndexedSeq.empty[Nothing];
     def value    = None;
   }
+
+  type Database[L,V,H] = Trie.Database[Node[L,V,H],H]
 }
 
 
@@ -148,8 +115,8 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H, AltPMTrie.Node[L,V,H]] {
   }
 
   private[this] def newTrie( newRootHash : H ) : Trie[L,V] = {
-    if ( db.isInstanceOf[AltPMTrie.RootTracking[H]] )
-      db.asInstanceOf[AltPMTrie.RootTracking[H]].markRoot( newRootHash );
+    if ( db.isInstanceOf[Trie.RootTracking[H]] )
+      db.asInstanceOf[Trie.RootTracking[H]].markRoot( newRootHash );
     instantiateSuccessor( newRootHash : H ) : Trie[L,V]
   }
 
