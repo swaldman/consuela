@@ -1,9 +1,9 @@
 package com.mchange.sc.v1.consuela.ethereum.trie;
 
-import com.mchange.sc.v1.consuela.trie.BasicPMTrie;
+import com.mchange.sc.v1.consuela.trie.AltPMTrie;
 import com.mchange.sc.v1.consuela.ethereum.{HP, RLP};
 
-trait EthTrieDb extends BasicPMTrie.Database[Nibble,Seq[Byte],EthHash] {
+trait EthTrieDb extends AltPMTrie.Database[Nibble,Seq[Byte],EthHash] {
   val Zero = EthHash.Zero;
   def hash( node : Node ) : EthHash = if ( node == Empty ) Zero else EthHash( toBytes( node ) );
 

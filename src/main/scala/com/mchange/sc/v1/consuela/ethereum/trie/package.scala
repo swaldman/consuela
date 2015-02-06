@@ -3,7 +3,7 @@ package com.mchange.sc.v1.consuela.ethereum;
 import scala.collection.mutable.ArrayBuffer;
 
 import com.mchange.sc.v1.consuela.hash.Hash;
-import com.mchange.sc.v1.consuela.trie.BasicPMTrie;
+import com.mchange.sc.v1.consuela.trie.AltPMTrie;
 
 package object trie {
   type Nibble = Int;
@@ -11,10 +11,10 @@ package object trie {
   val  EthHash = Hash.SHA3_256;
   type EthHash = Hash.SHA3_256;
 
-  type Node = BasicPMTrie.Node[Nibble,Seq[Byte],EthHash]
-  type Branch = BasicPMTrie.Branch[Nibble,Seq[Byte],EthHash]
-  type Extension = BasicPMTrie.Extension[Nibble,Seq[Byte],EthHash]
-  val  Empty = BasicPMTrie.Empty;
+  type Node = AltPMTrie.Node[Nibble,Seq[Byte],EthHash]
+  type Branch = AltPMTrie.Branch[Nibble,Seq[Byte],EthHash]
+  type Extension = AltPMTrie.Extension[Nibble,Seq[Byte],EthHash]
+  val  Empty = AltPMTrie.Empty;
 
   def nibbles( bytes : Seq[Byte] ) = lsbNibbles( bytes.map( _ & 0xFF ) )
 

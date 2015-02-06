@@ -7,9 +7,9 @@ import com.mchange.sc.v1.log.MLevel._;
 
 import scala.reflect._;
 
-import BasicPMTrie.Database;
-import BasicPMTrie.Empty;
-import BasicPMTrie.RootTracking;
+import AltPMTrie.Database;
+import AltPMTrie.Empty;
+import AltPMTrie.RootTracking;
 
 object LowercaseTrie {
   implicit val logger = MLogger( this );
@@ -17,11 +17,11 @@ object LowercaseTrie {
   val alphabet : IndexedSeq[Char] = IndexedSeq( 'a' to 'z' : _* );
   val Zero : Hash.SHA3_256 = Hash.SHA3_256.Zero;
 
-  type Node      = BasicPMTrie.Node[Char,String,Hash.SHA3_256];
-  type Branch    = BasicPMTrie.Branch[Char,String,Hash.SHA3_256];
-  type Extension = BasicPMTrie.Extension[Char,String,Hash.SHA3_256];
+  type Node      = AltPMTrie.Node[Char,String,Hash.SHA3_256];
+  type Branch    = AltPMTrie.Branch[Char,String,Hash.SHA3_256];
+  type Extension = AltPMTrie.Extension[Char,String,Hash.SHA3_256];
 
-  val Empty = BasicPMTrie.Empty;
+  val Empty = AltPMTrie.Empty;
 
   class MapDatabase extends Database[Char,String,Hash.SHA3_256] with RootTracking[Hash.SHA3_256] {
 
@@ -81,7 +81,7 @@ object LowercaseTrie {
 
 class LowercaseTrie( val mdb : LowercaseTrie.MapDatabase = new LowercaseTrie.MapDatabase, r : Hash.SHA3_256 = LowercaseTrie.Zero ) extends {
   val earlyInit = ( mdb, r );
-} with BasicPMTrie[Char,String,Hash.SHA3_256] {
+} with AltPMTrie[Char,String,Hash.SHA3_256] {
   import LowercaseTrie._;
 
   val hashTypeClassTag : ClassTag[Hash.SHA3_256] = classTag[Hash.SHA3_256];

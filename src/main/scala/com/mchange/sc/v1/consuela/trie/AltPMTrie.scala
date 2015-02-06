@@ -2,7 +2,7 @@ package com.mchange.sc.v1.consuela.trie;
 
 import scala.reflect.ClassTag;
 
-object BasicPMTrie {
+object AltPMTrie {
   class Exception( message : String, t : Throwable = null ) extends java.lang.Exception( message, t )
   class FutureDatabaseException[H]( r : H ) extends Exception(s"This database has been garbage collected against a future root, and may no longer contain data for root ${r}.")
   class UnknownHashException[H]( h : H, t : Throwable = null ) extends Exception(s"Looked up but failed to find node for hash '${h}'", t);
@@ -64,20 +64,20 @@ object BasicPMTrie {
  * This implementation is rendered unfortunately more complex by a (perhaps unnecessary, unwise)
  * decision to support the empty sequence (of generic type L) as a valid key.
  */ 
-trait BasicPMTrie[L,V,H] extends PMTrie[L,V,H, BasicPMTrie.Node[L,V,H]] {
+trait AltPMTrie[L,V,H] extends PMTrie[L,V,H, AltPMTrie.Node[L,V,H]] {
 
   /*
    * First lets put some unwieldy bits from the companion object into more convenient forms
    */ 
-  type Node = BasicPMTrie.Node[L,V,H];
-  type Branch = BasicPMTrie.Branch[L,V,H];
-  type Extension = BasicPMTrie.Extension[L,V,H];
-  type Database = BasicPMTrie.Database[L,V,H];
+  type Node = AltPMTrie.Node[L,V,H];
+  type Branch = AltPMTrie.Branch[L,V,H];
+  type Extension = AltPMTrie.Extension[L,V,H];
+  type Database = AltPMTrie.Database[L,V,H];
 
-  import BasicPMTrie.Empty;
+  import AltPMTrie.Empty;
 
-  val Branch = BasicPMTrie.Branch;
-  val Extension = BasicPMTrie.Extension;
+  val Branch = AltPMTrie.Branch;
+  val Extension = AltPMTrie.Extension;
 
   /*
    * The following abstract members must be set by our concrete subclass
@@ -103,7 +103,7 @@ trait BasicPMTrie[L,V,H] extends PMTrie[L,V,H, BasicPMTrie.Node[L,V,H]] {
   // if we restore this, zero znd hash should use rawDb.
   //
   //val rawDb : Database = earlyInit._1;
-  //def db = if ( rawDb.knowsRoot( root ) ) rawDb else throw new BasicPMTrie.FutureDatabaseException( root );
+  //def db = if ( rawDb.knowsRoot( root ) ) rawDb else throw new AltPMTrie.FutureDatabaseException( root );
 
   val db : Database = earlyInit._1;
   val root : H      = earlyInit._2; 
@@ -148,8 +148,8 @@ trait BasicPMTrie[L,V,H] extends PMTrie[L,V,H, BasicPMTrie.Node[L,V,H]] {
   }
 
   private[this] def newTrie( newRootHash : H ) : Trie[L,V] = {
-    if ( db.isInstanceOf[BasicPMTrie.RootTracking[H]] )
-      db.asInstanceOf[BasicPMTrie.RootTracking[H]].markRoot( newRootHash );
+    if ( db.isInstanceOf[AltPMTrie.RootTracking[H]] )
+      db.asInstanceOf[AltPMTrie.RootTracking[H]].markRoot( newRootHash );
     instantiateSuccessor( newRootHash : H ) : Trie[L,V]
   }
 
