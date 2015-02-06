@@ -10,7 +10,7 @@ import scala.reflect._;
 import AltPMTrie.Database;
 import AltPMTrie.Empty;
 
-import Trie.RootTracking;
+import PMTrie.RootTracking;
 
 object LowercaseTrie {
   implicit val logger = MLogger( this );

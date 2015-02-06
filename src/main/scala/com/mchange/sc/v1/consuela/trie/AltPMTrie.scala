@@ -3,7 +3,6 @@ package com.mchange.sc.v1.consuela.trie;
 import scala.reflect.ClassTag;
 
 object AltPMTrie {
-
   sealed trait Node[+L,+V,+H] {
     def subkey   : IndexedSeq[L];
     def children : IndexedSeq[H];
@@ -21,7 +20,7 @@ object AltPMTrie {
     def value    = None;
   }
 
-  type Database[L,V,H] = Trie.Database[Node[L,V,H],H]
+  type Database[L,V,H] = PMTrie.Database[Node[L,V,H],H]
 }
 
 
@@ -115,8 +114,8 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H, AltPMTrie.Node[L,V,H]] {
   }
 
   private[this] def newTrie( newRootHash : H ) : Trie[L,V] = {
-    if ( db.isInstanceOf[Trie.RootTracking[H]] )
-      db.asInstanceOf[Trie.RootTracking[H]].markRoot( newRootHash );
+    if ( db.isInstanceOf[PMTrie.RootTracking[H]] )
+      db.asInstanceOf[PMTrie.RootTracking[H]].markRoot( newRootHash );
     instantiateSuccessor( newRootHash : H ) : Trie[L,V]
   }
 
