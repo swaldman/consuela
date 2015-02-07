@@ -270,7 +270,7 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H, AltPMTrie.Node[L,V,H]] {
     case class UpdatedPath( modifiedPath : List[Element], lastAndChildren : Option[NewElements] ) { /* Note that lastAndChildren include children of the updated path not in elements */
       assert( 
         lastAndChildren == None || lastAndChildren.get.head == modifiedPath.head, 
-        s"The head of lastAndChildren should be the leaf element of or updated path. [modifiedPath -> ${modifiedPath}, lastAndChildren -> ${lastAndChildren}]" 
+        s"The head of lastAndChildren should be the leaf element of our updated path. [modifiedPath -> ${modifiedPath}, lastAndChildren -> ${lastAndChildren}]" 
       );
       def all : Set[Element] = lastAndChildren.fold( modifiedPath.toSet )( _.children ++ modifiedPath ); 
       def newRoot : Option[Element] = if ( modifiedPath == Nil ) None else Some(modifiedPath.last);
@@ -304,7 +304,7 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H, AltPMTrie.Node[L,V,H]] {
         reverseTruncate( Nil, reversedPairs );
       }
 
-      // after all of those definitions, here is the actual buildExtension(...) method...
+      // after all of those definitions, here is the actual updatePath(...) method...
 
       ( newLastElement, oldPath ) match {
         case ( Element.Deletion, Nil )      => aerr("Can't delete from an empty path!");
