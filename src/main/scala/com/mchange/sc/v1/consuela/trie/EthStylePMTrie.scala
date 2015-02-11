@@ -118,28 +118,28 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
         def _fromEmpty( searchSubkey : Subkey ) : Path =  TruncatedAtRoot( searchSubkey );
         def _fromExtension( nodeHash : H, extension : Extension, searchSubkey : Subkey, parents : List[Element] ) : Path = {
           val subkeyComparison = subkeyCompare( searchSubkey, extension.subkey );
-          def nextElements = Element( nodeHash, extension ) :: parents;
+          val nextElements = Element( nodeHash, extension ) :: parents;
           subkeyComparison match {
             case MatchLessThan( matched, unmatchedOnExtension )                 => OvershotByExtension( extension, nextElements, matched, unmatchedOnExtension );
             case MatchGreaterThan( matched, unmatchedOnSubkey )                 => build( extension.child, db( extension.child ), unmatchedOnSubkey, nextElements );
             case MatchExact( matched )                                          => ExactExtension( extension, nextElements );
-            case NoMatch                                                        => TruncatedAboveUnmatchableExtension( extension, parents, searchSubkey );
             case Divergent( matched, unmatchedOnSubkey, unmatchedOnExtension )  => DivergentExtension( extension, nextElements, matched, unmatchedOnExtension, unmatchedOnSubkey );
+            case NoMatch                                                        => TruncatedAtBeginningOfExtension( extension, nextElements, searchSubkey );
           }
         }
         def _fromLeaf( nodeHash : H, leaf : Leaf, searchSubkey : Subkey, parents : List[Element] ) : Path = {
           val subkeyComparison = subkeyCompare( searchSubkey, leaf.subkey );
-          def nextElements = Element( nodeHash, leaf ) :: parents;
+          val nextElements = Element( nodeHash, leaf ) :: parents;
           subkeyComparison match {
             case MatchLessThan( matched, unmatchedOnLeaf )                      => OvershotByLeaf( leaf, nextElements, matched, unmatchedOnLeaf );
             case MatchGreaterThan( matched, unmatchedOnSubkey )                 => TruncatedWithinLeaf( leaf, nextElements, matched, unmatchedOnSubkey );
             case MatchExact( matched )                                          => ExactLeaf( leaf, nextElements );
-            case NoMatch                                                        => TruncatedAboveUnmatchableLeaf( leaf, parents, searchSubkey );
+            case NoMatch                                                        => TruncatedAtBeginningOfLeaf( leaf, nextElements, searchSubkey );
             case Divergent( matched, unmatchedOnSubkey, unmatchedOnLeaf )       => DivergentLeaf( leaf, nextElements, matched, unmatchedOnLeaf, unmatchedOnSubkey );
           }
         }
         def _fromBranch( nodeHash : H, branch : Branch, searchSubkey : Subkey, parents : List[Element] ) : Path = {
-          def nextElements = Element( nodeHash, branch ) :: parents;
+          val nextElements = Element( nodeHash, branch ) :: parents;
           val firstLetterIndex = alphabet.indexOf( searchSubkey.head );
           val childHash = branch.children( firstLetterIndex );
           childHash match {
@@ -221,10 +221,42 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
     private def updatePath( oldPath : List[Element], newLastElement : Element ) : List[Element] = ???
 
     case class DivergentLeaf( leaf : Leaf, elements : List[Element], matched : Subkey, oldRemainder : Subkey, newDivergence : Subkey ) extends Path {
-      def replacementForIncluding( v : V ) : NewElements = ???
+      def replacementForIncluding( v : V ) : NewElements = {
+        val oldRemainderLeaf = Leaf( oldRemainder.tail, leaf.value ); //tail can be empty, leaves can have empty keys
+        val oldRemainderLeafHash = db.hash( oldRemainderLeaf );
+        val newDivergenceLeaf = Leaf( newDivergence.tail, v ); //tail can be empty, leaves can have empty keys
+        val newDivergenceLeafHash = db.hash( newDivergenceLeaf );
+        val newBranchChildren = EmptyBranchChildren
+          .updated( alphabet.indexOf( oldRemainder.head ), oldRemainderLeafHash )
+          .updated( alphabet.indexOf( newDivergence.head ), newDivergenceLeafHash );
+        val newBranch = Branch( newBranchChildren, None );
+        val newBranchHash = db.hash( newBranch );
+        val currentExtension = Extension( matched, newBranchHash );
+        NewElements( Element( currentExtension ), Set( Element( newBranchHash, newBranch ), Element( newDivergenceLeafHash, newDivergenceLeaf ), Element( oldRemainderLeafHash, oldRemainderLeaf ) ) )
+      }
     }
     case class DivergentExtension( extension : Extension, elements : List[Element], matched : Subkey, oldRemainder : Subkey, newDivergence : Subkey ) extends Path {
-      def replacementForIncluding( v : V ) : NewElements = ???
+      def replacementForIncluding( v : V ) : NewElements = {
+        // a bit tricky. 
+        // if oldRemainder is only one long, then the new branch will consume its letter and take the extension child for its own
+        // we end up with a new Leaf and a new Branch, and a leading Extension
+        // otherwise, both arms of the divergence become nodes, the old one an Extension, the new one a Leaf, joined by a Branch with a leading Extension 
+
+        // first, the easiest thing. we always need a Leaf for the new divergence.
+        val newDivergenceLeaf = Leaf( newDivergence.tail, v ); //tail can be empty, leaves can have empty keys
+        val newDivergenceLeafHash = db.hash( newDivergenceLeaf );
+
+        // now, we need to condition on whether the remainder will form an Extension
+        val mbOldRemainderExtensionElement : Option[Element] = if ( oldRemainder.length > 1 ) Some( Element( Extension( oldRemainder.tail, extension.child ) ) ) else None
+        val newBranchChildren = EmptyBranchChildren
+          .updated( alphabet.indexOf( oldRemainder.head ), mbOldRemainderExtensionElement.fold( extension.child )( _.hash ) )
+          .updated( alphabet.indexOf( newDivergence.head ), newDivergenceLeafHash );
+        val newBranch = Branch( newBranchChildren, None );
+        val newBranchHash = db.hash( newBranch );
+        val currentExtension = Extension( matched, newBranchHash );
+        val newChildElements = Set( Element( newBranchHash, newBranch ), Element( newDivergenceLeafHash, newDivergenceLeaf ) ) ++ mbOldRemainderExtensionElement.fold( Set.empty[Element] )( Set(_) );
+        NewElements( Element( currentExtension ), newChildElements )
+      }
     }
     case class ExactLeaf( leaf : Leaf, elements : List[Element] ) extends Path with Exact {
       def mbValue : Option[V] = Some( leaf.value )
@@ -364,28 +396,91 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
 
       def replacementOrDeletionForExcluding : NewElements = ???;
     }
-    case class OvershotByExtension( extension : Extension, elements : List[Element], matched : Subkey, remainder : Subkey ) extends Path {
-      def replacementForIncluding( v : V ) : NewElements = ???
-    }
     case class OvershotByLeaf( leaf : Leaf, elements : List[Element], matched : Subkey, remainder : Subkey ) extends Path {
-      def replacementForIncluding( v : V ) : NewElements = ???
+      def replacementForIncluding( v : V ) : NewElements = {
+        // we have to replace one character of the Leaf by a Branch, which will terminate the matched subkey.
+        // matched elements form a leading Extension
+
+        val remainderLeaf = Leaf( remainder.tail, leaf.value ); // subkey can be empty, expected for leaves
+        val remainderLeafHash = db.hash( remainderLeaf );
+        val newBranch = Branch( EmptyBranchChildren.updated( alphabet.indexOf( remainder.head ), remainderLeafHash ), Some( v ) );
+        val newBranchHash = db.hash( newBranch );
+        val currentExtension = Extension( matched, newBranchHash );
+        NewElements( Element( currentExtension ), Set( Element( newBranchHash, newBranch ), Element( remainderLeafHash, remainderLeaf ) ) )
+      }
+    }
+    case class OvershotByExtension( extension : Extension, elements : List[Element], matched : Subkey, remainder : Subkey ) extends Path {
+      def replacementForIncluding( v : V ) : NewElements = {
+        // we make a Branch to terminate the matched portion
+        // if the remainder is larger than one, we have to replace it with an Extension, otherwise the Branch suffices
+
+        val mbRemainderExtensionElement = if (remainder.length > 1) Some( Element( Extension( remainder.tail, extension.child ) ) ) else None;
+        val branchChildHash = mbRemainderExtensionElement.fold( extension.child )( _.hash );
+        val newBranch = Branch( EmptyBranchChildren.updated( alphabet.indexOf( remainder.head ), branchChildHash ), Some(v) );
+        val newBranchHash = db.hash( newBranch );
+        val newBranchElement = Element( newBranchHash, newBranch );
+        val currentExtension = Extension( matched, newBranchHash );
+        NewElements( Element(currentExtension), mbRemainderExtensionElement.fold( Set( newBranchElement ) )( remainderElement => Set( newBranchElement, remainderElement ) ) )
+      }
     }
     case class TruncatedAtRoot( remainder : Subkey ) extends Path {
       val elements : List[Element] = Nil;
 
-      def replacementForIncluding( v : V ) : NewElements = ???
+      def replacementForIncluding( v : V ) : NewElements = NewElements( Leaf( remainder, v ) ); //easy-peasy...
     }
-    case class TruncatedAboveUnmatchableLeaf( leaf : Leaf, elements : List[Element], val remainder : Subkey ) extends Path {
-      def replacementForIncluding( v : V ) : NewElements = ???
+    case class TruncatedAtBeginningOfLeaf( leaf : Leaf, elements : List[Element], newLetters : Subkey ) extends Path {
+      def replacementForIncluding( v : V ) : NewElements = {
+        val newLettersLeaf = Leaf( newLetters.tail, v );
+        val newLettersLeafHash = db.hash( newLettersLeaf );
+        val oldLetters = leaf.subkey;
+        val oldLettersLeaf = Leaf( oldLetters.tail, leaf.value );
+        val oldLettersLeafHash = db.hash( oldLettersLeaf );
+        val newBranchChildren = EmptyBranchChildren
+          .updated( alphabet.indexOf( newLetters.head ), newLettersLeafHash )
+          .updated( alphabet.indexOf( oldLetters.head ), oldLettersLeafHash );
+        val newBranch = Branch( newBranchChildren, None );
+        NewElements( Element( newBranch ), Set( Element( oldLettersLeafHash, oldLettersLeaf ), Element( newLettersLeafHash, newLettersLeaf ) ) )
+      }
     }
-    case class TruncatedAboveUnmatchableExtension( extension : Extension, elements : List[Element], remainder : Subkey ) extends Path {
-      def replacementForIncluding( v : V ) : NewElements = ???
+    case class TruncatedAtBeginningOfExtension( extension : Extension, elements : List[Element], newLetters : Subkey ) extends Path {
+      def replacementForIncluding( v : V ) : NewElements = {
+        val newLettersLeaf = Leaf( newLetters.tail, v );
+        val newLettersLeafHash = db.hash( newLettersLeaf );
+        val newLettersLeafElement = Element( newLettersLeafHash, newLettersLeaf );
+        val oldLetters = extension.subkey;
+        val mbOldLettersExtensionElement = if ( oldLetters.length > 1 ) Some( Element( Extension( oldLetters.tail, extension.child ) ) ) else None;
+        val oldLettersBranchChild = mbOldLettersExtensionElement.fold( extension.child )( _.hash );
+        val newBranchChildren = EmptyBranchChildren
+          .updated( alphabet.indexOf( newLetters.head ), newLettersLeafHash )
+          .updated( alphabet.indexOf( oldLetters.head ), oldLettersBranchChild );
+        val newBranch = Branch( newBranchChildren, None );
+        NewElements( Element( newBranch ), mbOldLettersExtensionElement.fold( Set( newLettersLeafElement ) )( oldLettersExtensionElement => Set( newLettersLeafElement, oldLettersExtensionElement ) ) )
+      }
     }
-    case class TruncatedWithinLeaf( leaf : Leaf, elements : List[Element], matched : Subkey, remainder : Subkey ) extends Path {
-      def replacementForIncluding( v : V ) : NewElements = ???
+    case class TruncatedWithinLeaf( leaf : Leaf, elements : List[Element], matched : Subkey, newLetters : Subkey ) extends Path {
+      def replacementForIncluding( v : V ) : NewElements = {
+        // the existing Leaf has to become an Extension terminated by a Branch
+        // to which a new Leaf with the new Letters must be added
+
+        val newLettersLeaf = Leaf( newLetters.tail, v );
+        val newLettersLeafHash = db.hash( newLettersLeaf );
+        val joinBranch = Branch( EmptyBranchChildren.updated( alphabet.indexOf( newLetters.head ), newLettersLeafHash ), Some( leaf.value ) );
+        val joinBranchHash = db.hash( joinBranch );
+        val currentExtension = Extension( matched, joinBranchHash );
+        NewElements( Element( currentExtension ), Set( Element( joinBranchHash, joinBranch ), Element( newLettersLeafHash, newLettersLeaf ) ) )
+      }
     }
-    case class TruncatedWithinBranch( branch : Branch, elements : List[Element], newBranchChildIndex : Int, remainder : Subkey ) extends Path {
-      def replacementForIncluding( v : V ) : NewElements = ???
+    case class TruncatedWithinBranch( branch : Branch, elements : List[Element], newBranchChildIndex : Int, newLetters : Subkey ) extends Path {
+      def replacementForIncluding( v : V ) : NewElements = {
+        val newLettersLeaf = Leaf( newLetters.tail, v );
+        val newLettersLeafHash = db.hash( newLettersLeaf );
+        val firstNewLetterIndex = alphabet.indexOf( newLetters.head );
+        def msg = s"Huh? Truncation within a branch means that trying to traverse our next letter hits an empty child! index -> ${firstNewLetterIndex}, branch -> ${branch}";
+        assert( firstNewLetterIndex == Zero, msg );
+        val newBranchChildren = branch.children.updated( firstNewLetterIndex, newLettersLeafHash );
+        val newBranch = Branch( newBranchChildren, branch.mbValue );
+        NewElements( Element( newBranch ), Element( newLettersLeafHash, newLettersLeaf ) )
+      }
     }
     trait Exact {
       self : Path =>
