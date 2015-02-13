@@ -5,13 +5,13 @@ import org.specs2._;
 import com.mchange.sc.v1.log.MLogger;
 import com.mchange.sc.v1.log.MLevel._;
 
-class LowercaseTrieSpec extends Specification { 
+class AltLowercaseTrieSpec extends Specification { 
 
   private[this] implicit val logger = MLogger( this );
 
   def is =
 s2"""
-   A LowercaseTrie can
+   An AltLowercaseTrie can
          return "world" after it has stored the binding "hello" -> "world"                        ${ e1 }
          return "said" after it has stored the binding "he" -> "said" after "hello" -> "world"    ${ e2 }
          return to an EmptyNode root when all bindings are deleted                                ${ e3 }
@@ -36,7 +36,7 @@ s2"""
 
 """;
 
-  val tt0 = new LowercaseTrie();
+  val tt0 = new AltLowercaseTrie();
   val tt1 = tt0.including( "hello", "world" );
   val tt2 = tt1.including("he","said");
   val tt3 = tt1.excluding( "hello" );
@@ -132,11 +132,11 @@ s2"""
     "hi" -> "again"
   )
 
-  def checkTrie( trie : LowercaseTrie, yes : Set[String] ) : Boolean = {
+  def checkTrie( trie : AltLowercaseTrie, yes : Set[String] ) : Boolean = {
     testBindings.filter( binding => yes(binding._1) ).forall( binding => trie( binding._1 ).contains( binding._2 ) ) && 
     testBindings.filter( binding => !yes(binding._1) ).forall( binding => trie( binding._1 ) == None )
   }
-  def checkEmpty( trie : LowercaseTrie ) = tt3.root == tt3.db.Zero;
+  def checkEmpty( trie : AltLowercaseTrie ) = tt3.root == tt3.db.Zero;
 
 
   def e1 : Boolean = checkTrie( tt1, Set("hello") ) 
