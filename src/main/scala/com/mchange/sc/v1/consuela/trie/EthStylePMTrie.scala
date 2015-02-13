@@ -53,16 +53,16 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
    * And now we do our work.
    */ 
 
-  val db       : Database = earlyInit._1;
-  val Zero     : H      = db.Zero;
-  val rootHash : H      = earlyInit._2;
+  val db   : Database = earlyInit._1;
+  val Zero : H      = db.Zero;
+  val root : H      = earlyInit._2;
   
-  lazy val rootNode = db( rootHash );
+  lazy val rootNode = db( root );
 
-  val alphabetLen = alphabet.length;
+  lazy val alphabetLen = alphabet.length;
 
   // useful empties
-  val EmptyBranchChildren = IndexedSeq.fill( alphabetLen )( Zero );
+  lazy val EmptyBranchChildren = IndexedSeq.fill( alphabetLen )( Zero );
   val EmptySubkey = IndexedSeq.empty[L];
 
   def hash( node : Node ) : H = db.hash( node );
@@ -110,21 +110,32 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
 
   object Path {
     object Builder {
-      def build( key : IndexedSeq[L] ) : Path = {
-        //println( s"rootHash->${rootHash} rootNode->${rootNode}" );
-        build( rootHash, rootNode, key, Nil )
+      def build( key : IndexedSeq[L] ) : Path = if (key.isEmpty) buildEmptySubkey() else buildNonemptySubkey( root, rootNode, key, Nil )
+
+      private def buildEmptySubkey() : Path = {
+        rootNode match {
+          case leaf @ Leaf( EmptySubkey, _ )               => ExactLeaf( leaf, Element.Root :: Nil );
+          case leaf : Leaf                                 => EmptySubkeyAtNonemptySubkeyRootLeaf( leaf );
+          case Extension( EmptySubkey, _ )                 => aerr( "Huh? Under no circumstances should we have an Extension with an empty subkey. ${rootNode}" );
+          case extension @ Extension( IndexedSeq( _ ), _ ) => EmptySubkeyAtOneLetterSubkeyRootExtension( extension );
+          case extension : Extension                       => EmptySubkeyAtMultiLetterSubkeyRootExtension( extension );
+          case branch : Branch                             => EmptySubkeyAtRootBranch( branch );
+          case Empty                                       => TruncatedAtEmptyRoot( EmptySubkey );
+        }
       }
-      private def build( nodeHash : H, node : Node, searchSubkey : Subkey, parents : List[Element] ) : Path = {
+      private def buildNonemptySubkey( nodeHash : H, node : Node, searchSubkey : Subkey, parents : List[Element] ) : Path = {
+        require( searchSubkey.length > 0, s"buildNonemptySubkey(...) requires a nonempty search subkey. searchSubkey -> ${searchSubkey}" );
+
         import SubkeyComparison._
 
         // build utilities
-        def _fromEmpty( searchSubkey : Subkey ) : Path =  TruncatedAtRoot( searchSubkey );
+        def _fromEmpty( searchSubkey : Subkey ) : Path =  TruncatedAtEmptyRoot( searchSubkey );
         def _fromExtension( nodeHash : H, extension : Extension, searchSubkey : Subkey, parents : List[Element] ) : Path = {
           val subkeyComparison = subkeyCompare( searchSubkey, extension.subkey );
           val nextElements = Element( nodeHash, extension ) :: parents;
           subkeyComparison match {
             case MatchLessThan( matched, unmatchedOnExtension )                 => OvershotByExtension( extension, nextElements, matched, unmatchedOnExtension );
-            case MatchGreaterThan( matched, unmatchedOnSubkey )                 => build( extension.child, db( extension.child ), unmatchedOnSubkey, nextElements );
+            case MatchGreaterThan( matched, unmatchedOnSubkey )                 => buildNonemptySubkey( extension.child, db( extension.child ), unmatchedOnSubkey, nextElements );
             case MatchExact( matched )                                          => ExactExtension( extension, nextElements );
             case Divergent( matched, unmatchedOnSubkey, unmatchedOnExtension )  => DivergentExtension( extension, nextElements, matched, unmatchedOnExtension, unmatchedOnSubkey );
             case NoMatch                                                        => TruncatedAtBeginningOfExtension( extension, nextElements, searchSubkey );
@@ -148,7 +159,7 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
           childHash match {
             case Zero                                 => TruncatedWithinBranch( branch, nextElements, firstLetterIndex, searchSubkey.tail );
             case goodHash if searchSubkey.length == 1 => ExactBranch( branch, nextElements, firstLetterIndex );
-            case goodHash                             => build( goodHash, db( goodHash ), searchSubkey.tail, nextElements );
+            case goodHash                             => buildNonemptySubkey( goodHash, db( goodHash ), searchSubkey.tail, nextElements );
           }
         }
 
@@ -193,7 +204,7 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
       }
     }
     object Element {
-      val Root     = Element( Zero, Empty );
+      lazy val Root = Element( root, rootNode );
       val Deletion = Element( Zero, null );
 
       def apply( node : Node ) : Element = Element( db.hash( node ), node );
@@ -518,23 +529,35 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
         NewElements( Element(currentExtension), mbRemainderExtensionElement.fold( Set( newBranchElement ) )( remainderElement => Set( newBranchElement, remainderElement ) ) )
       }
     }
-    case class TruncatedAtRoot( remainder : Subkey ) extends Path {
+    case class TruncatedAtEmptyRoot( remainder : Subkey ) extends Path {
       val elements : List[Element] = Nil;
 
       def replacementForIncluding( v : V ) : NewElements = NewElements( Leaf( remainder, v ) ); //easy-peasy...
     }
     case class TruncatedAtBeginningOfLeaf( leaf : Leaf, elements : List[Element], newLetters : Subkey ) extends Path {
       def replacementForIncluding( v : V ) : NewElements = {
-        val newLettersLeaf = Leaf( newLetters.tail, v );
-        val newLettersLeafHash = db.hash( newLettersLeaf );
-        val oldLetters = leaf.subkey;
-        val oldLettersLeaf = Leaf( oldLetters.tail, leaf.value );
-        val oldLettersLeafHash = db.hash( oldLettersLeaf );
-        val newBranchChildren = EmptyBranchChildren
-          .updated( alphabet.indexOf( newLetters.head ), newLettersLeafHash )
-          .updated( alphabet.indexOf( oldLetters.head ), oldLettersLeafHash );
-        val newBranch = Branch( newBranchChildren, None );
-        NewElements( Element( newBranch ), Set( Element( oldLettersLeafHash, oldLettersLeaf ), Element( newLettersLeafHash, newLettersLeaf ) ) )
+
+        def emptyLeafSubkeyCase = {
+          val newChildLeaf = Leaf( newLetters.tail, v );
+          val newChildLeafHash = db.hash( newChildLeaf );
+          val newBranch = Branch( EmptyBranchChildren.updated( alphabet.indexOf( newLetters.head ), newChildLeafHash ), Some( leaf.value ) );
+          NewElements( Element( newBranch ), Element( newChildLeaf ) )
+        }
+
+        def nonEmptyLeafSubkeyCase = {
+          val newLettersLeaf = Leaf( newLetters.tail, v );
+          val newLettersLeafHash = db.hash( newLettersLeaf );
+          val oldLetters = leaf.subkey;
+          val oldLettersLeaf = Leaf( oldLetters.tail, leaf.value );
+          val oldLettersLeafHash = db.hash( oldLettersLeaf );
+          val newBranchChildren = EmptyBranchChildren
+            .updated( alphabet.indexOf( newLetters.head ), newLettersLeafHash )
+            .updated( alphabet.indexOf( oldLetters.head ), oldLettersLeafHash );
+          val newBranch = Branch( newBranchChildren, None );
+          NewElements( Element( newBranch ), Set( Element( oldLettersLeafHash, oldLettersLeaf ), Element( newLettersLeafHash, newLettersLeaf ) ) )
+        }
+
+        if ( leaf.subkey.isEmpty ) emptyLeafSubkeyCase else nonEmptyLeafSubkeyCase
       }
     }
     case class TruncatedAtBeginningOfExtension( extension : Extension, elements : List[Element], newLetters : Subkey ) extends Path {
@@ -565,18 +588,80 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
         NewElements( Element( currentExtension ), Set( Element( joinBranchHash, joinBranch ), Element( newLettersLeafHash, newLettersLeaf ) ) )
       }
     }
-    case class TruncatedWithinBranch( branch : Branch, elements : List[Element], newBranchChildIndex : Int, newLetters : Subkey ) extends Path {
+    case class TruncatedWithinBranch( branch : Branch, elements : List[Element], branchLetterIndex : Int, extraLetters : Subkey ) extends Path {
       def replacementForIncluding( v : V ) : NewElements = {
-        val newLettersLeaf = Leaf( newLetters.tail, v );
-        val newLettersLeafHash = db.hash( newLettersLeaf );
-        val firstNewLetterIndex = alphabet.indexOf( newLetters.head );
-        def msg = s"Huh? Truncation within a branch means that trying to traverse our next letter hits an empty child! index -> ${firstNewLetterIndex}, branch -> ${branch}";
-        assert( firstNewLetterIndex == Zero, msg );
-        val newBranchChildren = branch.children.updated( firstNewLetterIndex, newLettersLeafHash );
+        val extraLettersLeaf = Leaf( extraLetters, v );
+        val extraLettersLeafHash = db.hash( extraLettersLeaf );
+        def msg = s"Huh? Truncation within a branch means that trying to traverse our next letter hits an empty child! branchLetterIndex -> ${branchLetterIndex}, branch -> ${branch}";
+        assert( branch.children( branchLetterIndex ) == Zero, msg );
+        val newBranchChildren = branch.children.updated( branchLetterIndex, extraLettersLeafHash );
         val newBranch = Branch( newBranchChildren, branch.mbValue );
-        NewElements( Element( newBranch ), Element( newLettersLeafHash, newLettersLeaf ) )
+        NewElements( Element( newBranch ), Element( extraLettersLeafHash, extraLettersLeaf ) )
       }
     }
+    case class EmptySubkeyAtNonemptySubkeyRootLeaf( rootLeaf : Leaf ) extends Path {
+      def elements = Element( rootLeaf ) :: Nil;
+
+      def replacementForIncluding( v : V ) : NewElements = {
+        val childLeaf = Leaf( rootLeaf.subkey.tail, rootLeaf.value );
+        val childLeafHash = db.hash( childLeaf );
+        val newBranch = Branch( EmptyBranchChildren.updated( alphabet.indexOf( rootLeaf.subkey.head ), childLeafHash ), Some( v ) );
+        NewElements( Element( newBranch ), Element( childLeafHash, childLeaf ) )
+      }
+    }
+    case class EmptySubkeyAtOneLetterSubkeyRootExtension( rootExtension : Extension ) extends Path {
+      def elements = Element( rootExtension ) :: Nil;
+
+      def replacementForIncluding( v : V ) : NewElements = {
+        val newBranch = Branch( EmptyBranchChildren.updated( alphabet.indexOf( rootExtension.subkey.head ), rootExtension.child ), Some( v ) );
+        NewElements( Element( newBranch ) )
+      }
+    }
+    case class EmptySubkeyAtMultiLetterSubkeyRootExtension( rootExtension : Extension ) extends Path {
+      def elements = Element( rootExtension ) :: Nil;
+
+      def replacementForIncluding( v : V ) : NewElements = {
+        val childExtension = Extension( rootExtension.subkey.tail, rootExtension.child );
+        val childExtensionHash = db.hash( childExtension );
+        val newBranch = Branch( EmptyBranchChildren.updated( alphabet.indexOf( rootExtension.subkey.head ), childExtensionHash ), Some( v ) );
+        NewElements( Element( newBranch ), Element( childExtensionHash, childExtension ) )
+      }
+    }
+    case class EmptySubkeyAtRootBranch( rootBranch : Branch ) extends Path with ExactValueHolder {
+      def elements = Element( rootBranch ) :: Nil;
+
+      def mbValue   : Option[V] = rootBranch.mbValue;
+
+      def replacementForIncluding( v : V ) : NewElements = NewElements( rootBranch.copy( mbValue=Some(v) ) )
+
+      def replacementOrDeletionForExcluding : NewElements = {
+        def oneChildCase( childIndex : Int ) = {
+          val subkeyLetter = alphabet( childIndex );
+          val childHash = rootBranch.children( childIndex );
+          val childNode = db( childHash );
+
+          def branchChildCase = NewElements( Extension( IndexedSeq( subkeyLetter ), childHash ) );
+          def leafChildCase( leafChild : Leaf ) = NewElements( Leaf( subkeyLetter +: leafChild.subkey, leafChild.value ) )
+          def extensionChildCase( extensionChild : Extension ) = NewElements( Extension( subkeyLetter +: extensionChild.subkey, extensionChild.child ) )
+
+          childNode match {
+            case _ : Branch                 => branchChildCase;
+            case leafChild : Leaf           => leafChildCase( leafChild );
+            case extensionChild : Extension => extensionChildCase( extensionChild );
+            case Empty                      => aerr( s"A one-child branch shouldn't have an empty node as its child! rootBranch -> ${rootBranch}" );
+          }
+        }
+        def multipleChildCase = NewElements( rootBranch.copy( mbValue=None ) )
+
+        val kidPairs = indexKidPairs( rootBranch.children );
+        kidPairs.length match {
+          case 0 => aerr( s"We should never see a zero-child Branch! rootBranch->${rootBranch}" );
+          case 1 => oneChildCase( kidPairs.head._1 );
+          case _ => multipleChildCase;
+        }
+      }
+    }
+
     trait Exact {
       self : Path =>
 
@@ -598,13 +683,8 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
 
     def updatedPath( newElements : NewElements ) : UpdatedPath = {
       val newPath = Path.updatePath( elements, newElements.head );
-      UpdatedPath( newPath, Some( newElements ) )
+      val lastAndChildren = if ( newElements == NewElements.Deletion ) None else Some( newElements )
+      UpdatedPath( newPath, lastAndChildren )
     }
-    /*
-    def updatedPathForDeletion : Path.UpdatedPath = {
-      val newPath = Path.updatePath( elements, Element.Deletion );
-      UpdatedPath( newPath, None )
-    }
-    */
   }
 }
