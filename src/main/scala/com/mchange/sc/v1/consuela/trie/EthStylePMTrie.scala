@@ -79,8 +79,8 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
   }
   def excluding( key : Subkey ) : Trie[L,V] = {
     path( key ) match {
-      case exact : Path.Exact => persistClone( exact.excluding );
-      case _                  => this;
+      case exact : Path.ExactValueHolder => persistClone( exact.excluding );
+      case _                             => this;
     }
   }
 
@@ -258,13 +258,13 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
         NewElements( Element( currentExtension ), newChildElements )
       }
     }
-    case class ExactLeaf( leaf : Leaf, elements : List[Element] ) extends Path with Exact {
+    case class ExactLeaf( leaf : Leaf, elements : List[Element] ) extends Path with ExactValueHolder {
       def mbValue : Option[V] = Some( leaf.value )
 
       // easy-peasy, no structural changes or children, just switch out the value
       def replacementForIncluding( v : V ) : NewElements = NewElements( leaf.copy( value=v ) )
 
-      def replacementOrDeletionForExcluding : NewElements = ???;
+      def replacementOrDeletionForExcluding : NewElements = NewElements.Deletion; // this leaf is just gone, gotta carry it up the chain
     }
     case class ExactExtension( extension : Extension, elements : List[Element] ) extends Path with Exact {
       // Per ethereum spec, Extensions must have a child branch as "terminator" if it is to be associated with a value
@@ -289,10 +289,8 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
         val updatedExtension       = extension.copy( child=updatedChildBranchHash );
         NewElements( Element( updatedExtension ),  Element( updatedChildBranchHash, updatedChildBranch ) )
       }
-
-      def replacementOrDeletionForExcluding : NewElements = ???;
     }
-    case class ExactBranch( branch : Branch, elements : List[Element], matchLetterIndex : Int ) extends Path with Exact {
+    case class ExactBranch( branch : Branch, elements : List[Element], matchLetterIndex : Int ) extends Path with ExactValueHolder {
       // Per ethereum spec, Branches must have a child Branch or empty-key Leaf as "terminator" if it is to be associated with a value
       def mbValue : Option[V] = {
         val childHash = branch.children( matchLetterIndex );
@@ -394,7 +392,21 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
         }
       }
 
-      def replacementOrDeletionForExcluding : NewElements = ???;
+      def replacementOrDeletionForExcluding : NewElements = {
+        // if there are at least two children, we just replace with a no-value Branch
+        // if there is only one child, we have to become an Extension, which might need to be merged into a parent Extension up the chain
+
+        val remainingIndexedKids = Stream.from( 0 ).zip( branch.children ).filter( _._2 != Zero );
+
+        remainingIndexedKids.length match {
+          case 0 => aerr( s"We've found a Branch with no children! That should never occur in the Trie. branch->${Branch}" );
+          case 1 => {
+            val indexedKid = remainingIndexedKids.head;
+            NewElements( Extension( IndexedSeq( alphabet( indexedKid._1 ) ), indexedKid._2 ) );
+          }
+          case 2 => NewElements( branch.copy( mbValue = None ) );
+        }
+      }
     }
     case class OvershotByLeaf( leaf : Leaf, elements : List[Element], matched : Subkey, remainder : Subkey ) extends Path {
       def replacementForIncluding( v : V ) : NewElements = {
@@ -486,8 +498,11 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
       self : Path =>
 
       def mbValue   : Option[V]
-      def excluding : UpdatedPath = updatedPath( replacementOrDeletionForExcluding );
+    }
+    trait ExactValueHolder extends Exact {
+      self : Path =>
 
+      def excluding : UpdatedPath = updatedPath( replacementOrDeletionForExcluding );
       def replacementOrDeletionForExcluding : NewElements;
     }
   }
