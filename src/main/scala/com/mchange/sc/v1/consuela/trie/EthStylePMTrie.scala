@@ -101,6 +101,9 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
     instantiateSuccessor( newRootHash : H ) : Trie[L,V]
   }
 
+  private[this] def indexKidPairs( children : IndexedSeq[H] ) : IndexedSeq[( Int, H )] = Stream.from( 0 ).zip( children ).filter( _._2 != Zero ).toIndexedSeq;
+
+
   private[this] def path( key : Subkey ) : Path = Path.Builder.build( key );
 
   private[this] def aerr( message : String ) : Nothing = throw new AssertionError( message );
@@ -218,7 +221,87 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
       def all : Set[Element] = lastAndChildren.fold( modifiedPath.toSet )( _.children ++ modifiedPath ); 
       def newRoot : Option[Element] = if ( modifiedPath == Nil ) None else Some(modifiedPath.last);
     }
-    private def updatePath( oldPath : List[Element], newLastElement : Element ) : List[Element] = ???
+    private def updatePath( oldPath : List[Element], newLastElement : Element ) : List[Element] = {
+      
+      def _singleNodePath = newLastElement :: Nil
+      def _updateMultipleElementPath : List[Element] = {
+        def newParent( newChild : Element, oldChild : Element, oldParent : Element ) : Element = {
+          def updatedChildren( branch : Branch, h : H ) = branch.children.map( childHash => if ( childHash == oldChild.hash ) h else childHash );
+          def culledChildren( branch : Branch )         = updatedChildren( branch, Zero );
+          def replacedChildren( branch : Branch )       = updatedChildren( branch, newChild.hash );
+
+          def deleteFromBranch( branch : Branch ) : Node = {
+            val children = branch.children;
+            val remainingKidPairs = indexKidPairs( children ).filter( _._2 != oldChild.hash );
+
+            def toOneLetterExtension : Extension = { 
+              val remainingKidPair = remainingKidPairs.head;
+              Extension( IndexedSeq( alphabet( remainingKidPair._1 ) ), remainingKidPair._2 )
+            }
+            def toOneLessChildBranch : Branch = branch.copy( children=culledChildren( branch ) )
+
+            ( remainingKidPairs.length, branch.mbValue ) match {
+              case ( 0, None )      => aerr( s"Huh? We should never see a Branch which previously had just one child and has no value! branch -> ${branch}" );
+              case ( 0, someValue ) => Leaf( EmptySubkey, someValue.get ); // the Branch becomes an empty terminator
+              case ( 1, None )      => toOneLetterExtension;
+              case _                => toOneLessChildBranch;
+            }
+          }
+
+          val DeletionNode = Element.Deletion.node; // this is just null, but to emphasize its meaning
+          (newChild.node, oldParent.node) match {
+            case ( DeletionNode        , _ : Extension )         => Element.Deletion
+            case ( DeletionNode        , branch : Branch )       => Element( deleteFromBranch( branch ) )
+            case ( leafChild : Leaf    , extension : Extension ) => Element( Leaf( extension.subkey ++ leafChild.subkey, leafChild.value ) )
+            case ( extChild : Extension, ext : Extension )       => Element( Extension( ext.subkey ++ extChild.subkey, extChild.child ) )
+            case ( branchChild : Branch, ext : Extension )       => Element( Extension( ext.subkey, newChild.hash ) )
+            case ( _                   , branch : Branch )       => Element( branch.copy( children=replacedChildren( branch ) ) )
+            case ( _                   , _ : Leaf )              => aerr( s"Leaf found as parent?! newChild->${newChild}, oldChild->${oldChild}, BAD oldParent->${oldParent}" );
+            case ( _                   , Empty )                 => aerr( s"Empty node found as parent?! newChild->${newChild}, oldChild->${oldChild}, BAD oldParent->${oldParent}" );
+            case ( Empty               , _ )                     => aerr( s"Empty node found as child?! newChild->${newChild}, oldChild->${oldChild}, BAD oldParent->${oldParent}" );
+          }
+        }
+
+        def isLeaf( element : Element ) = {
+          element.node match {
+            case _ : Leaf => true;
+            case _        => false;
+          }
+        }
+
+        // reverseAccum builds with head closest to root and tail at or past leaf, opposite to how
+        // we normally store paths.
+        def accumulate( reversedAccum : List[(Element, Boolean)], oldChildParentSeq : List[Element] ) : List[(Element, Boolean)] = {
+          val newP = newParent( reversedAccum.head._1, oldChildParentSeq.head, oldChildParentSeq.tail.head );
+          val isL = isLeaf( newP );
+          ( newP, isL ) :: reversedAccum
+        }
+        def reverseTruncate( accum : List[Element], reversedAccum : List[(Element, Boolean)] ) : List[Element] = {
+          reversedAccum match {
+            case ( Element.Deletion, _ ) :: _ => accum; // once we've hit a deletion, we have the full valid remainder of the path
+            case ( elem, false ) :: Nil       => elem :: accum; // no leaf, we're done, we just return the full untruncated reversal
+            case ( elem, true )  :: _         => elem :: accum;
+            case ( elem, false ) :: tail      => reverseTruncate( elem :: accum, tail );
+            case Nil                          => aerr( "We should never get to an empty path while reversing." );
+          }
+        }
+
+        val reversedPairs = {
+          oldPath
+            .sliding(2, 1)
+            .foldLeft( (newLastElement, isLeaf( newLastElement ) ) :: Nil )( accumulate ) // we end up with a reversed path, root in front and leaf towards tail
+        }
+        reverseTruncate( Nil, reversedPairs );
+      }
+
+      ( oldPath, newLastElement ) match {
+        case ( Nil, Element.Deletion )      => aerr("Can't delete from an empty path!");
+        case ( Nil, _ )                     => _singleNodePath;
+        case ( _ :: Nil, Element.Deletion ) => Nil
+        case ( _ :: Nil, _ )                => _singleNodePath;
+        case _                              => _updateMultipleElementPath;
+      }
+    }
 
     case class DivergentLeaf( leaf : Leaf, elements : List[Element], matched : Subkey, oldRemainder : Subkey, newDivergence : Subkey ) extends Path {
       def replacementForIncluding( v : V ) : NewElements = {
@@ -396,12 +479,12 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
         // if there are at least two children, we just replace with a no-value Branch
         // if there is only one child, we have to become an Extension, which might need to be merged into a parent Extension up the chain
 
-        val remainingIndexedKids = Stream.from( 0 ).zip( branch.children ).filter( _._2 != Zero );
+        val indexedKids = indexKidPairs( branch.children );
 
-        remainingIndexedKids.length match {
+        indexedKids.length match {
           case 0 => aerr( s"We've found a Branch with no children! That should never occur in the Trie. branch->${Branch}" );
           case 1 => {
-            val indexedKid = remainingIndexedKids.head;
+            val indexedKid = indexedKids.head;
             NewElements( Extension( IndexedSeq( alphabet( indexedKid._1 ) ), indexedKid._2 ) );
           }
           case 2 => NewElements( branch.copy( mbValue = None ) );
