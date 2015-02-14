@@ -1,5 +1,6 @@
 package com.mchange.sc.v1.consuela.trie;
 
+import scala.annotation.tailrec;
 import scala.reflect.ClassTag;
 
 object EthStylePMTrie {
@@ -79,13 +80,25 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
   }
   def excluding( key : Subkey ) : Trie[L,V] = {
     path( key ) match {
-      case exact : Path.ExactValueHolder => persistClone( exact.excluding );
-      case _                             => this;
+      case exact : Path.Exact => exact.excluding.map( persistClone( _ ) ).getOrElse( this );
+      case _                  => this;
     }
   }
 
   def subkeys( branch : Branch ) : Seq[L] = branch.children.zip( Stream.from(0) ).filter( _._1 != Zero ).map( tup => alphabet( tup._2 ) );
 
+  def dumpTrie : Unit = {
+    def dumpNode( h : H ) : Unit = {
+      val node = db( h )
+      println( s"${h} -> ${node}" );
+      node match {
+        case Branch( children, _ ) => children.filter( _ != Zero ).foreach( dumpNode(_) );
+        case Extension( _, child ) => dumpNode( child );
+        case _ => /* ignore */;
+      }
+    }
+    dumpNode( root );
+  }
 
   private[this] def persist( updated : Path.UpdatedPath ) : Unit = {
     updated.all.foreach( element => db.put( element.hash, element.node ) );
@@ -104,7 +117,7 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
   private[this] def indexKidPairs( children : IndexedSeq[H] ) : IndexedSeq[( Int, H )] = Stream.from( 0 ).zip( children ).filter( _._2 != Zero ).toIndexedSeq;
 
 
-  private[this] def path( key : Subkey ) : Path = Path.Builder.build( key );
+  /* private[this] */ def path( key : Subkey ) : Path = Path.Builder.build( key );
 
   private[this] def aerr( message : String ) : Nothing = throw new AssertionError( message );
 
@@ -236,7 +249,11 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
       
       def _singleNodePath = newLastElement :: Nil
       def _updateMultipleElementPath : List[Element] = {
+
         def newParent( newChild : Element, oldChild : Element, oldParent : Element ) : Element = {
+          //println( s" --> newChild -> ${ newChild }, oldChild -> ${ oldChild }, oldParent -> ${ oldParent }" );
+
+
           def updatedChildren( branch : Branch, h : H ) = branch.children.map( childHash => if ( childHash == oldChild.hash ) h else childHash );
           def culledChildren( branch : Branch )         = updatedChildren( branch, Zero );
           def replacedChildren( branch : Branch )       = updatedChildren( branch, newChild.hash );
@@ -249,12 +266,20 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
               val remainingKidPair = remainingKidPairs.head;
               Extension( IndexedSeq( alphabet( remainingKidPair._1 ) ), remainingKidPair._2 )
             }
+            def toMaybeCondensedOneLetterExtension : Node = condenseDownward( toOneLetterExtension )/*{
+              val ole = toOneLetterExtension;
+              newChild.node match {
+                case leaf : Leaf => Leaf( ole.subkey ++ leaf.subkey, leaf.value );
+                case extension : Extension => Extension( ole.subkey ++ extension.subkey, extension.child );
+                case _ => ole;
+              }
+            }*/
             def toOneLessChildBranch : Branch = branch.copy( children=culledChildren( branch ) )
 
             ( remainingKidPairs.length, branch.mbValue ) match {
               case ( 0, None )      => aerr( s"Huh? We should never see a Branch which previously had just one child and has no value! branch -> ${branch}" );
               case ( 0, someValue ) => Leaf( EmptySubkey, someValue.get ); // the Branch becomes an empty terminator
-              case ( 1, None )      => toOneLetterExtension;
+              case ( 1, None )      => toMaybeCondensedOneLetterExtension;
               case _                => toOneLessChildBranch;
             }
           }
@@ -314,6 +339,49 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
       }
     }
 
+    def condenseDownward( parentExtension : Extension ) : Node = {
+      val child = db( parentExtension.child );
+      child match {
+        case branch : Branch             => parentExtension;
+        case leaf : Leaf                 => Leaf( parentExtension.subkey ++ leaf.subkey, leaf.value );
+        case childExtension : Extension  => condenseDownward( Extension( parentExtension.subkey ++ childExtension.subkey, childExtension.child ) )
+        case Empty                       => aerr( s"An Empty node should never be an Extension child! parentExtension -> ${parentExtension}" )
+      }
+    }
+    def reshapeValueDroppingBranch( droppingBranch : Branch ) : Node = {
+      val indexedKids = indexKidPairs( droppingBranch.children );
+      indexedKids.length match {
+        case 0 => aerr( s"We've found a Branch with no children! That should never occur in the Trie. branch->${Branch}" );
+        case 1 => {
+          val indexedKid = indexedKids.head;
+          condenseDownward( Extension( IndexedSeq( alphabet( indexedKid._1 ) ), indexedKid._2 ) )
+        }
+        case _ => droppingBranch.copy( mbValue=None )
+      }
+    }
+    def reshapeChildDroppingBranch( droppingBranch : Branch, dropLetterIndex : Int ) : Node = {
+      val indexedKids = indexKidPairs( droppingBranch.children );
+      ( indexedKids.length, droppingBranch.mbValue ) match {
+        case (0, _)             => aerr( s"We've found a Branch with no children! That should never occur in the Trie. branch->${Branch}" );
+        case (1, None)          => aerr( s"We've found a Branch with on child and no value. That should never occur in the Trie. branch->${Branch}" );
+        case (1, Some( value )) => {
+          val indexedKid = indexedKids.head;
+          assert( dropLetterIndex == indexedKid._1, s"We're trying to drop an unfound child! dropLetterIndex -> ${dropLetterIndex}, indexedKid -> ${indexedKid}" );
+          Leaf( EmptySubkey, value )
+        }
+        case (2, None)          => {
+          val survivingChildren = indexedKids.filter( _._1 != dropLetterIndex );
+          assert(
+            survivingChildren.size == 1,
+            s"We started with two kids and are dropping one, there should be just one. dropLetterIndex -> ${dropLetterIndex}, survivingChildren -> ${survivingChildren}"
+          )
+          val survivingChild = survivingChildren.head;
+          condenseDownward( Extension( IndexedSeq( alphabet( survivingChild._1 ) ), survivingChild._2 ) )
+        }
+        case _                  => droppingBranch.copy( children=droppingBranch.children.updated( dropLetterIndex, Zero ) )
+      }
+    }
+
     case class DivergentLeaf( leaf : Leaf, elements : List[Element], matched : Subkey, oldRemainder : Subkey, newDivergence : Subkey ) extends Path {
       def replacementForIncluding( v : V ) : NewElements = {
         val oldRemainderLeaf = Leaf( oldRemainder.tail, leaf.value ); //tail can be empty, leaves can have empty keys
@@ -352,13 +420,13 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
         NewElements( Element( currentExtension ), newChildElements )
       }
     }
-    case class ExactLeaf( leaf : Leaf, elements : List[Element] ) extends Path with ExactValueHolder {
+    case class ExactLeaf( leaf : Leaf, elements : List[Element] ) extends Path with Exact {
       def mbValue : Option[V] = Some( leaf.value )
 
       // easy-peasy, no structural changes or children, just switch out the value
       def replacementForIncluding( v : V ) : NewElements = NewElements( leaf.copy( value=v ) )
 
-      def replacementOrDeletionForExcluding : NewElements = NewElements.Deletion; // this leaf is just gone, gotta carry it up the chain
+      def replacementOrDeletionForExcluding : Option[NewElements] = Some( NewElements.Deletion ); // this leaf is just gone, gotta carry it up the chain
     }
     case class ExactExtension( extension : Extension, elements : List[Element] ) extends Path with Exact {
       // Per ethereum spec, Extensions must have a child branch as "terminator" if it is to be associated with a value
@@ -383,8 +451,37 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
         val updatedExtension       = extension.copy( child=updatedChildBranchHash );
         NewElements( Element( updatedExtension ),  Element( updatedChildBranchHash, updatedChildBranch ) )
       }
+      def replacementOrDeletionForExcluding : Option[NewElements] = {
+
+        def withoutBranchValue( oldBranchChild : Branch ) = {
+          val kidPairs = indexKidPairs( oldBranchChild.children );
+
+          if ( kidPairs.length > 1 ) {
+            val newBranchChild = oldBranchChild.copy( mbValue=None );
+            val newBranchChildHash = db.hash( newBranchChild );
+            val currentExtension = extension.copy( child=newBranchChildHash )
+            NewElements( Element( currentExtension ), Element( newBranchChildHash, newBranchChild ) )
+          } else {
+            // condense
+            val kidPair = kidPairs.head; //there had better be precisely one kidPair here
+            val kidLetter = alphabet( kidPair._1 );
+            val kidHash = kidPair._2;
+
+            val onceCondensedExtension : Extension = Extension( extension.subkey :+ kidLetter, kidHash );
+            val fullyCondensedNode     : Node      = condenseDownward( onceCondensedExtension )
+
+            NewElements( fullyCondensedNode )
+          }
+        }
+
+        val child = db( extension.child );
+        child match {
+          case oldBranchChild @ Branch( _, Some( _ ) )  => Some( withoutBranchValue( oldBranchChild ) )
+          case _                                        => None;
+        }
+      }
     }
-    case class ExactBranch( branch : Branch, elements : List[Element], matchLetterIndex : Int ) extends Path with ExactValueHolder {
+    case class ExactBranch( branch : Branch, elements : List[Element], matchLetterIndex : Int ) extends Path with Exact {
       // Per ethereum spec, Branches must have a child Branch or empty-key Leaf as "terminator" if it is to be associated with a value
       def mbValue : Option[V] = {
         val childHash = branch.children( matchLetterIndex );
@@ -486,19 +583,21 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
         }
       }
 
-      def replacementOrDeletionForExcluding : NewElements = {
-        // if there are at least two children, we just replace with a no-value Branch
-        // if there is only one child, we have to become an Extension, which might need to be merged into a parent Extension up the chain
+      def replacementOrDeletionForExcluding : Option[NewElements] = {
 
-        val indexedKids = indexKidPairs( branch.children );
+        def removeChild = Some( NewElements( reshapeChildDroppingBranch( branch, matchLetterIndex ) ) )
 
-        indexedKids.length match {
-          case 0 => aerr( s"We've found a Branch with no children! That should never occur in the Trie. branch->${Branch}" );
-          case 1 => {
-            val indexedKid = indexedKids.head;
-            NewElements( Extension( IndexedSeq( alphabet( indexedKid._1 ) ), indexedKid._2 ) );
-          }
-          case 2 => NewElements( branch.copy( mbValue = None ) );
+        def reshapeChildBranch( childBranch : Branch )  = {
+          val newChild = reshapeValueDroppingBranch( childBranch );
+          val newChildHash = db.hash( newChild );
+          val currentBranch = branch.copy( children=branch.children.updated( matchLetterIndex, newChildHash ) )
+          Some( NewElements( Element( currentBranch ), Element( newChildHash, newChild ) ) )
+        }
+        val potentiallyTerminatingChild = db( branch.children( matchLetterIndex ) );
+        potentiallyTerminatingChild match {
+          case Leaf( EmptySubkey, _ )               => removeChild;
+          case childBranch @ Branch( _, Some( _ ) ) => reshapeChildBranch( childBranch )
+          case _                                    => None; //not a terminator
         }
       }
     }
@@ -627,14 +726,14 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
         NewElements( Element( newBranch ), Element( childExtensionHash, childExtension ) )
       }
     }
-    case class EmptySubkeyAtRootBranch( rootBranch : Branch ) extends Path with ExactValueHolder {
+    case class EmptySubkeyAtRootBranch( rootBranch : Branch ) extends Path with Exact {
       def elements = Element( rootBranch ) :: Nil;
 
       def mbValue   : Option[V] = rootBranch.mbValue;
 
       def replacementForIncluding( v : V ) : NewElements = NewElements( rootBranch.copy( mbValue=Some(v) ) )
 
-      def replacementOrDeletionForExcluding : NewElements = {
+      def replacementOrDeletionForExcluding : Option[NewElements] = {
         def oneChildCase( childIndex : Int ) = {
           val subkeyLetter = alphabet( childIndex );
           val childHash = rootBranch.children( childIndex );
@@ -656,8 +755,8 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
         val kidPairs = indexKidPairs( rootBranch.children );
         kidPairs.length match {
           case 0 => aerr( s"We should never see a zero-child Branch! rootBranch->${rootBranch}" );
-          case 1 => oneChildCase( kidPairs.head._1 );
-          case _ => multipleChildCase;
+          case 1 => Some( oneChildCase( kidPairs.head._1 ) );
+          case _ => Some( multipleChildCase );
         }
       }
     }
@@ -666,12 +765,9 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
       self : Path =>
 
       def mbValue   : Option[V]
-    }
-    trait ExactValueHolder extends Exact {
-      self : Path =>
 
-      def excluding : UpdatedPath = updatedPath( replacementOrDeletionForExcluding );
-      def replacementOrDeletionForExcluding : NewElements;
+      def excluding : Option[UpdatedPath] = replacementOrDeletionForExcluding.map( updatedPath(_) )
+      def replacementOrDeletionForExcluding : Option[NewElements];
     }
   }
   sealed trait Path {
@@ -683,7 +779,40 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
 
     def updatedPath( newElements : NewElements ) : UpdatedPath = {
       val newPath = Path.updatePath( elements, newElements.head );
-      val lastAndChildren = if ( newElements == NewElements.Deletion ) None else Some( newElements )
+      val lastAndChildren = {
+        if ( newElements == NewElements.Deletion ) {
+          None
+        } else if ( newPath.isEmpty ) {
+          None
+        } else if (newPath.head == newElements.head ) {
+          Some( newElements )
+        } else {
+          // updating the path condensed the last node, we have to do some work to find the children of the condensed node
+          newPath.head match {
+            case Element(_, branch : Branch)       => aerr( s"A Branch could not have been the result of a condensation! branch -> ${branch}" );
+            case Element(_, leaf : Leaf)           => None; // no kids to worry about
+            case Element(_, extension : Extension) => {
+              def referenced = {
+                def referencedFrom( referencer : Node ) : Set[Element] = referencer match {
+                  case _         : Leaf      => Set.empty[Element];
+                  case extension : Extension => newElements.children.filter( extension.child == _.hash );
+                  case branch    : Branch    => newElements.children.filter( elem => branch.children.contains( elem.hash ) );
+                  case Empty                 => aerr( "We should never find an empty node in a path or as its children!" );
+                }
+                @tailrec
+                def accumulateReferenced( accum : Set[Element], referencers : Set[Element] ) : Set[Element] = {
+                  val newReferenced = referencers.foldLeft( Set.empty[Element] )( ( set, referencer ) => set ++ referencedFrom( referencer.node ) );
+                  if ( newReferenced.isEmpty ) accum else accumulateReferenced( accum ++ newReferenced, newReferenced )
+                }
+                accumulateReferenced( Set.empty, Set(newPath.head) );
+              }
+
+              val unhandledChildren = referenced;
+              if ( unhandledChildren.isEmpty ) None else Some( NewElements( newPath.head, unhandledChildren ) )
+            }
+          }
+        }
+      }
       UpdatedPath( newPath, lastAndChildren )
     }
   }
