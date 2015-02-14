@@ -258,6 +258,7 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
           def culledChildren( branch : Branch )         = updatedChildren( branch, Zero );
           def replacedChildren( branch : Branch )       = updatedChildren( branch, newChild.hash );
 
+          // remember that "newChild" is Deletion in this case, don't try to condense with it!
           def deleteFromBranch( branch : Branch ) : Node = {
             val children = branch.children;
             val remainingKidPairs = indexKidPairs( children ).filter( _._2 != oldChild.hash );
@@ -266,14 +267,8 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
               val remainingKidPair = remainingKidPairs.head;
               Extension( IndexedSeq( alphabet( remainingKidPair._1 ) ), remainingKidPair._2 )
             }
-            def toMaybeCondensedOneLetterExtension : Node = condenseDownward( toOneLetterExtension )/*{
-              val ole = toOneLetterExtension;
-              newChild.node match {
-                case leaf : Leaf => Leaf( ole.subkey ++ leaf.subkey, leaf.value );
-                case extension : Extension => Extension( ole.subkey ++ extension.subkey, extension.child );
-                case _ => ole;
-              }
-            }*/
+            def toMaybeCondensedOneLetterExtension : Node = condenseDownward( toOneLetterExtension )
+
             def toOneLessChildBranch : Branch = branch.copy( children=culledChildren( branch ) )
 
             ( remainingKidPairs.length, branch.mbValue ) match {
