@@ -1,7 +1,6 @@
 package com.mchange.sc.v1.consuela.trie;
 
 import scala.annotation.tailrec;
-import scala.reflect.ClassTag;
 
 object EthStylePMTrie {
   trait UniqueSubkey[L] {
@@ -39,8 +38,6 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
   /*
    * The following abstract members must be set by our concrete subclass
    */ 
-
-  implicit val hashTypeClassTag : ClassTag[H];
 
   val alphabet : IndexedSeq[L];
   val earlyInit : ( Database, H ); /* ( Database, root at time of instance construction ) */

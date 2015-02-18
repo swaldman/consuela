@@ -5,8 +5,6 @@ import com.mchange.sc.v1.consuela.hash.Hash;
 import com.mchange.sc.v1.log.MLogger;
 import com.mchange.sc.v1.log.MLevel._;
 
-import scala.reflect._;
-
 import EthStylePMTrie.Database;
 import EthStylePMTrie.Empty;
 
@@ -93,8 +91,6 @@ class EthStyleLowercaseTrie( val mdb : EthStyleLowercaseTrie.MapDatabase = new E
   val earlyInit = ( mdb, r );
 } with EthStylePMTrie[Char,String,Hash.SHA3_256] {
   import EthStyleLowercaseTrie._;
-
-  val hashTypeClassTag : ClassTag[Hash.SHA3_256] = classTag[Hash.SHA3_256];
 
   val alphabet = EthStyleLowercaseTrie.alphabet;
 
