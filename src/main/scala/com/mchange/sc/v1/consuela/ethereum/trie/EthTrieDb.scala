@@ -1,50 +1,55 @@
+/*
 package com.mchange.sc.v1.consuela.ethereum.trie;
 
-import com.mchange.sc.v1.consuela.trie.AltPMTrie;
+import com.mchange.sc.v1.consuela.trie.PMTrie;
 import com.mchange.sc.v1.consuela.ethereum.{HP, RLP};
 
-trait EthTrieDb extends AltPMTrie.Database[Nibble,Seq[Byte],EthHash] {
+trait EthTrieDb extends PMTrie.Database[EthNode,EthHash] {
+  val EmptyByteSeq = Seq.empty[Byte];
+
   val Zero = EthHash.Zero;
   def hash( node : Node ) : EthHash = if ( node == Empty ) Zero else EthHash( toBytes( node ) );
 
-  private[this] def toBytes( node : Node ) : Array[Byte] = {
+  private[this] def toBytes( node : Node ) : Seq[Byte] = {
     node match {
-      case branch : Branch => toBytes( branch );
+      case branch    : Branch    => toBytes( branch );
       case extension : Extension => toBytes( extension );
+      case Leaf      : Leaf      => toBytes( leaf );
       case Empty => throw new AssertionError( "Empty should hash to zero prior to and without any conversion into bytes.")
     }
   }
-  private[this] def toBytes( branch : Branch ) : Array[Byte] = {
-    ???
+  private[this] def toBytes( branch : Branch ) : Seq[Byte] = {
+    val branchAsByteSeqSeq = branch.children.map( embeddedOrHash _ ) :+ branch.mbValue.getOrElse( EmptyByteSeq );
+    val branchSeq = branchAsByteSeqSeq.map( RLP.EncodableByteSeq( _ ) );
+    RLP.encode( branchSeq );
   }
-  private[this] def toBytes( extension : Extension ) : Array[Byte] = {
-    ( extension.child, extension.value ) match {
-      case ( Zero, None )          => throw new AssertionError( "We should never see an extension with no child or value." );
-      case ( hash, None )          => toBytesEthExtension( extension, hash );
-      case ( Zero, Some( value ) ) => toBytesEthLeaf( extension, value );
-      case ( hash, Some( value ) ) => toBytesEthExtendedLeaf( extension, hash, value );
-    }
+  private[this] def toBytes( extension : Extension ) : Seq[Byte] = {
+    val extSeq : Seq[RLP.Encodable] = Seq(
+      RLP.Encodable.ByteSeq( HP.encode( extension.subkey, false ) ),
+      RLP.Encodable.ByteSeq( embeddedOrHash( extension.hash ) )
+    );
+    RLP.encode( RLP.Encodable.Seq( extSeq ) )
+  }
+  private[this] def toBytes( leaf : Leaf ) : Seq[Byte] = {
+    val leafSeq : Seq[RLP.Encodable] = Seq( 
+      RLP.Encodable.ByteSeq( HP.encode( leaf.subkey, true ) ), 
+      RLP.Encodable( leaf.value )
+    )
+    RLP.encode( RLP.Encodable.Seq( leafSeq ) )
+  }
 
-    /*
-    if ( extension.child == Zero ) { // this should be what the Ethereum spec calls a leaf 
-      toBytesEthLeaf( extension, extension.value.get ); // we assert it has a value, otherwise it shouldn't exist in the trie
-    } else { // this is an Ethereum spec extension
-      toBytesEthExtension( extension, child );
-    }
-    */ 
+  private[this] def embeddedOrHash( childHash : EthHash )
+    val childNode  = this.apply( childHash );
+    val rawChildBytes = this.toBytes( childNode );
+    val childBytes = if (rawChildBytes.length < 32) rawChildBytes else childHash.bytes;
   }
-  private[this] def toBytesEthExtendedLeaf( leaf : Extension, childHash : EthHash, value : Seq[Byte] ) : Array[Byte] = ???
-  private[this] def toBytesEthLeaf( leaf : Extension, value : Seq[Byte] ) : Array[Byte] = {
-    RLP.encode( RLP.Encodable.ByteSeq( HP.encode( leaf.subkey, true ) ++ value ) ).toArray
-  }
-  private[this] def toBytesEthExtension( leaf : Extension, childHash : EthHash ) : Array[Byte] = {
-    RLP.encode( RLP.Encodable.ByteSeq( HP.encode( leaf.subkey, false ) ++ embeddedOrHash( childHash ) ) ).toArray
-  }
-  private[this] def embeddedOrHash( childHash : EthHash ) : Seq[Byte] = {
-    val childBytes = toBytes( this.apply( childHash ) );
-    if ( childBytes.length < 32 )
-      childBytes
-    else
-      childHash.bytes;
+
+  // too complicated for now, we'd have to change a lot to support this
+  private[this] def embeddedOrHashChildrenMaybeKnown( childHash : EthHash, mbKnownChildren : Option[Map[EthHash,Node]] = None ) : Seq[Byte] = {
+    def fromDb( h : EthHash ) : Node = this.apply( childHash );
+    val childNode  = mbKnownChildren.fold( fromDb( childHash ) ){ knownChildren => knownChildren.getOrElse( fromDb( childHash ) ) }
+    val rawChildBytes = this.toBytes( childNode );
+    val childBytes = if (rawChildBytes.length < 32) rawChildBytes else childHash.bytes;
   }
 }
+*/

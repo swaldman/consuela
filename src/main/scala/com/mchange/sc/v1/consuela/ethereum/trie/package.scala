@@ -1,3 +1,4 @@
+/*
 package com.mchange.sc.v1.consuela.ethereum;
 
 import scala.collection.mutable.ArrayBuffer;
@@ -11,10 +12,11 @@ package object trie {
   val  EthHash = Hash.SHA3_256;
   type EthHash = Hash.SHA3_256;
 
-  type Node = AltPMTrie.Node[Nibble,Seq[Byte],EthHash]
-  type Branch = AltPMTrie.Branch[Nibble,Seq[Byte],EthHash]
-  type Extension = AltPMTrie.Extension[Nibble,Seq[Byte],EthHash]
-  val  Empty = AltPMTrie.Empty;
+  type EthNode   = EthStylePMTrie.Node[Nibble,Seq[Byte],EthHash]
+  type Branch    = EthStylePMTrie.Branch[Nibble,Seq[Byte],EthHash]
+  type Extension = EthStylePMTrie.Extension[Nibble,Seq[Byte],EthHash]
+  type Leaf      = EthStylePMTrie.Leaf[Nibble,Seq[Byte],EthHash]
+  val  Empty     = EthStylePMTrie.Empty;
 
   def nibbles( bytes : Seq[Byte] ) = lsbNibbles( bytes.map( _ & 0xFF ) )
 
@@ -32,3 +34,4 @@ package object trie {
     out.toSeq
   }
 }
+*/

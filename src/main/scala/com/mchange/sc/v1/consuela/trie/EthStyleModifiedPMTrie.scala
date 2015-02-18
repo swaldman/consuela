@@ -1,58 +1,66 @@
 package com.mchange.sc.v1.consuela.trie;
 
 import scala.annotation.tailrec;
-import scala.reflect.ClassTag;
 
 object EthStyleModifiedPMTrie {
   object NodeSource {
-    case class Hash[H]( hash : H ) extends NodeSource[H];
-    case class Embedded( bytes : Seq[Byte] ) extends NodeSource[Nothing];
-    case object Empty extends NodeSource[Nothing];
+    trait Defaults {
+      def isHash : Boolean     = false;
+      def isEmbedded : Boolean = false;
+      def isEmpty : Boolean    = false;
+    }
+    case class Hash[H]( hash : H ) extends Defaults with NodeSource[H,Nothing]         { override def isHash     : Boolean = true; }
+    case class Embedded[E]( embedded : E ) extends Defaults with NodeSource[Nothing,E] { override def isEmbedded : Boolean = true; }
+    case object Empty extends Defaults with NodeSource[Nothing,Nothing]                { override def isEmpty    : Boolean = true; }
   }
-  sealed trait NodeSource[+H];
+  sealed trait NodeSource[+H,+E]{
+    def isHash : Boolean;
+    def isEmbedded : Boolean;
+    def isEmpty : Boolean;
+  }
 
   trait UniqueSubkey[L] {
-    self : Node[L,_,_] =>
+    self : Node[L,_,_,_] =>
 
     def subkey : IndexedSeq[L];
   }
 
-  sealed trait Node[+L,+V,+H];
-  case class Branch[L,V,H] ( val children : IndexedSeq[NodeSource[H]], val mbValue : Option[V] ) extends Node[L,V,H];
-  case class Extension[L,V,H] ( val subkey : IndexedSeq[L], val child : NodeSource[H] ) extends Node[L,V,H] with UniqueSubkey[L];
-  case class Leaf[L,V,H] ( val subkey : IndexedSeq[L], val value : V ) extends Node[L,V,H] with UniqueSubkey[L];
-  case object Empty extends Node[Nothing,Nothing,Nothing];
+  sealed trait Node[+L,+V,+H,+E];
+  case class Branch[L,V,H,E] ( val children : IndexedSeq[NodeSource[H,E]], val mbValue : Option[V] ) extends Node[L,V,H,E];
+  case class Extension[L,V,H,E] ( val subkey : IndexedSeq[L], val child : NodeSource[H,E] ) extends Node[L,V,H,E] with UniqueSubkey[L];
+  case class Leaf[L,V,H,E] ( val subkey : IndexedSeq[L], val value : V ) extends Node[L,V,H,E] with UniqueSubkey[L];
+  case object Empty extends Node[Nothing,Nothing,Nothing,Nothing];
 
-  trait Database[L,V,H] {
+  trait Database[L,V,H,E] {
     // definitely requires access to the persistent store
-    def put( hash : H, node : Node[L,V,H] ) : Unit;
-    def apply( hash : H ) : Node[L,V,H];
+    def put( hash : H, node : Node[L,V,H,E] ) : Unit;
+    def apply( hash : H ) : Node[L,V,H,E];
 
     // may require access to the persistent store
-    def dereference( node : NodeSource[H] ) : Node[L,V,H];
+    def dereference( node : NodeSource[H,E] ) : Node[L,V,H,E];
 
     // no access to the persistent store
-    def reference( node : Node[L,V,H] )     : NodeSource[H];
-    def rootReference( node : Node[L,V,H] ) : NodeSource.Hash[H]; // same a reference, but force to NodeSource.Hash, since there's nothing to embed root
+    def reference( node : Node[L,V,H,E] )     : NodeSource[H,E];
+    def rootReference( node : Node[L,V,H,E] ) : NodeSource[H,E]; // same, a reference, but cannot be embedded, since there's nothing to embed root
     def Zero : H;
   }
 
-  case class EarlyInit[L,V,H]( alphabet : IndexedSeq[L], database : Database[L,V,H], root : H );
+  case class EarlyInit[L,V,H,E]( alphabet : IndexedSeq[L], database : Database[L,V,H,E], root : H );
 }
 
-trait EthStyleModifiedPMTrie[L,V,H] extends Trie[L,V] {
+trait EthStyleModifiedPMTrie[L,V,H,E] extends Trie[L,V] {
 
   /*
    * First lets put some unwieldy bits from the companion object into more convenient forms
    */ 
-  type EarlyInit  = EthStyleModifiedPMTrie.EarlyInit[L,V,H];
-  type Database   = EthStyleModifiedPMTrie.Database[L,V,H];
-  type NodeSource = EthStyleModifiedPMTrie.NodeSource[H];
+  type EarlyInit  = EthStyleModifiedPMTrie.EarlyInit[L,V,H,E];
+  type Database   = EthStyleModifiedPMTrie.Database[L,V,H,E];
+  type NodeSource = EthStyleModifiedPMTrie.NodeSource[H,E];
   type Subkey     = IndexedSeq[L]
-  type Node       = EthStyleModifiedPMTrie.Node[L,V,H];
-  type Branch     = EthStyleModifiedPMTrie.Branch[L,V,H];
-  type Extension  = EthStyleModifiedPMTrie.Extension[L,V,H];
-  type Leaf       = EthStyleModifiedPMTrie.Leaf[L,V,H];
+  type Node       = EthStyleModifiedPMTrie.Node[L,V,H,E];
+  type Branch     = EthStyleModifiedPMTrie.Branch[L,V,H,E];
+  type Extension  = EthStyleModifiedPMTrie.Extension[L,V,H,E];
+  type Leaf       = EthStyleModifiedPMTrie.Leaf[L,V,H,E];
 
 
   val Empty = EthStyleModifiedPMTrie.Empty;
@@ -61,7 +69,7 @@ trait EthStyleModifiedPMTrie[L,V,H] extends Trie[L,V] {
   val Extension = EthStyleModifiedPMTrie.Extension;
   val Leaf      = EthStyleModifiedPMTrie.Leaf;
 
-  val NodeSource = EthStyleModifiedPMTrie.NodeSource;
+  import EthStyleModifiedPMTrie.NodeSource;
 
   /*
    * The following abstract members must be set by our concrete subclass
@@ -85,7 +93,7 @@ trait EthStyleModifiedPMTrie[L,V,H] extends Trie[L,V] {
   
   val alphabetLen = alphabet.length;
 
-  lazy val rootSource = NodeSource.Hash( root );
+  lazy val rootSource = if ( root == db.Zero ) NodeSource.Empty else NodeSource.Hash( root );
   lazy val rootNode   = db.dereference( rootSource );
 
   // useful empties
@@ -116,8 +124,8 @@ trait EthStyleModifiedPMTrie[L,V,H] extends Trie[L,V] {
       val node = db.dereference( nodeSource )
       println( s"${nodeSource} -> ${node}" );
       node match {
-        case Branch( children, _ ) => children.filter( _ != NodeSource.Empty ).foreach( dumpNode(_) );
-        case Extension( _, child ) => dumpNode( child );
+        case Branch( children, _ ) => children.filter( _.isHash ).foreach( dumpNode(_) ); // embedded and empties have already printed
+        case Extension( _, child ) if ( child.isHash ) => dumpNode( child );              // embedded and empties have already printed
         case _ => /* ignore */;
       }
     }
@@ -137,18 +145,25 @@ trait EthStyleModifiedPMTrie[L,V,H] extends Trie[L,V] {
   // ugly, very verbose fully qualified names to avoid warnings like 
   // "The outer reference in this type test cannot be checked at run time."
   def persist( updated : Path.UpdatedPath ) : Option[H] = {
+    def rootReferenceHash( rootRef : NodeSource ) : H = {
+      rootRef match {
+        case NodeSource.Hash( hash ) => hash;
+        case NodeSource.Embedded( _ ) => aerr( s"A root reference cannot be an embedded node. It must be referenced by a hash. rootRef -> ${rootRef}" );
+        case NodeSource.Empty => db.Zero;
+      }
+    }
     val NewRootElement : Path.Element = updated.newRoot.getOrElse( null ); //so sue me
     val mbRootHash = NewRootElement match {
-      case Path.Element( EthStyleModifiedPMTrie.NodeSource.Hash( hash ), _ )     => Some( hash );
-      case Path.Element( EthStyleModifiedPMTrie.NodeSource.Embedded( _ ), node ) => Some( db.rootReference( node ).hash );
+      case Path.Element( NodeSource.Hash( hash ), _ )     => Some( hash );
+      case Path.Element( NodeSource.Embedded( _ ), node ) => Some( rootReferenceHash( db.rootReference( node ) ) );
       case null => None
       case _    => aerr( s"updated.newRoot is an Element that should never appear in a path. NewRootElement -> ${NewRootElement}" );
     }
     updated.all.foreach { element => 
       element match {
         case NewRootElement                                                       => db.put( mbRootHash.get, NewRootElement.node );
-        case Path.Element( EthStyleModifiedPMTrie.NodeSource.Hash( hash ), node ) => db.put( hash, node );
-        case Path.Element( EthStyleModifiedPMTrie.NodeSource.Embedded( _ ), _ )   => /* skip. this will be persisted via a parent */;
+        case Path.Element( NodeSource.Hash( hash ), node ) => db.put( hash, node );
+        case Path.Element( NodeSource.Embedded( _ ), _ )   => /* skip. this will be persisted via a parent */;
         case _                                                                    => aerr( s"Unexpected element in persist(...). element -> ${element}" );
       }
     }
@@ -160,8 +175,8 @@ trait EthStyleModifiedPMTrie[L,V,H] extends Trie[L,V] {
   }
 
   private[this] def newTrie( newRootHash : H ) : Trie[L,V] = {
-    if ( db.isInstanceOf[PMTrie.RootTracking[H]] )
-      db.asInstanceOf[PMTrie.RootTracking[H]].markRoot( newRootHash );
+//    if ( db.isInstanceOf[PMTrie.RootTracking[H]] )
+//      db.asInstanceOf[PMTrie.RootTracking[H]].markRoot( newRootHash );
     instantiateSuccessor( newRootHash : H ) : Trie[L,V]
   }
 
