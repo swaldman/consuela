@@ -1,11 +1,11 @@
 package com.mchange.sc.v1.consuela.ethereum;
 
 object HP {
-  def encode( nibbles : Seq[Int], flag : Boolean ) : Seq[Byte] = {
+  def encode( nibbles : Seq[Nibble], flag : Boolean ) : Seq[Byte] = {
     require( nibbles.forall( _ < 16 ), s"nibbles should be values between 0 and 15 [ nibbles -> ${ nibbles} ]" );
     _encode( nibbles, flag ).map( _.asInstanceOf[Byte] )
   }
-  private[this] def _encode( nibbles : Seq[Int], flag : Boolean ) : Seq[Int] = {
+  private[this] def _encode( nibbles : Seq[Nibble], flag : Boolean ) : Seq[Int] = {
     val f = if ( flag ) 2 else 0;
     val len = nibbles.length;
     val even = (len % 2 == 0);
@@ -23,22 +23,18 @@ object HP {
       reverseBuild( headerByte :: Nil, 1 ).reverse
     }
   }
-  def decode( bytes : Seq[Byte] ) : ( Seq[Int], Boolean ) = _decode( bytes.map( _ & 0xFF ) )
-  private[this] def _decode( bytes : Seq[Int] ) : ( Seq[Int], Boolean ) = {
+  def decode( bytes : Seq[Byte] ) : ( Seq[Nibble], Boolean ) = _decode( bytes.map( _ & 0xFF ) )
+  private[this] def _decode( bytes : Seq[Int] ) : ( Seq[Nibble], Boolean ) = {
     val headerByte = bytes(0);
     val headerNibble = (headerByte >>> 4);
     val flag = ( headerNibble & 2 ) != 0
     val even = ( headerNibble & 1 ) == 0;
-    def toNibbles( byte : Int ) : Array[Int] = Array( byte >>> 4, byte & 0x0F )
+    def toNibbles( byte : Int ) : Array[Nibble] = Array( byte >>> 4, byte & 0x0F )
     val nibbles = {
       val nonheader = bytes.drop(1).flatMap( toNibbles(_) );
       if ( even ) (nonheader) else ((headerByte & 0x0F) +: nonheader);
     }
     ( nibbles, flag )
-  }
-  private[this] def printEval[T]( expr : T ) = {
-    println( expr );
-    expr
   }
 }
 

@@ -4,7 +4,7 @@ package com.mchange.sc.v1.consuela.ethereum.trie;
 import com.mchange.sc.v1.consuela.trie.PMTrie;
 import com.mchange.sc.v1.consuela.ethereum.{HP, RLP};
 
-trait EthTrieDb extends PMTrie.Database[EthNode,EthHash] {
+trait EthTrieDb extends EmbeddableEthStyleTrie.Database[EthNode,EthHash] {
   val EmptyByteSeq = Seq.empty[Byte];
 
   val Zero = EthHash.Zero;
@@ -52,4 +52,5 @@ trait EthTrieDb extends PMTrie.Database[EthNode,EthHash] {
     val childBytes = if (rawChildBytes.length < 32) rawChildBytes else childHash.bytes;
   }
 }
+
 */
