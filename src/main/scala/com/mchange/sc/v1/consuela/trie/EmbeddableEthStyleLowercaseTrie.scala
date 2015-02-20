@@ -2,25 +2,25 @@ package com.mchange.sc.v1.consuela.trie;
 
 import com.mchange.sc.v1.consuela.hash.Hash;
 
-import EthStyleModifiedPMTrie.NodeSource;
-import EthStyleModifiedPMTrie.Empty;
-import EthStyleModifiedPMTrie.EarlyInit;
+import EmbeddableEthStylePMTrie.NodeSource;
+import EmbeddableEthStylePMTrie.Empty;
+import EmbeddableEthStylePMTrie.EarlyInit;
 
-object EthStyleModifiedLowercaseTrie {
+object EmbeddableEthStyleLowercaseTrie {
 
   val alphabet : IndexedSeq[Char] = IndexedSeq( 'a' to 'z' : _* );
   val Zero : Hash.SHA3_256 = Hash.SHA3_256.Zero;
 
-  type EarlyInit  = EthStyleModifiedPMTrie.EarlyInit[Char,String,Hash.SHA3_256,AnyRef];
-  type Database   = EthStyleModifiedPMTrie.Database[Char,String,Hash.SHA3_256,AnyRef];
-  type NodeSource = EthStyleModifiedPMTrie.NodeSource[Hash.SHA3_256,AnyRef];
-  type Node       = EthStyleModifiedPMTrie.Node[Char,String,Hash.SHA3_256,AnyRef];
-  type Branch     = EthStyleModifiedPMTrie.Branch[Char,String,Hash.SHA3_256,AnyRef];
-  type Extension  = EthStyleModifiedPMTrie.Extension[Char,String,Hash.SHA3_256,AnyRef];
-  type Leaf       = EthStyleModifiedPMTrie.Leaf[Char,String,Hash.SHA3_256,AnyRef];
+  type EarlyInit  = EmbeddableEthStylePMTrie.EarlyInit[Char,String,Hash.SHA3_256,AnyRef];
+  type Database   = EmbeddableEthStylePMTrie.Database[Char,String,Hash.SHA3_256,AnyRef];
+  type NodeSource = EmbeddableEthStylePMTrie.NodeSource[Hash.SHA3_256,AnyRef];
+  type Node       = EmbeddableEthStylePMTrie.Node[Char,String,Hash.SHA3_256,AnyRef];
+  type Branch     = EmbeddableEthStylePMTrie.Branch[Char,String,Hash.SHA3_256,AnyRef];
+  type Extension  = EmbeddableEthStylePMTrie.Extension[Char,String,Hash.SHA3_256,AnyRef];
+  type Leaf       = EmbeddableEthStylePMTrie.Leaf[Char,String,Hash.SHA3_256,AnyRef];
   type Subkey     = IndexedSeq[Char];
 
-  class MapDatabase extends EthStyleModifiedPMTrie.Database[Char,String,Hash.SHA3_256,AnyRef] {
+  class MapDatabase extends EmbeddableEthStylePMTrie.Database[Char,String,Hash.SHA3_256,AnyRef] {
 
     private[this] val _map = scala.collection.mutable.Map.empty[Hash.SHA3_256,Node];
     _map += ( Hash.SHA3_256.Zero -> Empty );
@@ -92,14 +92,14 @@ object EthStyleModifiedLowercaseTrie {
   }
 }
 
-class EthStyleModifiedLowercaseTrie( val mdb : EthStyleModifiedLowercaseTrie.MapDatabase = new EthStyleModifiedLowercaseTrie.MapDatabase, r : Hash.SHA3_256 = Hash.SHA3_256.Zero ) extends {
-  val earlyInit = EarlyInit( EthStyleModifiedLowercaseTrie.alphabet, mdb, r );
-} with EthStyleModifiedPMTrie[Char,String,Hash.SHA3_256,AnyRef] {
-  import EthStyleModifiedLowercaseTrie._;
+class EmbeddableEthStyleLowercaseTrie( val mdb : EmbeddableEthStyleLowercaseTrie.MapDatabase = new EmbeddableEthStyleLowercaseTrie.MapDatabase, r : Hash.SHA3_256 = Hash.SHA3_256.Zero ) extends {
+  val earlyInit = EarlyInit( EmbeddableEthStyleLowercaseTrie.alphabet, mdb, r );
+} with EmbeddableEthStylePMTrie[Char,String,Hash.SHA3_256,AnyRef] {
+  import EmbeddableEthStyleLowercaseTrie._;
 
-  def instantiateSuccessor( newRootHash : Hash.SHA3_256 ) : EthStyleModifiedLowercaseTrie = {
-    new EthStyleModifiedLowercaseTrie( mdb, newRootHash );
+  def instantiateSuccessor( newRootHash : Hash.SHA3_256 ) : EmbeddableEthStyleLowercaseTrie = {
+    new EmbeddableEthStyleLowercaseTrie( mdb, newRootHash );
   }
-  override def excluding( key : Subkey ) : EthStyleModifiedLowercaseTrie = super.excluding( key ).asInstanceOf[EthStyleModifiedLowercaseTrie];
-  override def including( key : Subkey, value : String ) : EthStyleModifiedLowercaseTrie = super.including( key, value ).asInstanceOf[EthStyleModifiedLowercaseTrie];
+  override def excluding( key : Subkey ) : EmbeddableEthStyleLowercaseTrie = super.excluding( key ).asInstanceOf[EmbeddableEthStyleLowercaseTrie];
+  override def including( key : Subkey, value : String ) : EmbeddableEthStyleLowercaseTrie = super.including( key, value ).asInstanceOf[EmbeddableEthStyleLowercaseTrie];
 }

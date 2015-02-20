@@ -2,7 +2,7 @@ package com.mchange.sc.v1.consuela.trie;
 
 import scala.annotation.tailrec;
 
-object EthStyleModifiedPMTrie {
+object EmbeddableEthStylePMTrie {
   object NodeSource {
     trait Defaults {
       def isHash : Boolean     = false;
@@ -48,28 +48,28 @@ object EthStyleModifiedPMTrie {
   case class EarlyInit[L,V,H,E]( alphabet : IndexedSeq[L], database : Database[L,V,H,E], root : H );
 }
 
-trait EthStyleModifiedPMTrie[L,V,H,E] extends Trie[L,V] {
+trait EmbeddableEthStylePMTrie[L,V,H,E] extends Trie[L,V] {
 
   /*
    * First lets put some unwieldy bits from the companion object into more convenient forms
    */ 
-  type EarlyInit  = EthStyleModifiedPMTrie.EarlyInit[L,V,H,E];
-  type Database   = EthStyleModifiedPMTrie.Database[L,V,H,E];
-  type NodeSource = EthStyleModifiedPMTrie.NodeSource[H,E];
+  type EarlyInit  = EmbeddableEthStylePMTrie.EarlyInit[L,V,H,E];
+  type Database   = EmbeddableEthStylePMTrie.Database[L,V,H,E];
+  type NodeSource = EmbeddableEthStylePMTrie.NodeSource[H,E];
   type Subkey     = IndexedSeq[L]
-  type Node       = EthStyleModifiedPMTrie.Node[L,V,H,E];
-  type Branch     = EthStyleModifiedPMTrie.Branch[L,V,H,E];
-  type Extension  = EthStyleModifiedPMTrie.Extension[L,V,H,E];
-  type Leaf       = EthStyleModifiedPMTrie.Leaf[L,V,H,E];
+  type Node       = EmbeddableEthStylePMTrie.Node[L,V,H,E];
+  type Branch     = EmbeddableEthStylePMTrie.Branch[L,V,H,E];
+  type Extension  = EmbeddableEthStylePMTrie.Extension[L,V,H,E];
+  type Leaf       = EmbeddableEthStylePMTrie.Leaf[L,V,H,E];
 
 
-  val Empty = EthStyleModifiedPMTrie.Empty;
+  val Empty = EmbeddableEthStylePMTrie.Empty;
 
-  val Branch    = EthStyleModifiedPMTrie.Branch;
-  val Extension = EthStyleModifiedPMTrie.Extension;
-  val Leaf      = EthStyleModifiedPMTrie.Leaf;
+  val Branch    = EmbeddableEthStylePMTrie.Branch;
+  val Extension = EmbeddableEthStylePMTrie.Extension;
+  val Leaf      = EmbeddableEthStylePMTrie.Leaf;
 
-  import EthStyleModifiedPMTrie.NodeSource;
+  import EmbeddableEthStylePMTrie.NodeSource;
 
   /*
    * The following abstract members must be set by our concrete subclass
