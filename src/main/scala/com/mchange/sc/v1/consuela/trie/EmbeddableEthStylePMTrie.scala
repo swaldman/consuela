@@ -3,79 +3,68 @@ package com.mchange.sc.v1.consuela.trie;
 import scala.annotation.tailrec;
 
 object EmbeddableEthStylePMTrie {
+  case class EarlyInit[L,V,H,X]( alphabet : IndexedSeq[L], databaseExternalized : X, root : H );
+}
+
+trait EmbeddableEthStylePMTrie[L,V,H,X] extends Trie[L,V] {
+
+  // implementations must provide an implementation of this inner trait
+  trait Database {
+    // definitely requires access to the persistent store
+    def put( hash : H, node : Node ) : Unit;
+    def apply( hash : H ) : Node;
+
+    // may require access to the persistent store
+    def dereference( node : NodeSource ) : Node;
+
+    // no access to the persistent store
+    def reference( node : Node )     : NodeSource;
+    def rootReference( node : Node ) : NodeSource; // same, a reference, but cannot be embedded, since there's nothing to embed root
+    def Zero : H;
+  }
+
+  type Subkey     = IndexedSeq[L]
+
   object NodeSource {
     trait Defaults {
       def isHash : Boolean     = false;
       def isEmbedded : Boolean = false;
       def isEmpty : Boolean    = false;
     }
-    case class Hash[H]( hash : H ) extends Defaults with NodeSource[H,Nothing]         { override def isHash     : Boolean = true; }
-    case class Embedded[E]( embedded : E ) extends Defaults with NodeSource[Nothing,E] { override def isEmbedded : Boolean = true; }
-    case object Empty extends Defaults with NodeSource[Nothing,Nothing]                { override def isEmpty    : Boolean = true; }
+    case class Hash( hash : H ) extends Defaults with NodeSource        { override def isHash     : Boolean = true; }
+    case class Embedded( node : Node ) extends Defaults with NodeSource { override def isEmbedded : Boolean = true; }
+    case object Empty extends Defaults with NodeSource                  { override def isEmpty    : Boolean = true; }
   }
-  sealed trait NodeSource[+H,+E]{
+  sealed trait NodeSource{
     def isHash : Boolean;
     def isEmbedded : Boolean;
     def isEmpty : Boolean;
   }
 
-  trait UniqueSubkey[L] {
-    self : Node[L,_,_,_] =>
+  trait UniqueSubkey {
+    self : Node =>
 
-    def subkey : IndexedSeq[L];
+    def subkey : Subkey;
   }
 
-  sealed trait Node[+L,+V,+H,+E];
-  case class Branch[L,V,H,E] ( val children : IndexedSeq[NodeSource[H,E]], val mbValue : Option[V] ) extends Node[L,V,H,E];
-  case class Extension[L,V,H,E] ( val subkey : IndexedSeq[L], val child : NodeSource[H,E] ) extends Node[L,V,H,E] with UniqueSubkey[L];
-  case class Leaf[L,V,H,E] ( val subkey : IndexedSeq[L], val value : V ) extends Node[L,V,H,E] with UniqueSubkey[L];
-  case object Empty extends Node[Nothing,Nothing,Nothing,Nothing];
-
-  trait Database[L,V,H,E] {
-    // definitely requires access to the persistent store
-    def put( hash : H, node : Node[L,V,H,E] ) : Unit;
-    def apply( hash : H ) : Node[L,V,H,E];
-
-    // may require access to the persistent store
-    def dereference( node : NodeSource[H,E] ) : Node[L,V,H,E];
-
-    // no access to the persistent store
-    def reference( node : Node[L,V,H,E] )     : NodeSource[H,E];
-    def rootReference( node : Node[L,V,H,E] ) : NodeSource[H,E]; // same, a reference, but cannot be embedded, since there's nothing to embed root
-    def Zero : H;
-  }
-
-  case class EarlyInit[L,V,H,E]( alphabet : IndexedSeq[L], database : Database[L,V,H,E], root : H );
-}
-
-trait EmbeddableEthStylePMTrie[L,V,H,E] extends Trie[L,V] {
-
-  /*
-   * First lets put some unwieldy bits from the companion object into more convenient forms
-   */ 
-  type EarlyInit  = EmbeddableEthStylePMTrie.EarlyInit[L,V,H,E];
-  type Database   = EmbeddableEthStylePMTrie.Database[L,V,H,E];
-  type NodeSource = EmbeddableEthStylePMTrie.NodeSource[H,E];
-  type Subkey     = IndexedSeq[L]
-  type Node       = EmbeddableEthStylePMTrie.Node[L,V,H,E];
-  type Branch     = EmbeddableEthStylePMTrie.Branch[L,V,H,E];
-  type Extension  = EmbeddableEthStylePMTrie.Extension[L,V,H,E];
-  type Leaf       = EmbeddableEthStylePMTrie.Leaf[L,V,H,E];
+  sealed trait Node;
+  case class Branch ( val children : IndexedSeq[NodeSource], val mbValue : Option[V] ) extends Node;
+  case class Extension ( val subkey : Subkey, val child : NodeSource ) extends Node with UniqueSubkey;
+  case class Leaf ( val subkey : Subkey, val value : V ) extends Node with UniqueSubkey;
+  case object Empty extends Node;
 
 
-  val Empty = EmbeddableEthStylePMTrie.Empty;
-
-  val Branch    = EmbeddableEthStylePMTrie.Branch;
-  val Extension = EmbeddableEthStylePMTrie.Extension;
-  val Leaf      = EmbeddableEthStylePMTrie.Leaf;
-
-  import EmbeddableEthStylePMTrie.NodeSource;
 
   /*
    * The following abstract members must be set by our concrete subclass
    */ 
 
-  val earlyInit : EarlyInit
+  /**
+   *  define in an early initializer!
+   */ 
+  val earlyInit : EmbeddableEthStylePMTrie.EarlyInit[L,V,H,X]
+
+  protected def createDatabase( databaseExternalized : X ) : Database;
 
 
   /**
@@ -88,7 +77,7 @@ trait EmbeddableEthStylePMTrie[L,V,H,E] extends Trie[L,V] {
    */ 
 
   val alphabet   : IndexedSeq[L] = earlyInit.alphabet;
-  val db         : Database      = earlyInit.database;
+  val db         : Database      = createDatabase( earlyInit.databaseExternalized );
   val root       : H             = earlyInit.root;
   
   val alphabetLen = alphabet.length;
@@ -189,7 +178,7 @@ trait EmbeddableEthStylePMTrie[L,V,H,E] extends Trie[L,V] {
 
   object Path {
     object Builder {
-      def build( key : IndexedSeq[L] ) : Path = if (key.isEmpty) buildEmptySubkey() else buildNonemptySubkey( rootSource, rootNode, key, Nil )
+      def build( key : Subkey ) : Path = if (key.isEmpty) buildEmptySubkey() else buildNonemptySubkey( rootSource, rootNode, key, Nil )
 
       private def buildEmptySubkey() : Path = {
         rootNode match {
