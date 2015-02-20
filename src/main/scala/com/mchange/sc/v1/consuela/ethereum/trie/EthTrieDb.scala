@@ -14,6 +14,25 @@ object EthTrieDb {
   val EmptyByteSeq = Seq.empty[Byte];
 
   private def aerr( msg : String ) = throw new AssertionError( msg );
+
+  object Test {
+    import EmbeddableEthStyleTrie.EarlyInit;
+
+    class Db extends EthTrieDb {
+      private[this] val _map = scala.collection.mutable.Map.empty[EthHash,Node];
+      _map += ( EthHash.Zero -> Empty );
+
+      def put( hash : EthHash, node : Node ) : Unit = this.synchronized{ _map += ( hash -> node ) }
+      def apply( hash : EthHash ) : Node = this.synchronized{ _map( hash ) }
+    }
+    class Trie( testdb : Db = new Db, rootHash : EthHash = EthHash.Zero ) extends {
+      val earlyInit = EarlyInit( Alphabet, testdb, rootHash )
+    } with EmbeddableEthStyleTrie[Nibble,RLP.Encodable,EthHash] {
+      def instantiateSuccessor( newRootHash : EthHash ) : Trie =  new Trie( testdb, newRootHash );
+      override def excluding( key : Subkey ) : Trie = super.excluding( key ).asInstanceOf[Trie];
+      override def including( key : Subkey, value : RLP.Encodable ) : Trie = super.including( key, value ).asInstanceOf[Trie];
+    }
+  }
 }
 trait EthTrieDb extends EmbeddableEthStyleTrie.Database[Nibble,RLP.Encodable,EthHash] {
   import EthTrieDb._;

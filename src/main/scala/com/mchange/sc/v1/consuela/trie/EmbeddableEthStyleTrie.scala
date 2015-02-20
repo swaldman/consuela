@@ -31,7 +31,6 @@ object EmbeddableEthStyleTrie {
     def isEmpty : Boolean;
   }
 
-
   trait Database[L,V,H] {
     type Node       = EmbeddableEthStyleTrie.Node[L,V,H];
     type NodeSource = EmbeddableEthStyleTrie.NodeSource[L,V,H];
