@@ -5,11 +5,11 @@ import com.mchange.lang.IntegerUtils;
 
 object RLP {
   object Encodable {
-    sealed trait Basic;
+    sealed trait Basic extends Encodable;
 
     def sameBytes( a : Encodable, b : Encodable ) = a.simplify == b.simplify
 
-    case class ByteSeq( bytes : scala.Seq[Byte] ) extends Encodable with Basic {
+    case class ByteSeq( bytes : scala.Seq[Byte] ) extends Encodable.Basic {
       def isSimple = true;
       def simplify = this;
     }
@@ -21,7 +21,7 @@ object RLP {
       def isSimple = false;
       def simplify = Encodable.ByteSeq( be( value ) )
     }
-    case class Seq( seq : scala.Seq[Encodable] ) extends Encodable with Basic {
+    case class Seq( seq : scala.Seq[Encodable] ) extends Encodable.Basic {
       lazy val isSimple = seq.forall( _.isSimple )
       def simplify = if ( this.isSimple ) this else Seq( seq.map( _.simplify ) )
     }
@@ -30,16 +30,21 @@ object RLP {
   }
   sealed trait Encodable {
     def isSimple : Boolean;
-    def simplify : Encodable with Encodable.Basic;
+    def simplify : Encodable.Basic;
   }
 
 
-  // note that encoding even the length of the length in a small portion of the first byte
-  // does not support arbitrary lengths. Although it probably does support lengths sufficiently
-  // large in practice, a very very long sequence could overflow the capacity of the first
-  // byte to encode the length of its length.
+  // note that encoding even the length of the length in a small portion of the first byte,
+  // this encoding does not support arbitrary lengths. 
+  //
+  // Although it probably does support lengths sufficiently large in practice, a very very 
+  // long sequence could overflow the capacity of the first byte to encode the length of its 
+  // length.
 
-  def decode( bytes : Seq[Byte] ) : (Encodable with Encodable.Basic, Seq[Byte]) = {
+  /**
+   *  @return a pair, decoded Encodable and unconsumed bytes
+   */  
+  def decode( bytes : Seq[Byte] ) : (Encodable.Basic, Seq[Byte]) = {
     def splitOut( splitMe : Seq[Byte], len : Int ) = {
       val ( decoded, rest ) = splitMe.splitAt( len );
       ( Encodable.ByteSeq( decoded ), rest )
@@ -58,7 +63,7 @@ object RLP {
         bi.intValue;
       }
     }
-    def encodableSeq( count : Int, reverseAccum : List[Encodable with Encodable.Basic], in : Seq[Byte] ) : ( Seq[Encodable with Encodable.Basic], Seq[Byte] ) = {
+    def encodableSeq( count : Int, reverseAccum : List[Encodable.Basic], in : Seq[Byte] ) : ( Seq[Encodable.Basic], Seq[Byte] ) = {
       assert( count >= 0, "Count should begin with precisely the byte length of the concatenated elements, and so we should end with precisely zero bytes." );
 
       if ( count == 0 )
