@@ -2,15 +2,15 @@ package com.mchange.sc.v1.consuela.trie;
 
 import com.mchange.sc.v1.consuela.hash.Hash.SHA3_256;
 
-import EmbeddableEthStylePMTrie.EarlyInit;
+import EmbeddableEthStyleTrie.EarlyInit;
 
 object EmbeddableEthStyleLowercaseTrie {
   val alphabet : IndexedSeq[Char] = IndexedSeq( 'a' to 'z' : _* );
   val Zero : SHA3_256 = SHA3_256.Zero;
 
-  class MapDatabase extends EmbeddableEthStylePMTrie.Database[Char,String,SHA3_256] {
+  class MapDatabase extends EmbeddableEthStyleTrie.Database[Char,String,SHA3_256] {
 
-    import EmbeddableEthStylePMTrie.NodeSource;
+    import EmbeddableEthStyleTrie.NodeSource;
 
     private[this] val _map = scala.collection.mutable.Map.empty[SHA3_256,Node];
     _map += ( SHA3_256.Zero -> Empty );
@@ -20,9 +20,9 @@ object EmbeddableEthStyleLowercaseTrie {
 
     def dereference( source : NodeSource ) : Node = {
       source match {
-        case EmbeddableEthStylePMTrie.NodeSource.Hash( hash ) => this( hash );
-        case EmbeddableEthStylePMTrie.NodeSource.Embedded( node ) => node
-        case EmbeddableEthStylePMTrie.NodeSource.Empty => Empty;
+        case EmbeddableEthStyleTrie.NodeSource.Hash( hash ) => this( hash );
+        case EmbeddableEthStyleTrie.NodeSource.Embedded( node ) => node
+        case EmbeddableEthStyleTrie.NodeSource.Empty => Empty;
         case _ => throw new AssertionError( s"Dereferencing unexpected source: ${source}" );
       }
     }
@@ -47,9 +47,9 @@ object EmbeddableEthStyleLowercaseTrie {
       def strToBytes( str : String ) : Seq[Byte] = str.getBytes("UTF-8").toSeq;
       def osToBytes( mbStr : Option[String] ) : Seq[Byte] = mbStr.fold( Seq( b(0) ) )( str => (b(0) +: str.getBytes("UTF-8")).toSeq :+ b(0) );
       def nsToBytes( ns  : NodeSource ) : Seq[Byte] = (ns : @unchecked) match {
-        case nse : EmbeddableEthStylePMTrie.NodeSource.Embedded[Char,String,SHA3_256] => nseToBytes( nse );
-        case nsh : EmbeddableEthStylePMTrie.NodeSource.Hash[Char,String,SHA3_256] => nshToBytes( nsh );
-        case EmbeddableEthStylePMTrie.NodeSource.Empty => Seq.empty[Byte]
+        case nse : EmbeddableEthStyleTrie.NodeSource.Embedded[Char,String,SHA3_256] => nseToBytes( nse );
+        case nsh : EmbeddableEthStyleTrie.NodeSource.Hash[Char,String,SHA3_256] => nshToBytes( nsh );
+        case EmbeddableEthStyleTrie.NodeSource.Empty => Seq.empty[Byte]
       }
       def nodeToBytes( node : Node ) : Seq[Byte] = {
         node match {
@@ -84,7 +84,7 @@ object EmbeddableEthStyleLowercaseTrie {
 
 class EmbeddableEthStyleLowercaseTrie( val mdb : EmbeddableEthStyleLowercaseTrie.MapDatabase = new EmbeddableEthStyleLowercaseTrie.MapDatabase, r : SHA3_256 = SHA3_256.Zero ) extends {
   val earlyInit = EarlyInit( EmbeddableEthStyleLowercaseTrie.alphabet, mdb, r );
-} with EmbeddableEthStylePMTrie[Char,String,SHA3_256] {
+} with EmbeddableEthStyleTrie[Char,String,SHA3_256] {
   import EmbeddableEthStyleLowercaseTrie._;
 
   def instantiateSuccessor( newRootHash : SHA3_256 ) : EmbeddableEthStyleLowercaseTrie = {

@@ -2,7 +2,7 @@ package com.mchange.sc.v1.consuela.trie;
 
 import scala.annotation.tailrec;
 
-object EmbeddableEthStylePMTrie {
+object EmbeddableEthStyleTrie {
 
   sealed trait Node[+L,+V,+H];
   case class Branch[L,V,H] ( val children : IndexedSeq[NodeSource[L,V,H]], val mbValue : Option[V] ) extends Node[L,V,H];
@@ -33,18 +33,18 @@ object EmbeddableEthStylePMTrie {
 
 
   trait Database[L,V,H] {
-    type Node       = EmbeddableEthStylePMTrie.Node[L,V,H];
-    type NodeSource = EmbeddableEthStylePMTrie.NodeSource[L,V,H];
-    type Branch     = EmbeddableEthStylePMTrie.Branch[L,V,H];
-    type Extension  = EmbeddableEthStylePMTrie.Extension[L,V,H];
-    type Leaf       = EmbeddableEthStylePMTrie.Leaf[L,V,H];
+    type Node       = EmbeddableEthStyleTrie.Node[L,V,H];
+    type NodeSource = EmbeddableEthStyleTrie.NodeSource[L,V,H];
+    type Branch     = EmbeddableEthStyleTrie.Branch[L,V,H];
+    type Extension  = EmbeddableEthStyleTrie.Extension[L,V,H];
+    type Leaf       = EmbeddableEthStyleTrie.Leaf[L,V,H];
     type Subkey     = IndexedSeq[L]
 
-    val NodeSource = EmbeddableEthStylePMTrie.NodeSource;
-    val Branch     = EmbeddableEthStylePMTrie.Branch;
-    val Extension  = EmbeddableEthStylePMTrie.Extension;
-    val Leaf       = EmbeddableEthStylePMTrie.Leaf;
-    val Empty      = EmbeddableEthStylePMTrie.Empty;
+    val NodeSource = EmbeddableEthStyleTrie.NodeSource;
+    val Branch     = EmbeddableEthStyleTrie.Branch;
+    val Extension  = EmbeddableEthStyleTrie.Extension;
+    val Leaf       = EmbeddableEthStyleTrie.Leaf;
+    val Empty      = EmbeddableEthStyleTrie.Empty;
 
     // definitely requires access to the persistent store
     def put( hash : H, node : Node ) : Unit;
@@ -62,23 +62,23 @@ object EmbeddableEthStylePMTrie {
   case class EarlyInit[L,V,H]( alphabet : IndexedSeq[L], database : Database[L,V,H], root : H );
 }
 
-trait EmbeddableEthStylePMTrie[L,V,H] extends Trie[L,V] {
+trait EmbeddableEthStyleTrie[L,V,H] extends Trie[L,V] {
 
 
-  type Node       = EmbeddableEthStylePMTrie.Node[L,V,H];
-  type Branch     = EmbeddableEthStylePMTrie.Branch[L,V,H];
-  type Extension  = EmbeddableEthStylePMTrie.Extension[L,V,H];
-  type Leaf       = EmbeddableEthStylePMTrie.Leaf[L,V,H];
-  type NodeSource = EmbeddableEthStylePMTrie.NodeSource[L,V,H];
-  type Database   = EmbeddableEthStylePMTrie.Database[L,V,H];
+  type Node       = EmbeddableEthStyleTrie.Node[L,V,H];
+  type Branch     = EmbeddableEthStyleTrie.Branch[L,V,H];
+  type Extension  = EmbeddableEthStyleTrie.Extension[L,V,H];
+  type Leaf       = EmbeddableEthStyleTrie.Leaf[L,V,H];
+  type NodeSource = EmbeddableEthStyleTrie.NodeSource[L,V,H];
+  type Database   = EmbeddableEthStyleTrie.Database[L,V,H];
   type Subkey     = IndexedSeq[L]
 
-  val Branch     = EmbeddableEthStylePMTrie.Branch;
-  val Extension  = EmbeddableEthStylePMTrie.Extension;
-  val Leaf       = EmbeddableEthStylePMTrie.Leaf;
+  val Branch     = EmbeddableEthStyleTrie.Branch;
+  val Extension  = EmbeddableEthStyleTrie.Extension;
+  val Leaf       = EmbeddableEthStyleTrie.Leaf;
 
-  import EmbeddableEthStylePMTrie.NodeSource;
-  import EmbeddableEthStylePMTrie.Empty;
+  import EmbeddableEthStyleTrie.NodeSource;
+  import EmbeddableEthStyleTrie.Empty;
 
 
   /*
@@ -88,7 +88,7 @@ trait EmbeddableEthStylePMTrie[L,V,H] extends Trie[L,V] {
   /**
    *  define in an early initializer!
    */ 
-  val earlyInit : EmbeddableEthStylePMTrie.EarlyInit[L,V,H]
+  val earlyInit : EmbeddableEthStyleTrie.EarlyInit[L,V,H]
 
   /**
     *  all nodes in the updated path will already have been persisted before this method is called.
