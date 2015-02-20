@@ -27,14 +27,14 @@ object EthTrieDb {
     }
     class Trie( testdb : Db = new Db, rootHash : EthHash = EthHash.Zero ) extends {
       val earlyInit = EarlyInit( Alphabet, testdb, rootHash )
-    } with EmbeddableEthStyleTrie[Nibble,RLP.Encodable,EthHash] {
+    } with EmbeddableEthStyleTrie[Nibble,Seq[Byte],EthHash] {
       def instantiateSuccessor( newRootHash : EthHash ) : Trie =  new Trie( testdb, newRootHash );
       override def excluding( key : Subkey ) : Trie = super.excluding( key ).asInstanceOf[Trie];
-      override def including( key : Subkey, value : RLP.Encodable ) : Trie = super.including( key, value ).asInstanceOf[Trie];
+      override def including( key : Subkey, value : Seq[Byte] ) : Trie = super.including( key, value ).asInstanceOf[Trie];
     }
   }
 }
-trait EthTrieDb extends EmbeddableEthStyleTrie.Database[Nibble,RLP.Encodable,EthHash] {
+trait EthTrieDb extends EmbeddableEthStyleTrie.Database[Nibble,Seq[Byte],EthHash] {
   import EthTrieDb._;
 
   // definitely requires access to the persistent store
@@ -59,8 +59,6 @@ trait EthTrieDb extends EmbeddableEthStyleTrie.Database[Nibble,RLP.Encodable,Eth
   }
   val Zero = EthHash.Zero;
 
-  def toValue( valueBytes : Seq[Byte] ) : RLP.Encodable = completeDecode( valueBytes );
-
   def rlpToNodeSource( nodeRLP : Seq[Byte], mbKnownNode : Option[Node] = None ) : NodeSource = {
     if (nodeRLP.length == 0) {
       NodeSource.Empty
@@ -81,7 +79,7 @@ trait EthTrieDb extends EmbeddableEthStyleTrie.Database[Nibble,RLP.Encodable,Eth
     def intoExtensionLeaf( decoded : Seq[RLP.Encodable] ) : Node = {
       val Seq( RLP.Encodable.ByteSeq( hpKey ), RLP.Encodable.ByteSeq( payloadBytes ) ) = decoded;
       val ( keyNibbles, terminated ) = HP.decode( hpKey );
-      if ( terminated ) Leaf( keyNibbles.toIndexedSeq, toValue( payloadBytes ) ) else Extension( keyNibbles.toIndexedSeq, rlpToNodeSource( payloadBytes ) );
+      if ( terminated ) Leaf( keyNibbles.toIndexedSeq, payloadBytes ) else Extension( keyNibbles.toIndexedSeq, rlpToNodeSource( payloadBytes ) );
     }
     def intoBranch( decoded : Seq[RLP.Encodable] ) : Node = {
       val ( protochildren, Seq( RLP.Encodable.ByteSeq( protoMbValueBytes ) ) ) = decoded.splitAt( AlphabetLen );
@@ -93,7 +91,7 @@ trait EthTrieDb extends EmbeddableEthStyleTrie.Database[Nibble,RLP.Encodable,Eth
       //Note that the bytes of the value are an RLP-encoded... something
       //RLP encoding never yields an empty sequence, not even of an empty Byte string
       //So, an empty Byte string is treated as an out-of-band value signifying no value.
-      val mbValue = if (protoMbValueBytes.length == 0) None else Some( toValue( protoMbValueBytes ) );
+      val mbValue = if (protoMbValueBytes.length == 0) None else Some( protoMbValueBytes );
 
       Branch( children.toIndexedSeq, mbValue );
     }
@@ -110,7 +108,7 @@ trait EthTrieDb extends EmbeddableEthStyleTrie.Database[Nibble,RLP.Encodable,Eth
 
   def toRLP( node : Node ) : Seq[Byte] = {
     def branchToRLP( branch : Branch ) : Seq[Byte] = {
-      val mbValueBytes = branch.mbValue.fold( EmptyByteSeq ){ encodable => RLP.encode( encodable ) }
+      val mbValueBytes = branch.mbValue.getOrElse( EmptyByteSeq );
       val branchAsByteSeqSeq : IndexedSeq[Seq[Byte]] = branch.children.map( nodeSourceToBytes _ ) :+ mbValueBytes;
       val branchSeq = RLP.Encodable.Seq( branchAsByteSeqSeq.map( RLP.Encodable.ByteSeq( _ ) ) );
       RLP.encode( branchSeq );
@@ -125,7 +123,7 @@ trait EthTrieDb extends EmbeddableEthStyleTrie.Database[Nibble,RLP.Encodable,Eth
     def leafToRLP( leaf : Leaf ) : Seq[Byte] = {
       val leafSeq : Seq[RLP.Encodable] = Seq(
         RLP.Encodable.ByteSeq( HP.encode( leaf.subkey, true ) ),
-        RLP.Encodable.ByteSeq( RLP.encode(leaf.value) )
+        RLP.Encodable.ByteSeq( leaf.value )
       )
       RLP.encode( RLP.Encodable.Seq( leafSeq ) )
     }
