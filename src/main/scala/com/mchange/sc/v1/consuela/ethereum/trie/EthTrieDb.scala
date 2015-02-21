@@ -58,7 +58,7 @@ trait EthTrieDb extends EmbeddableEthStyleTrie.Database[Nibble,Seq[Byte],EthHash
     val nodeRLP = toRLP( node );
     if (nodeRLP.length == 0) NodeSource.Empty else NodeSource.Hash( EthHash.hash( nodeRLP ) )
   }
-  val Zero = EthHash.Zero;
+  def Zero = EthHash.Zero;
 
   def rlpToNodeSource( nodeRLP : Seq[Byte], mbKnownNode : Option[Node] = None ) : NodeSource = {
     if (nodeRLP.length == 0) {
@@ -68,12 +68,6 @@ trait EthTrieDb extends EmbeddableEthStyleTrie.Database[Nibble,Seq[Byte],EthHash
     } else {
       NodeSource.Hash( EthHash.hash( nodeRLP ) )
     }
-  }
-
-  def completeDecode( rlpBytes : Seq[Byte] ) : RLP.Encodable = {
-    val ( decoded, rest ) = RLP.decode( rlpBytes );
-    assert( rest.length == 0, s"We expect to decode Byte sequences that are the result of RLP encoding. There should be no extra. rest.length -> ${rest.length}" );
-    decoded
   }
 
   def fromRLP( rlpBytes : Seq[Byte] ) : Node = {
@@ -148,61 +142,10 @@ trait EthTrieDb extends EmbeddableEthStyleTrie.Database[Nibble,Seq[Byte],EthHash
 
   def toRLP( node : Node ) : Seq[Byte] = RLP.encode( toEncodable( node ) );
 
-  /*
-  def toRLP( node : Node ) = {
-    val out = RLP.encode( toEncodable( node ) );
-    println( s"toRLP: node -> ${node}" );
-    println( s"toRLP: out -> ${out}" );
-    println( s"toRLP: out (hex) -> ${out.map( com.mchange.lang.ByteUtils.toLowercaseHexAscii _ ).mkString}" );
-    println( s"toRLP: out.length -> ${out.length}" );
-    println( s"toRLP: RLP.decode( out ) -> ${RLP.decode( out )}" );
-    out
+  private[this] def completeDecode( rlpBytes : Seq[Byte] ) : RLP.Encodable = {
+    val ( decoded, rest ) = RLP.decode( rlpBytes );
+    assert( rest.length == 0, s"We expect to decode Byte sequences that are the result of RLP encoding. There should be no extra. rest.length -> ${rest.length}" );
+    decoded
   }
-
-  def toRLP( node : Node ) : Seq[Byte] = {
-    def branchToRLP( branch : Branch ) : Seq[Byte] = {
-      val mbValueBytes = branch.mbValue.getOrElse( EmptyByteSeq );
-      val branchAsByteSeqSeq : IndexedSeq[Seq[Byte]] = branch.children.map( nodeSourceToBytes _ ) :+ mbValueBytes;
-      val branchSeq = RLP.Encodable.Seq( branchAsByteSeqSeq.map( RLP.Encodable.ByteSeq( _ ) ) );
-      println( s"branchSeq -> $branchSeq" )
-      RLP.encode( branchSeq );
-    }
-    def extensionToRLP( extension : Extension ) : Seq[Byte] = {
-      val extSeq : Seq[RLP.Encodable] = Seq(
-        RLP.Encodable.ByteSeq( HP.encode( extension.subkey, false ) ),
-        RLP.Encodable.ByteSeq( nodeSourceToBytes( extension.child ) )
-      );
-      RLP.encode( RLP.Encodable.Seq( extSeq ) )
-    }
-    def leafToRLP( leaf : Leaf ) : Seq[Byte] = {
-      val leafSeq : Seq[RLP.Encodable] = Seq(
-        RLP.Encodable.ByteSeq( HP.encode( leaf.subkey, true ) ),
-        RLP.Encodable.ByteSeq( leaf.value )
-      )
-      println( s"leafSeq ->${leafSeq}" )
-      RLP.encode( RLP.Encodable.Seq( leafSeq ) )
-    }
-    def nodeSourceToBytes( nodeSource : NodeSource ) : Seq[Byte] = {
-      nodeSource match {
-        case EmbeddableEthStyleTrie.NodeSource.Hash( hash )     => hash.bytes;
-        case EmbeddableEthStyleTrie.NodeSource.Embedded( node ) => toRLP( node );
-        case EmbeddableEthStyleTrie.NodeSource.Empty            => EmptyByteSeq
-      }
-    }
-
-    // finally, the method implementation
-    val out = node match {
-      case branch    : Branch    => branchToRLP( branch );
-      case extension : Extension => extensionToRLP( extension );
-      case leaf      : Leaf      => leafToRLP( leaf );
-      case Empty => aerr( "Empty should hash to zero prior to and without any conversion into bytes.")
-    }
-    println( s"toRLP: node -> ${node}" );
-    println( s"toRLP: out -> ${out}" );
-    println( s"toRLP: out.length -> ${out.length}" );
-    println( s"toRLP: RLP.decode( out ) -> ${RLP.decode( out )}" );
-    out
-  }
-  */
 }
 
