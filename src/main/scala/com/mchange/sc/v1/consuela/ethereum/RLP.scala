@@ -1,9 +1,63 @@
 package com.mchange.sc.v1.consuela.ethereum;
 
+import scala.util.Try;
 import java.nio.charset.Charset;
 import com.mchange.lang.IntegerUtils;
 
 object RLP {
+  object UTF_8 {
+    val UTF8_Charset = Charset.forName("UTF-8");
+
+    /**
+     * Strings interpreted as UTF-8 bytes. Strings can be empty, other empty sequences interpreted as structure
+     */  
+    def fastEncode( obj : Any ) : Option[Seq[Byte]] = fastEncodable( obj ).map( encode _ )
+
+    /**
+     * Strings interpreted as UTF-8 bytes. Strings can be empty, other empty sequences interpreted as structure
+     */  
+    def fastEncodable( obj : Any ) : Option[Encodable] = {
+      def tryAsAtom : Option[Encodable] = {
+        obj match {
+          case i   : Int    => Some( Encodable.Int( i ) ) 
+          case bi  : BigInt => Some( Encodable.BigInt( bi ) ) 
+          case str : String => Some( Encodable.ByteSeq( str.getBytes( UTF8_Charset ) ) )
+          case _            => None
+        }
+      }
+      def tryAsSeq : Option[Encodable] = {
+        if ( obj.isInstanceOf[Seq[_]] ) {
+          val seq : Seq[_] = obj.asInstanceOf[Seq[_]];
+
+          def tryAsHomogenousByteSeq : Option[Encodable] = {
+            seq match {
+              case Seq() => Some( Encodable.Seq( Seq.empty[Encodable] ) );
+              case Seq( head, tail @ _* ) => {
+                head match {
+                  case byte : Byte => {
+                    if ( tail.forall( _.isInstanceOf[Byte] ) ) { // yay! Seq[Byte]
+                      Some( Encodable.ByteSeq( byte +: tail.map( _.asInstanceOf[Byte] ) ) )
+                    } else {
+                      None
+                    }
+                  }
+                  case _ => None
+                }
+              }
+              case _ => None
+            }
+          }
+          def tryAsOtherSeq : Option[Encodable] = Try( Encodable.Seq( seq.map( fastEncodable( _ ).get ) ) ).toOption
+
+          tryAsHomogenousByteSeq orElse tryAsOtherSeq
+        } else {
+          None
+        }
+      }
+
+      tryAsAtom orElse tryAsSeq
+    }
+  }
   object Encodable {
     sealed trait Basic extends Encodable;
 
@@ -146,7 +200,7 @@ object RLP {
   private[this] def be( i : Int ) = IntegerUtils.byteArrayFromInt( i ).dropWhile( _ == 0 );
   private[this] def be( bi : BigInt ) = bi.toByteArray.dropWhile( _ == 0 );
 
-  private[this] val byteCaster : (AnyVal => Byte) = { // this is a workaround to weird errors trying to cast to byte, should just be _.asInstanceOf[Byte]
+  private[this] val byteCaster : (Any => Byte) = { // this is a workaround to weird errors trying to cast to byte, should just be _.asInstanceOf[Byte]
     case i : Int  => i.asInstanceOf[Byte]
     case b : Byte => b;
     case huh => throw new AssertionError( s"Expected an Int or Byte, got ${huh.getClass} [${huh}]" )
