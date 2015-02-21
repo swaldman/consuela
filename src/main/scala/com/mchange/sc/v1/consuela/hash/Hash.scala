@@ -5,10 +5,16 @@ import scala.util.hashing.MurmurHash3;
 import com.mchange.sc.v1.consuela.conf.Config.Implicits._;
 
 object Hash {
-  object SHA3_256 extends Hasher[SHA3_256] {
-    def apply( bytes : Array[Byte] ) : SHA3_256 = new SHA3_256(hash_SHA3_256(bytes));
-    def apply( bytes : Seq[Byte] ) : SHA3_256 = this.apply( bytes.toArray );
+  object SHA3_256 extends Hasher[SHA3_256] with Hasher.FixedLength {
+    def withBytes( bytes : Array[Byte] ) : SHA3_256 = {
+      require( bytes.length == HashLength, s"An SHA3_356 hash must have a fixed length of ${HashLength} bytes, cannot create with ${bytes.length} bytes. bytes -> ${bytes}" )
+      new SHA3_256(bytes);
+    }
+    def withBytes( bytes : Seq[Byte] ) : SHA3_256 = withBytes( bytes.toArray );
+    def hash( bytes : Array[Byte] ) : SHA3_256 = new SHA3_256(hash_SHA3_256(bytes));
+    def hash( bytes : Seq[Byte] ) : SHA3_256 = this.hash( bytes.toArray );
     val Zero = new SHA3_256( Array.fill[Byte](32)(0) );
+    val HashLength = 32;
   }
   class SHA3_256 private( protected[this] val _bytes : Array[Byte] ) extends Hash[SHA3_256] {
     //protected[this] def sameClass( other : Any ) : Boolean = other.isInstanceOf[SHA3_256];

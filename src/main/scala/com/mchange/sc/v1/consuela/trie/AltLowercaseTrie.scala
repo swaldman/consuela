@@ -2,9 +2,6 @@ package com.mchange.sc.v1.consuela.trie;
 
 import com.mchange.sc.v1.consuela.hash.Hash;
 
-import com.mchange.sc.v1.log.MLogger;
-import com.mchange.sc.v1.log.MLevel._;
-
 import scala.reflect._;
 
 import AltPMTrie.Database;
@@ -13,7 +10,6 @@ import AltPMTrie.Empty;
 import PMTrie.RootTracking;
 
 object AltLowercaseTrie {
-  implicit val logger = MLogger( this );
 
   val alphabet : IndexedSeq[Char] = IndexedSeq( 'a' to 'z' : _* );
   val Zero : Hash.SHA3_256 = Hash.SHA3_256.Zero;
@@ -51,7 +47,7 @@ object AltLowercaseTrie {
               extension.value.foreach( dos.writeUTF(_) );
             }
             val bytes = baos.toByteArray;
-            Hash.SHA3_256( bytes )
+            Hash.SHA3_256.hash( bytes )
           }
         }
         case branch : Branch => {
@@ -62,17 +58,15 @@ object AltLowercaseTrie {
               branch.value.foreach( dos.writeUTF(_) );
             }
             val bytes = baos.toByteArray;
-            Hash.SHA3_256( bytes )
+            Hash.SHA3_256.hash( bytes )
           }
         }
       }
     }
     def put( h : Hash.SHA3_256, node : Node ) : Unit = {
       assert( h != null && node != null, s"${this} doesn't accept nulls. [ h -> ${h}, node -> ${node} ]" );
-      TRACE.log( s"${this} -- put( ${h}, ${node} )" );
       this.synchronized {
         _map += ( h -> node );
-        TRACE.log( s"after put -- map: ${_map}" );
       }
     }
 

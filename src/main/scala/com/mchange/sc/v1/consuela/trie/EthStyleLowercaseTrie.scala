@@ -49,7 +49,7 @@ object EthStyleLowercaseTrie {
               dos.write( extension.child.bytes.toArray, 0, extension.child.bytes.length );
             }
             val bytes = baos.toByteArray;
-            Hash.SHA3_256( bytes )
+            Hash.SHA3_256.hash( bytes )
           }
         }
         case branch : Branch => {
@@ -59,7 +59,7 @@ object EthStyleLowercaseTrie {
               branch.mbValue.foreach( dos.writeUTF(_) );
             }
             val bytes = baos.toByteArray;
-            Hash.SHA3_256( bytes )
+            Hash.SHA3_256.hash( bytes )
           }
         }
         case leaf : Leaf => {
@@ -69,7 +69,7 @@ object EthStyleLowercaseTrie {
               dos.writeUTF( leaf.value );
             }
             val bytes = baos.toByteArray;
-            Hash.SHA3_256( bytes )
+            Hash.SHA3_256.hash( bytes )
           }
         }
       }

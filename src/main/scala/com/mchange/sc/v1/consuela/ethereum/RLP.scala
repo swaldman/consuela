@@ -5,6 +5,10 @@ import java.nio.charset.Charset;
 import com.mchange.lang.IntegerUtils;
 
 object RLP {
+  object Encoded {
+    val EmptyByteSeq = encode( Encodable.EmptyByteSeq );
+    val EmptySeq     = encode( Encodable.EmptySeq );
+  }
   object UTF_8 {
     val UTF8_Charset = Charset.forName("UTF-8");
 
