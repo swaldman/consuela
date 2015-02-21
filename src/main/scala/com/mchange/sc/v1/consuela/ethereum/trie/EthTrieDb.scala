@@ -12,7 +12,6 @@ object EthTrieDb {
   val EmptyLength         = 0;
 
   val EmptyByteSeq             = Seq.empty[Byte];
-  val RlpEncodableEmptyByteSeq = RLP.Encodable.ByteSeq( EmptyByteSeq );
 
   private def aerr( msg : String ) = throw new AssertionError( msg );
 
@@ -23,7 +22,7 @@ object EthTrieDb {
       private[this] val _map = scala.collection.mutable.Map.empty[EthHash,Node];
       _map += ( EthHash.Zero -> Empty );
 
-      def put( hash : EthHash, node : Node ) : Unit = this.synchronized{ _map += ( hash -> node ) }
+      def put( hash : EthHash, node : Node ) : Unit = { println( s"--> put( ${hash}, ${node} )" ); this.synchronized{ _map += ( hash -> node ) } }
       def apply( hash : EthHash ) : Node = this.synchronized{ _map( hash ) }
     }
     class Trie( testdb : Db = new Db, rootHash : EthHash = EthHash.Zero ) extends {
@@ -61,27 +60,48 @@ trait EthTrieDb extends EmbeddableEthStyleTrie.Database[Nibble,Seq[Byte],EthHash
   def Zero = EthHash.Zero;
 
   def rlpToNodeSource( nodeRLP : Seq[Byte], mbKnownNode : Option[Node] = None ) : NodeSource = {
-    if (nodeRLP.length == 0) {
+    if (nodeRLP == RLP.Encoded.EmptyByteSeq) {
       NodeSource.Empty
     } else if (nodeRLP.length < 32) {
       NodeSource.Embedded( mbKnownNode.getOrElse( fromRLP( nodeRLP ) ) );
-    } else {
+    } else { 
       NodeSource.Hash( EthHash.hash( nodeRLP ) )
+    } 
+  }
+
+  def encodableToNodeSource( encodable : RLP.Encodable, mbKnownNode : Option[Node] = None ) : NodeSource = {
+    encodable match {
+      case RLP.Encodable.EmptyByteSeq                                           => NodeSource.Empty;
+      case RLP.Encodable.ByteSeq( hashBytes ) if hashBytes.length == EthHashLen => NodeSource.Hash( EthHash.withBytes( hashBytes ) )
+      case RLP.Encodable.Seq( Seq( keyEncodable, payloadEncodable ) ) => {
+        val node = mbKnownNode.getOrElse {
+          val RLP.Encodable.ByteSeq( hpKeyBytes ) = keyEncodable;
+          reviveLeafExtension( hpKeyBytes, payloadEncodable )
+        }
+        NodeSource.Embedded( node )
+      }
+      case _ => aerr( "Unexpected encodabe -> ${encodable}" );
+    }
+  }
+
+  def reviveLeafExtension( hpKeyBytes : Seq[Byte], payloadEncodable : RLP.Encodable ) : Node = {
+    val ( keyNibbles, terminated ) = HP.decode( hpKeyBytes );
+    if ( terminated ) {
+      val RLP.Encodable.ByteSeq( payloadBytes ) = payloadEncodable;
+      Leaf( keyNibbles.toIndexedSeq, payloadBytes )
+    } else {
+      Extension( keyNibbles.toIndexedSeq, encodableToNodeSource( payloadEncodable ) );
     }
   }
 
   def fromRLP( rlpBytes : Seq[Byte] ) : Node = {
     def intoExtensionLeaf( decoded : Seq[RLP.Encodable] ) : Node = {
-      val Seq( RLP.Encodable.ByteSeq( hpKey ), RLP.Encodable.ByteSeq( payloadBytes ) ) = decoded;
-      val ( keyNibbles, terminated ) = HP.decode( hpKey );
-      if ( terminated ) Leaf( keyNibbles.toIndexedSeq, payloadBytes ) else Extension( keyNibbles.toIndexedSeq, rlpToNodeSource( payloadBytes ) );
+      val Seq( RLP.Encodable.ByteSeq( hpKey ), payloadEncodable ) = decoded;
+      reviveLeafExtension( hpKey, payloadEncodable )
     }
     def intoBranch( decoded : Seq[RLP.Encodable] ) : Node = {
       val ( protochildren, Seq( RLP.Encodable.ByteSeq( protoMbValueBytes ) ) ) = decoded.splitAt( AlphabetLen );
-      val children = protochildren.map{ encodable =>
-        val RLP.Encodable.ByteSeq( childBytes ) = encodable;
-        rlpToNodeSource( childBytes )  
-      };
+      val children = protochildren.map( encodableToNodeSource( _ ) )
 
       //Note that the bytes of the value are an RLP-encoded... something
       //RLP encoding never yields an empty sequence, not even of an empty Byte string
@@ -127,7 +147,7 @@ trait EthTrieDb extends EmbeddableEthStyleTrie.Database[Nibble,Seq[Byte],EthHash
       nodeSource match {
         case EmbeddableEthStyleTrie.NodeSource.Hash( hash )     => RLP.Encodable.ByteSeq( hash.bytes );
         case EmbeddableEthStyleTrie.NodeSource.Embedded( node ) => toEncodable( node );
-        case EmbeddableEthStyleTrie.NodeSource.Empty            => RlpEncodableEmptyByteSeq
+        case EmbeddableEthStyleTrie.NodeSource.Empty            => RLP.Encodable.EmptyByteSeq
       }
     }
 
