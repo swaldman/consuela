@@ -22,7 +22,7 @@ object EthTrieDb {
       private[this] val _map = scala.collection.mutable.Map.empty[EthHash,Node];
       _map += ( EthHash.Zero -> Empty );
 
-      def put( hash : EthHash, node : Node ) : Unit = { println( s"--> put( ${hash}, ${node} )" ); this.synchronized{ _map += ( hash -> node ) } }
+      def put( hash : EthHash, node : Node ) : Unit = this.synchronized{ _map += ( hash -> node ) }
       def apply( hash : EthHash ) : Node = this.synchronized{ _map( hash ) }
     }
     class Trie( testdb : Db = new Db, rootHash : EthHash = EthHash.Zero ) extends {
