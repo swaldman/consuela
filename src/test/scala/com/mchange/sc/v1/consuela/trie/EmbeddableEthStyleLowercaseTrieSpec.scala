@@ -58,6 +58,7 @@ s2"""
   val ttJ = ttI.including("hi", "again");
   val ttK = ttJ.excluding("hi").excluding("book");
 
+  /*
   println("tt0:");
   tt0.dumpTrie;
   println(); println();
@@ -115,6 +116,7 @@ s2"""
   println(); println();
   ttK.dumpTrie;
   println(); println();
+ */
 
   val testBindings = Map(
     "hello" -> "world",
