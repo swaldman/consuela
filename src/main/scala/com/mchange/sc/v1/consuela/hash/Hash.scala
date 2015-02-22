@@ -2,6 +2,7 @@ package com.mchange.sc.v1.consuela.hash;
 
 import scala.util.hashing.MurmurHash3;
 
+import com.mchange.sc.v1.consuela.Implicits._;
 import com.mchange.sc.v1.consuela.conf.Config.Implicits._;
 
 object Hash {
@@ -33,6 +34,7 @@ trait Hash[T <: Hash[T]] {
 
   def toByteArray : Array[Byte] = _bytes.clone();
   def toBigInt : BigInt = BigInt( _bytes );
+  def hex = _bytes.hex
 
   lazy val hexbytes = com.mchange.lang.ByteUtils.toLowercaseHexAscii( bytes.toArray );
 
