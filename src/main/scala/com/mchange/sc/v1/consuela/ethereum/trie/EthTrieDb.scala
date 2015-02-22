@@ -1,6 +1,6 @@
 package com.mchange.sc.v1.consuela.ethereum.trie;
 
-import com.mchange.sc.v1.consuela.trie.EmbeddableEthStyleTrie;
+import com.mchange.sc.v1.consuela.trie.EmbeddableEthStylePMTrie;
 import com.mchange.sc.v1.consuela.ethereum.{HP, RLP, Nibble, Nibbles};
 
 object EthTrieDb {
@@ -16,7 +16,7 @@ object EthTrieDb {
   private def aerr( msg : String ) = throw new AssertionError( msg );
 
   object Test {
-    import EmbeddableEthStyleTrie.EarlyInit;
+    import EmbeddableEthStylePMTrie.EarlyInit;
 
     class Db extends EthTrieDb {
       private[this] val _map = scala.collection.mutable.Map.empty[EthHash,Node];
@@ -27,14 +27,14 @@ object EthTrieDb {
     }
     class Trie( testdb : Db = new Db, rootHash : EthHash = EthHash.Zero ) extends {
       val earlyInit = EarlyInit( Alphabet, testdb, rootHash )
-    } with EmbeddableEthStyleTrie[Nibble,Seq[Byte],EthHash] {
+    } with EmbeddableEthStylePMTrie[Nibble,Seq[Byte],EthHash] {
       def instantiateSuccessor( newRootHash : EthHash ) : Trie =  new Trie( testdb, newRootHash );
       override def excluding( key : Subkey ) : Trie = super.excluding( key ).asInstanceOf[Trie];
       override def including( key : Subkey, value : Seq[Byte] ) : Trie = super.including( key, value ).asInstanceOf[Trie];
     }
   }
 }
-trait EthTrieDb extends EmbeddableEthStyleTrie.Database[Nibble,Seq[Byte],EthHash] {
+trait EthTrieDb extends EmbeddableEthStylePMTrie.Database[Nibble,Seq[Byte],EthHash] {
   import EthTrieDb._;
 
   // definitely requires access to the persistent store
@@ -44,9 +44,9 @@ trait EthTrieDb extends EmbeddableEthStyleTrie.Database[Nibble,Seq[Byte],EthHash
   // may require access to the persistent store
   def dereference( nodeSource : NodeSource ) : Node = {
     nodeSource match {
-      case EmbeddableEthStyleTrie.NodeSource.Hash( hash )     => this( hash );
-      case EmbeddableEthStyleTrie.NodeSource.Embedded( node ) => node;
-      case EmbeddableEthStyleTrie.NodeSource.Empty            => Empty;
+      case EmbeddableEthStylePMTrie.NodeSource.Hash( hash )     => this( hash );
+      case EmbeddableEthStylePMTrie.NodeSource.Embedded( node ) => node;
+      case EmbeddableEthStylePMTrie.NodeSource.Empty            => Empty;
     }
   }
 
@@ -145,9 +145,9 @@ trait EthTrieDb extends EmbeddableEthStyleTrie.Database[Nibble,Seq[Byte],EthHash
     }
     def nodeSourceToEncodable( nodeSource : NodeSource ) : RLP.Encodable = {
       nodeSource match {
-        case EmbeddableEthStyleTrie.NodeSource.Hash( hash )     => RLP.Encodable.ByteSeq( hash.bytes );
-        case EmbeddableEthStyleTrie.NodeSource.Embedded( node ) => toEncodable( node );
-        case EmbeddableEthStyleTrie.NodeSource.Empty            => RLP.Encodable.EmptyByteSeq
+        case EmbeddableEthStylePMTrie.NodeSource.Hash( hash )     => RLP.Encodable.ByteSeq( hash.bytes );
+        case EmbeddableEthStylePMTrie.NodeSource.Embedded( node ) => toEncodable( node );
+        case EmbeddableEthStylePMTrie.NodeSource.Empty            => RLP.Encodable.EmptyByteSeq
       }
     }
 

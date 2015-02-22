@@ -2,16 +2,9 @@ package com.mchange.sc.v1.consuela.trie;
 
 import com.mchange.sc.v1.consuela.hash.Hash;
 
-import com.mchange.sc.v1.log.MLogger;
-import com.mchange.sc.v1.log.MLevel._;
-
-import EthStylePMTrie.Database;
 import EthStylePMTrie.Empty;
 
-import PMTrie.RootTracking;
-
 object EthStyleLowercaseTrie {
-  implicit val logger = MLogger( this );
 
   val alphabet : IndexedSeq[Char] = IndexedSeq( 'a' to 'z' : _* );
   val Zero : Hash.SHA3_256 = Hash.SHA3_256.Zero;
@@ -23,7 +16,9 @@ object EthStyleLowercaseTrie {
 
   val Empty = EthStylePMTrie.Empty;
 
-  class MapDatabase extends Database[Char,String,Hash.SHA3_256] with RootTracking[Hash.SHA3_256] {
+  class MapDatabase extends PMTrie.Database[Node, Hash.SHA3_256] 
+      with PMTrie.Database.NodeHashing[Node,Hash.SHA3_256]
+      with PMTrie.Database.RootTracking[Hash.SHA3_256] {
 
     private[this] val _map = scala.collection.mutable.Map.empty[Hash.SHA3_256,Node];
     _map += ( EthStyleLowercaseTrie.Zero -> Empty );
@@ -76,10 +71,8 @@ object EthStyleLowercaseTrie {
     }
     def put( h : Hash.SHA3_256, node : Node ) : Unit = {
       assert( h != null && node != null, s"${this} doesn't accept nulls. [ h -> ${h}, node -> ${node} ]" );
-      TRACE.log( s"${this} -- put( ${h}, ${node} )" );
       this.synchronized {
         _map += ( h -> node );
-        TRACE.log( s"after put -- map: ${_map}" );
       }
     }
 

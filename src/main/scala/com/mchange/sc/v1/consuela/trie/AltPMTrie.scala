@@ -20,7 +20,7 @@ object AltPMTrie {
     def value    = None;
   }
 
-  type Database[L,V,H] = PMTrie.Database[Node[L,V,H],H]
+  type Database[L,V,H] = PMTrie.Database[Node[L,V,H],H] with PMTrie.Database.NodeHashing[Node[L,V,H],H]
 }
 
 
@@ -30,7 +30,7 @@ object AltPMTrie {
  * This implementation is rendered unfortunately more complex by a (perhaps unnecessary, unwise)
  * decision to support the empty sequence (of generic type L) as a valid key.
  */ 
-trait AltPMTrie[L,V,H] extends PMTrie[L,V,H, AltPMTrie.Node[L,V,H]] {
+trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[L,V,H],H] {
 
   /*
    * First lets put some unwieldy bits from the companion object into more convenient forms
@@ -114,8 +114,8 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H, AltPMTrie.Node[L,V,H]] {
   }
 
   private[this] def newTrie( newRootHash : H ) : Trie[L,V] = {
-    if ( db.isInstanceOf[PMTrie.RootTracking[H]] )
-      db.asInstanceOf[PMTrie.RootTracking[H]].markRoot( newRootHash );
+    if ( db.isInstanceOf[PMTrie.Database.RootTracking[H]] )
+      db.asInstanceOf[PMTrie.Database.RootTracking[H]].markRoot( newRootHash );
     instantiateSuccessor( newRootHash : H ) : Trie[L,V]
   }
 

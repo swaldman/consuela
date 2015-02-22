@@ -14,10 +14,10 @@ object EthStylePMTrie {
   case class Leaf[L,V,H] ( val subkey : IndexedSeq[L], val value : V ) extends Node[L,V,H] with UniqueSubkey[L];
   case object Empty extends Node[Nothing,Nothing,Nothing];
 
-  type Database[L,V,H] = PMTrie.Database[Node[L,V,H],H]
+  type Database[L,V,H] = PMTrie.Database[Node[L,V,H],H] with PMTrie.Database.NodeHashing[Node[L,V,H],H]
 }
 
-trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
+trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[EthStylePMTrie.Node[L,V,H],H] {
 
   /*
    * First lets put some unwieldy bits from the companion object into more convenient forms
@@ -106,8 +106,8 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H,EthStylePMTrie.Node[L,V,H]] {
   }
 
   private[this] def newTrie( newRootHash : H ) : Trie[L,V] = {
-    if ( db.isInstanceOf[PMTrie.RootTracking[H]] )
-      db.asInstanceOf[PMTrie.RootTracking[H]].markRoot( newRootHash );
+    if ( db.isInstanceOf[PMTrie.Database.RootTracking[H]] )
+      db.asInstanceOf[PMTrie.Database.RootTracking[H]].markRoot( newRootHash );
     instantiateSuccessor( newRootHash : H ) : Trie[L,V]
   }
 

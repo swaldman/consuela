@@ -4,10 +4,7 @@ import com.mchange.sc.v1.consuela.hash.Hash;
 
 import scala.reflect._;
 
-import AltPMTrie.Database;
 import AltPMTrie.Empty;
-
-import PMTrie.RootTracking;
 
 object AltLowercaseTrie {
 
@@ -20,7 +17,9 @@ object AltLowercaseTrie {
 
   val Empty = AltPMTrie.Empty;
 
-  class MapDatabase extends Database[Char,String,Hash.SHA3_256] with RootTracking[Hash.SHA3_256] {
+  class MapDatabase extends PMTrie.Database[Node, Hash.SHA3_256]
+      with PMTrie.Database.NodeHashing[Node,Hash.SHA3_256]
+      with PMTrie.Database.RootTracking[Hash.SHA3_256] {
 
     private[this] val _map = scala.collection.mutable.Map.empty[Hash.SHA3_256,Node];
     _map += ( AltLowercaseTrie.Zero -> Empty );
