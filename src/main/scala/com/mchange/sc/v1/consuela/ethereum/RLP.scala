@@ -10,57 +10,14 @@ object RLP {
     val EmptySeq     = encode( Encodable.EmptySeq );
   }
   object UTF_8 {
-    val UTF8_Charset = Charset.forName("UTF-8");
+    val _Charset = Charset.forName("UTF-8");
 
     /**
      * Strings interpreted as UTF-8 bytes. Strings can be empty, other empty sequences interpreted as structure
      */  
-    def fastEncode( obj : Any ) : Option[Seq[Byte]] = fastEncodable( obj ).map( encode _ )
+    def fastEncode( obj : Any ) : Option[Seq[Byte]] = fastEncodableWithStrings( obj, _Charset ).map( encode _ )
 
-    /**
-     * Strings interpreted as UTF-8 bytes. Strings can be empty, other empty sequences interpreted as structure
-     */  
-    def fastEncodable( obj : Any ) : Option[Encodable] = {
-      def tryAsAtom : Option[Encodable] = {
-        obj match {
-          case i   : Int    => Some( Encodable.Int( i ) ) 
-          case bi  : BigInt => Some( Encodable.BigInt( bi ) ) 
-          case str : String => Some( Encodable.ByteSeq( str.getBytes( UTF8_Charset ) ) )
-          case _            => None
-        }
-      }
-      def tryAsSeq : Option[Encodable] = {
-        if ( obj.isInstanceOf[Seq[_]] ) {
-          val seq : Seq[_] = obj.asInstanceOf[Seq[_]];
-
-          def tryAsHomogenousByteSeq : Option[Encodable] = {
-            seq match {
-              case Seq() => Some( Encodable.Seq( Seq.empty[Encodable] ) );
-              case Seq( head, tail @ _* ) => {
-                head match {
-                  case byte : Byte => {
-                    if ( tail.forall( _.isInstanceOf[Byte] ) ) { // yay! Seq[Byte]
-                      Some( Encodable.ByteSeq( byte +: tail.map( _.asInstanceOf[Byte] ) ) )
-                    } else {
-                      None
-                    }
-                  }
-                  case _ => None
-                }
-              }
-              case _ => None
-            }
-          }
-          def tryAsOtherSeq : Option[Encodable] = Try( Encodable.Seq( seq.map( fastEncodable( _ ).get ) ) ).toOption
-
-          tryAsHomogenousByteSeq orElse tryAsOtherSeq
-        } else {
-          None
-        }
-      }
-
-      tryAsAtom orElse tryAsSeq
-    }
+    def encodeString( str : String ) : Seq[Byte] = RLP.encodeString( str, _Charset )
   }
   object Encodable {
     sealed trait Basic extends Encodable;
@@ -201,9 +158,58 @@ object RLP {
       case ese : Encodable.Seq     => rl( ese.seq );
     }
   }
+  def encodeBytes( bytes : Seq[Byte] )                : Seq[Byte] = encode( Encodable.ByteSeq( bytes ) );
+  def encodeInt( i : Int )                            : Seq[Byte] = encode( Encodable.Int( i ) );
+  def encodeBigInt( bi : BigInt )                     : Seq[Byte] = encode( Encodable.BigInt( bi ) );
+  def encodeString( str : String, charset : Charset ) : Seq[Byte] = encode( Encodable.ByteSeq( str.getBytes( charset ).toSeq ) );
+  /**
+   * Strings can be empty, other empty sequences interpreted as structure
+   */  
+  def fastEncodableWithStrings( obj : Any, charset : Charset ) : Option[Encodable] = {
+    def tryAsAtom : Option[Encodable] = {
+      obj match {
+        case i   : Int    => Some( Encodable.Int( i ) )
+        case bi  : BigInt => Some( Encodable.BigInt( bi ) )
+        case str : String => Some( Encodable.ByteSeq( str.getBytes( charset ) ) )
+        case _            => None
+      }
+    }
+    def tryAsSeq : Option[Encodable] = {
+      if ( obj.isInstanceOf[Seq[_]] ) {
+        val seq : Seq[_] = obj.asInstanceOf[Seq[_]];
+
+        def tryAsHomogenousByteSeq : Option[Encodable] = {
+          seq match {
+            case Seq() => Some( Encodable.Seq( Seq.empty[Encodable] ) );
+            case Seq( head, tail @ _* ) => {
+              head match {
+                case byte : Byte => {
+                  if ( tail.forall( _.isInstanceOf[Byte] ) ) { // yay! Seq[Byte]
+                    Some( Encodable.ByteSeq( byte +: tail.map( _.asInstanceOf[Byte] ) ) )
+                  } else {
+                    None
+                  }
+                }
+                case _ => None
+              }
+            }
+            case _ => None
+          }
+        }
+        def tryAsOtherSeq : Option[Encodable] = Try( Encodable.Seq( seq.map( fastEncodableWithStrings( _, charset ).get ) ) ).toOption
+
+        tryAsHomogenousByteSeq orElse tryAsOtherSeq
+      } else {
+        None
+      }
+    }
+
+    tryAsAtom orElse tryAsSeq
+  }
+
   private[this] def be( i : Int ) = IntegerUtils.byteArrayFromInt( i ).dropWhile( _ == 0 );
   private[this] def be( bi : BigInt ) = bi.toByteArray.dropWhile( _ == 0 );
-
+  
   private[this] val byteCaster : (Any => Byte) = { // this is a workaround to weird errors trying to cast to byte, should just be _.asInstanceOf[Byte]
     case i : Int  => i.asInstanceOf[Byte]
     case b : Byte => b;
