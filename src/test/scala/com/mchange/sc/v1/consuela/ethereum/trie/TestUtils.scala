@@ -12,8 +12,19 @@ object TestUtils {
     case obj   : JsObject    => throw new AssertionError( s"Object input value not expected: ${obj}" );
     case str   : JsString    => throw new AssertionError( s"String input value not expected: ${str}" );
   }
+  def toStringOrNull( jsv : JsValue ) : String = {
+    val CoerceToString : PartialFunction[JsValue,String] = {
+      case str   : JsString    => str.value;
+      case JsNull              => null;
+    }
+    ( CoerceToString orElse UnexpectedJsValue )( jsv )
+  }
+  def toNullableStringField( field : Tuple2[String,JsValue] ) : Tuple2[String,String] = ( field._1, toStringOrNull( field._2 ) );
+  def toNullableStringFields( fields : Seq[Tuple2[String,JsValue]] ) : Seq[Tuple2[String,String]] = fields.map( toNullableStringField _ );
+
   def toStringField( field : Tuple2[String,JsValue] ) : Tuple2[String,String] = ( field._1, field._2.asInstanceOf[JsString].value );
   def toStringFields( fields : Seq[Tuple2[String,JsValue]] ) : Seq[Tuple2[String,String]] = fields.map( toStringField _ );
+
   def printEval[T]( expr : =>T, mbPrefix : Option[String] = None) : T = {
     val out = expr;
     mbPrefix.fold( println( out ) )( pfx => println( s"${pfx}${out}" ) )

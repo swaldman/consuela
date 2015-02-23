@@ -11,7 +11,8 @@ object EthTrieDb {
   val BranchLength        = Nibbles.length + 1;
   val EmptyLength         = 0;
 
-  val EmptyByteSeq             = Seq.empty[Byte];
+  val EmptyByteSeq        = Seq.empty[Byte];
+  val EmptyHash           = EthHash.hash( RLP.Encoded.EmptyByteSeq )
 
   private def aerr( msg : String ) = throw new AssertionError( msg );
 
@@ -20,12 +21,12 @@ object EthTrieDb {
 
     class Db extends EthTrieDb {
       private[this] val _map = scala.collection.mutable.Map.empty[EthHash,Node];
-      _map += ( EthHash.Zero -> Empty );
+      _map += ( EmptyHash -> Empty );
 
       def put( hash : EthHash, node : Node ) : Unit = this.synchronized{ _map += ( hash -> node ) }
       def apply( hash : EthHash ) : Node = this.synchronized{ _map( hash ) }
     }
-    class Trie( testdb : Db = new Db, rootHash : EthHash = EthHash.Zero ) extends {
+    class Trie( testdb : Db = new Db, rootHash : EthHash = EmptyHash ) extends {
       val earlyInit = EarlyInit( Alphabet, testdb, rootHash )
     } with EmbeddableEthStylePMTrie[Nibble,Seq[Byte],EthHash] {
       def instantiateSuccessor( newRootHash : EthHash ) : Trie =  new Trie( testdb, newRootHash );
@@ -57,7 +58,7 @@ trait EthTrieDb extends EmbeddableEthStylePMTrie.Database[Nibble,Seq[Byte],EthHa
     val nodeRLP = toRLP( node );
     if (nodeRLP.length == 0) NodeSource.Empty else NodeSource.Hash( EthHash.hash( nodeRLP ) )
   }
-  def Zero = EthHash.Zero;
+  def EmptyHash = EthTrieDb.EmptyHash;
 
   def rlpToNodeSource( nodeRLP : Seq[Byte], mbKnownNode : Option[Node] = None ) : NodeSource = {
     if (nodeRLP == RLP.Encoded.EmptyByteSeq) {
