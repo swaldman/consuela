@@ -1,6 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum.trie;
 
 import scala.io.Source;
+import scala.util.Random;
 
 import play.api.libs.json._;
 
@@ -15,7 +16,9 @@ import org.specs2._;
 import TestUtils._;
 
 object EthTrieDbSpec {
-  private[this] implicit val charset = Charset.forName("UTF-8");
+
+  private implicit val charset = Charset.forName("UTF-8");
+  private val NumPermutations = 1000;
 
   def asJsObject( rsrcPath : String ) : JsObject = {
     val JsonString : String   = Source.fromURL(this.getClass.getResource( rsrcPath )).mkString
@@ -25,20 +28,47 @@ object EthTrieDbSpec {
     }
   }
 
-  object EthereumTrieAnyOrderTest {
+  trait Testable {
+    val RsrcPath : String;
+
+    lazy val items : Seq[Item] = asJsObject( RsrcPath ).fields.map( Item( _ ) )
+
+    def test = items.forall( _.test );
+  }
+
+  /**
+   * Following ethereum sources ( e.g https://github.com/ethereum/pyethereum/blob/d442c114b694439a85a89bb3b06d5115243d3067/tests/test_trie.py )
+   * it looks like some Trie tests are intended to be permuted, but with all deletions deterministic tacked onto the end to keep the outcome hash
+   * deterministic despite keys both added and removed.
+   * 
+   * So we support this sort of permutation testing. But some tests cannot be permuted this way. For example, they may have multiple nondelete
+   * bindings, so that the final trie depends on which came last. For now, we exclude those tests by hand from permutation testing.
+   *
+   * See https://github.com/ethereum/tests/issues/64 
+   */ 
+  trait PermuteTestable extends Testable {
+    val unpermutableTests : Set[String] = Set.empty;
+
+    def permuteTest = {
+      val random = new Random;
+      items.filter( item => !unpermutableTests( item.name ) ).forall { item =>
+        (1 to NumPermutations).forall { num => item.testPermutation( num, random ) }
+      }
+    }
+  }
+
+  object EthereumTrieAnyOrderTest extends PermuteTestable {
+    override val unpermutableTests = Set( "foo" )
+
     val RsrcPath : String      = "/com/mchange/sc/v1/consuela/ethereum/ethereum-tests-trieanyorder.json"
-    lazy val items : Seq[Item] = asJsObject( RsrcPath ).fields.map( Item( _ ) )
-    lazy val test = items.forall( _.test );
   }
-  object EthereumTrieTest {
+  object EthereumTrieTest extends PermuteTestable {
+    override val unpermutableTests = Set( "jeff" )
+
     val RsrcPath : String      = "/com/mchange/sc/v1/consuela/ethereum/ethereum-tests-trietest.json"
-    lazy val items : Seq[Item] = asJsObject( RsrcPath ).fields.map( Item( _ ) )
-    lazy val test = items.forall( _.test );
   }
-  object EthereumTrieTestNextPrev {
+  object EthereumTrieTestNextPrev extends Testable {
     val RsrcPath : String      = "/com/mchange/sc/v1/consuela/ethereum/ethereum-tests-trietestnextprev.json"
-    lazy val items : Seq[Item] = asJsObject( RsrcPath ).fields.map( Item( _ ) )
-    lazy val test = items.forall( _.test );
   }
 
   object Item {
@@ -76,21 +106,43 @@ object EthTrieDbSpec {
   }
   case class Item( name : String, in : Seq[Tuple2[IndexedSeq[Nibble],Seq[Byte]]], expectedRootHash : Seq[Byte] ) {
 
-    def test : Boolean = {
+    val verbose = false;
+
+    lazy val deletes = in.filter( _._2 == null )
+
+    def testPermutation( num : Int, random : Random ) : Boolean = {
+      val shuffled = random.shuffle( in );
+      val operations = shuffled ++ deletes;
+      doTest( operations, Some( num ) ); 
+    }
+
+    def test = doTest( in, None );
+
+    private[this] def doTest( operationTuples : Seq[Tuple2[IndexedSeq[Nibble],Seq[Byte]]], permutationNumber : Option[Int] = None ) : Boolean = {
       val empty = new EthTrieDb.Test.Trie;
       val nextTrie : ( EthTrieDb.Test.Trie, Tuple2[IndexedSeq[Nibble],Seq[Byte]] ) => EthTrieDb.Test.Trie = { ( lastTrie, pair ) =>
         if ( pair._2 == null) lastTrie.excluding( pair._1 ) else lastTrie.including( pair._1, pair._2 )
       }
-      val trie = in.foldLeft( empty )( nextTrie );
+      val trie = operationTuples.foldLeft( empty )( nextTrie );
       val result = trie.RootHash.bytes == expectedRootHash
+      val permuted = permutationNumber != None;
       if ( !result ) {
-        trie.dumpTrie
-        println( s"name: ${name}, result: ${result}" )
+        def isPermutedStr = permutationNumber.fold("")( num => s" (permutation #${num})" )
+        if ( permuted ) {
+          println("unpermuted:");
+          in.foldLeft( empty )( nextTrie ).dumpTrie;
+          println();
+          println("permuted:");
+        } 
+        trie.dumpTrie;
+        println();
+        println( s"""name: ${name}${isPermutedStr}, result: ${result}""" )
         println( s"trie.RootHash: ${trie.RootHash}, expectedRootHash: ${expectedRootHash}" )
         println( s"trie.RootHash.hex: ${trie.RootHash.hex}, expectedRootHash.hex: ${expectedRootHash.hex}" )
       }
       else {
-        println( s"passed: ${name}" )
+        if (verbose && !permuted)
+          println( s"passed: ${name}" )
       }
       result
     }
@@ -102,12 +154,18 @@ class EthTrieDbSpec extends Specification {
   def is =
 s2"""
    A Trie build on EthTrieDb should
-     pass the ethereum-trietestanyorder test suite             ${ e1 }
-     pass the ethereum-trietest         test suite             ${ e2 }
+     pass the ethereum-trietestanyorder           test suite                     ${ e1 }
+     pass the permuting ethereum-trietestanyorder test suite (excluding 'foo')   ${ e2 }
+     pass the simple ethereum-trietest            test suite                     ${ e3 }
+     pass the permuting ethereum-trietest         test suite (excluding 'jeff')  ${ e4 }
+  
+   Note: see https://github.com/ethereum/tests/issues/64 re excluded tests.
 """;
 //     pass the ethereum-trienextprev test suite             ${ e3 }
 
   def e1 = EthereumTrieAnyOrderTest.test
-  def e2 = EthereumTrieTest.test
+  def e2 = EthereumTrieAnyOrderTest.permuteTest
+  def e3 = EthereumTrieTest.test
+  def e4 = EthereumTrieTest.permuteTest
 //  def e3 = EthereumTrieTestNextPrev.test
 }
