@@ -589,7 +589,7 @@ trait EmbeddableEthStylePMTrie[L,V,H] extends PMTrie[L,V,H] {
             NewElements( Element( newCurrentBranch ), Element( newChildLeafSource, newChildLeaf ) )
           }
           def _nonemptyChildLeafCase = {
-            val (firstLetter, remainder) = childLeaf.subkey.splitAt(1);
+            val ( IndexedSeq( firstLetter ), remainder ) = childLeaf.subkey.splitAt(1);
             val firstLetterIndex = alphabet.indexOf( firstLetter );
             val grandchildLeaf = Leaf( remainder, childLeaf.value );
             val grandchildLeafSource = db.reference( grandchildLeaf );
