@@ -58,8 +58,6 @@ object EthTrieDbSpec {
   }
 
   object EthereumTrieAnyOrderTest extends PermuteTestable {
-    override val unpermutableTests = Set( "foo" )
-
     val RsrcPath : String      = "/com/mchange/sc/v1/consuela/ethereum/ethereum-tests-trieanyorder.json"
   }
   object EthereumTrieTest extends PermuteTestable {
@@ -155,7 +153,7 @@ class EthTrieDbSpec extends Specification {
 s2"""
    A Trie build on EthTrieDb should
      pass the ethereum-trietestanyorder           test suite                     ${ e1 }
-     pass the permuting ethereum-trietestanyorder test suite (excluding 'foo')   ${ e2 }
+     pass the permuting ethereum-trietestanyorder test suite                     ${ e2 }
      pass the simple ethereum-trietest            test suite                     ${ e3 }
      pass the permuting ethereum-trietest         test suite (excluding 'jeff')  ${ e4 }
   
