@@ -55,10 +55,10 @@ object EmbeddableEthStylePMTrie {
     // no access to the persistent store
     def reference( node : Node )     : NodeSource;
     def rootReference( node : Node ) : NodeSource; // same, a reference, but cannot be embedded, since there's nothing to embed root
-    def Zero : H;
+    def EmptyHash : H;
   }
 
-  case class EarlyInit[L,V,H]( alphabet : IndexedSeq[L], database : Database[L,V,H], root : H );
+  case class EarlyInit[L,V,H]( alphabet : IndexedSeq[L], database : Database[L,V,H], RootHash : H );
 }
 
 trait EmbeddableEthStylePMTrie[L,V,H] extends PMTrie[L,V,H] {
@@ -100,12 +100,12 @@ trait EmbeddableEthStylePMTrie[L,V,H] extends PMTrie[L,V,H] {
 
   val alphabet   : IndexedSeq[L] = earlyInit.alphabet;
   val db         : Database      = earlyInit.database;
-  val root       : H             = earlyInit.root;
+  val RootHash       : H             = earlyInit.RootHash;
   
   val alphabetLen = alphabet.length;
 
-  lazy val rootSource = if ( root == db.Zero ) NodeSource.Empty else NodeSource.Hash( root );
-  lazy val rootNode   = db.dereference( rootSource );
+  lazy val RootSource = if ( RootHash == db.EmptyHash ) NodeSource.Empty else NodeSource.Hash( RootHash );
+  lazy val RootNode   = db.dereference( RootSource );
 
   // useful empties
   val EmptyBranchChildren = IndexedSeq.fill( alphabetLen )( NodeSource.Empty );
@@ -128,7 +128,7 @@ trait EmbeddableEthStylePMTrie[L,V,H] extends PMTrie[L,V,H] {
     }
   }
 
-  def Zero = db.Zero;
+  def EmptyHash = db.EmptyHash;
 
   def subkeys( branch : Branch ) : Seq[L] = branch.children.zip( Stream.from(0) ).filter( _._1 != NodeSource.Empty ).map( tup => alphabet( tup._2 ) );
 
@@ -142,7 +142,7 @@ trait EmbeddableEthStylePMTrie[L,V,H] extends PMTrie[L,V,H] {
         case _ => /* ignore */;
       }
     }
-    dumpNode( rootSource );
+    dumpNode( RootSource );
   }
 
 /*
@@ -162,7 +162,7 @@ trait EmbeddableEthStylePMTrie[L,V,H] extends PMTrie[L,V,H] {
       rootRef match {
         case NodeSource.Hash( hash ) => hash;
         case NodeSource.Embedded( _ ) => aerr( s"A root reference cannot be an embedded node. It must be referenced by a hash. rootRef -> ${rootRef}" );
-        case NodeSource.Empty => db.Zero;
+        case NodeSource.Empty => db.EmptyHash;
       }
     }
     val NewRootElement : Path.Element = updated.newRoot.getOrElse( null ); //so sue me
@@ -184,7 +184,7 @@ trait EmbeddableEthStylePMTrie[L,V,H] extends PMTrie[L,V,H] {
   }
   private[this] def persistClone( updated : Path.UpdatedPath ) : Trie[L,V] = {
     val mbRootHash = persist( updated );
-    mbRootHash.fold( newTrie( db.Zero ) )( newTrie( _ ) )
+    mbRootHash.fold( newTrie( db.EmptyHash ) )( newTrie( _ ) )
   }
 
   private[this] def newTrie( newRootHash : H ) : Trie[L,V] = {
@@ -202,13 +202,13 @@ trait EmbeddableEthStylePMTrie[L,V,H] extends PMTrie[L,V,H] {
 
   object Path {
     object Builder {
-      def build( key : Subkey ) : Path = if (key.isEmpty) buildEmptySubkey() else buildNonemptySubkey( rootSource, rootNode, key, Nil )
+      def build( key : Subkey ) : Path = if (key.isEmpty) buildEmptySubkey() else buildNonemptySubkey( RootSource, RootNode, key, Nil )
 
       private def buildEmptySubkey() : Path = {
-        rootNode match {
+        RootNode match {
           case leaf @ Leaf( EmptySubkey, _ )               => ExactLeaf( leaf, Element.Root :: Nil );
           case leaf : Leaf                                 => EmptySubkeyAtNonemptySubkeyRootLeaf( leaf );
-          case Extension( EmptySubkey, _ )                 => aerr( "Huh? Under no circumstances should we have an Extension with an empty subkey. ${rootNode}" );
+          case Extension( EmptySubkey, _ )                 => aerr( "Huh? Under no circumstances should we have an Extension with an empty subkey. ${RootNode}" );
           case extension @ Extension( IndexedSeq( _ ), _ ) => EmptySubkeyAtOneLetterSubkeyRootExtension( extension );
           case extension : Extension                       => EmptySubkeyAtMultiLetterSubkeyRootExtension( extension );
           case branch : Branch                             => EmptySubkeyAtRootBranch( branch );
@@ -296,7 +296,7 @@ trait EmbeddableEthStylePMTrie[L,V,H] extends PMTrie[L,V,H] {
       }
     }
     object Element {
-      val Root = Element( rootSource, rootNode );
+      val Root = Element( RootSource, RootNode );
       val Deletion = Element( NodeSource.Empty, null );
 
       def apply( node : Node ) : Element = Element( db.reference( node ), node );

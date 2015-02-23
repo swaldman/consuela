@@ -9,20 +9,21 @@ import AltPMTrie.Empty;
 object AltLowercaseTrie {
 
   val alphabet : IndexedSeq[Char] = IndexedSeq( 'a' to 'z' : _* );
-  val Zero : Hash.SHA3_256 = Hash.SHA3_256.Zero;
+  val EmptyHash : Hash.SHA3_256 = Hash.SHA3_256.Zero;
 
   type Node      = AltPMTrie.Node[Char,String,Hash.SHA3_256];
   type Branch    = AltPMTrie.Branch[Char,String,Hash.SHA3_256];
   type Extension = AltPMTrie.Extension[Char,String,Hash.SHA3_256];
 
-  val Empty = AltPMTrie.Empty;
-
   class MapDatabase extends PMTrie.Database[Node, Hash.SHA3_256]
       with PMTrie.Database.NodeHashing[Node,Hash.SHA3_256]
       with PMTrie.Database.RootTracking[Hash.SHA3_256] {
 
+
+    val EmptyHash : Hash.SHA3_256 = AltLowercaseTrie.EmptyHash;
+
     private[this] val _map = scala.collection.mutable.Map.empty[Hash.SHA3_256,Node];
-    _map += ( AltLowercaseTrie.Zero -> Empty );
+    _map += ( EmptyHash -> Empty );
 
     private[this] val _roots = scala.collection.mutable.Set.empty[Hash.SHA3_256];
 
@@ -30,14 +31,13 @@ object AltLowercaseTrie {
     def markRoot( root : Hash.SHA3_256 ) : Unit = this.synchronized( _roots += root );
     def knowsRoot( h : Hash.SHA3_256 ) : Boolean = this.synchronized{ _roots.contains( h) } 
 
-    val Zero : Hash.SHA3_256                = AltLowercaseTrie.Zero;
     def apply( h : Hash.SHA3_256 ) : Node   = this.synchronized( _map(h) ); 
     def hash( node : Node ) : Hash.SHA3_256 = {
       import java.io._;
       import com.mchange.sc.v2.lang.borrow;
 
       node match {
-        case Empty => Zero;
+        case Empty => EmptyHash;
         case extension : Extension => {
           borrow( new ByteArrayOutputStream ) { baos =>
             borrow( new DataOutputStream( baos ) ) { dos =>
@@ -73,7 +73,7 @@ object AltLowercaseTrie {
   }
 }
 
-class AltLowercaseTrie( val mdb : AltLowercaseTrie.MapDatabase = new AltLowercaseTrie.MapDatabase, r : Hash.SHA3_256 = AltLowercaseTrie.Zero ) extends {
+class AltLowercaseTrie( val mdb : AltLowercaseTrie.MapDatabase = new AltLowercaseTrie.MapDatabase, r : Hash.SHA3_256 = AltLowercaseTrie.EmptyHash ) extends {
   val earlyInit = ( mdb, r );
 } with AltPMTrie[Char,String,Hash.SHA3_256] {
   import AltLowercaseTrie._;

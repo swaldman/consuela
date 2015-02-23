@@ -136,7 +136,7 @@ s2"""
     testBindings.filter( binding => yes(binding._1) ).forall( binding => trie( binding._1 ).contains( binding._2 ) ) && 
     testBindings.filter( binding => !yes(binding._1) ).forall( binding => trie( binding._1 ) == None )
   }
-  def checkEmpty( trie : EthStyleLowercaseTrie ) = tt3.root == tt3.db.Zero;
+  def checkEmpty( trie : EthStyleLowercaseTrie ) = tt3.RootHash == tt3.db.EmptyHash;
 
 
   def e1 : Boolean = checkTrie( tt1, Set("hello") ) 

@@ -34,8 +34,8 @@ object PMTrie {
     }
   }
   trait Database[N,H] {
-    // a lookup on the hash's Zero value should always return a node representing an empty Trie
-    def Zero : H;
+    // a lookup on the hash's Empty value should always return a node representing an empty Trie
+    def EmptyHash : H;
 
     def apply( h : H ) : N;       // throws UnknownHashException              
     def put( h : H, node : N ) : Unit;
@@ -54,7 +54,7 @@ object PMTrie {
 }
 
 trait PMTrie[L,V,H] extends Trie[L,V] {
-  def root : H;
-  def Zero : H;
+  def RootHash : H;
+  def EmptyHash : H;
 }
 

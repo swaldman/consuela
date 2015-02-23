@@ -40,7 +40,7 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[EthStylePM
    */ 
 
   val alphabet : IndexedSeq[L];
-  val earlyInit : ( Database, H ); /* ( Database, root at time of instance construction ) */
+  val earlyInit : ( Database, H ); /* ( Database, RootHash at time of instance construction ) */
 
   /**
     *  all nodes in the updated path will already have been persisted before this method is called.
@@ -52,15 +52,15 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[EthStylePM
    */ 
 
   val db   : Database = earlyInit._1;
-  val Zero : H      = db.Zero;
-  val root : H      = earlyInit._2;
+  val EmptyHash : H      = db.EmptyHash;
+  val RootHash : H      = earlyInit._2;
   
-  lazy val rootNode = db( root );
+  lazy val RootNode = db( RootHash );
 
   lazy val alphabetLen = alphabet.length;
 
   // useful empties
-  lazy val EmptyBranchChildren = IndexedSeq.fill( alphabetLen )( Zero );
+  lazy val EmptyBranchChildren = IndexedSeq.fill( alphabetLen )( EmptyHash );
   val EmptySubkey = IndexedSeq.empty[L];
 
   def hash( node : Node ) : H = db.hash( node );
@@ -82,19 +82,19 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[EthStylePM
     }
   }
 
-  def subkeys( branch : Branch ) : Seq[L] = branch.children.zip( Stream.from(0) ).filter( _._1 != Zero ).map( tup => alphabet( tup._2 ) );
+  def subkeys( branch : Branch ) : Seq[L] = branch.children.zip( Stream.from(0) ).filter( _._1 != EmptyHash ).map( tup => alphabet( tup._2 ) );
 
   def dumpTrie : Unit = {
     def dumpNode( h : H ) : Unit = {
       val node = db( h )
       println( s"${h} -> ${node}" );
       node match {
-        case Branch( children, _ ) => children.filter( _ != Zero ).foreach( dumpNode(_) );
+        case Branch( children, _ ) => children.filter( _ != EmptyHash ).foreach( dumpNode(_) );
         case Extension( _, child ) => dumpNode( child );
         case _ => /* ignore */;
       }
     }
-    dumpNode( root );
+    dumpNode( RootHash );
   }
 
   private[this] def persist( updated : Path.UpdatedPath ) : Unit = {
@@ -102,7 +102,7 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[EthStylePM
   }
   private[this] def persistClone( updated : Path.UpdatedPath ) : Trie[L,V] = {
     persist( updated );
-    updated.newRoot.fold( newTrie( Zero ) )( element => newTrie( element.hash ) )
+    updated.newRoot.fold( newTrie( EmptyHash ) )( element => newTrie( element.hash ) )
   }
 
   private[this] def newTrie( newRootHash : H ) : Trie[L,V] = {
@@ -111,7 +111,7 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[EthStylePM
     instantiateSuccessor( newRootHash : H ) : Trie[L,V]
   }
 
-  private[this] def indexKidPairs( children : IndexedSeq[H] ) : IndexedSeq[( Int, H )] = Stream.from( 0 ).zip( children ).filter( _._2 != Zero ).toIndexedSeq;
+  private[this] def indexKidPairs( children : IndexedSeq[H] ) : IndexedSeq[( Int, H )] = Stream.from( 0 ).zip( children ).filter( _._2 != EmptyHash ).toIndexedSeq;
 
 
   /* private[this] */ def path( key : Subkey ) : Path = Path.Builder.build( key );
@@ -120,13 +120,13 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[EthStylePM
 
   object Path {
     object Builder {
-      def build( key : IndexedSeq[L] ) : Path = if (key.isEmpty) buildEmptySubkey() else buildNonemptySubkey( root, rootNode, key, Nil )
+      def build( key : IndexedSeq[L] ) : Path = if (key.isEmpty) buildEmptySubkey() else buildNonemptySubkey( RootHash, RootNode, key, Nil )
 
       private def buildEmptySubkey() : Path = {
-        rootNode match {
+        RootNode match {
           case leaf @ Leaf( EmptySubkey, _ )               => ExactLeaf( leaf, Element.Root :: Nil );
           case leaf : Leaf                                 => EmptySubkeyAtNonemptySubkeyRootLeaf( leaf );
-          case Extension( EmptySubkey, _ )                 => aerr( "Huh? Under no circumstances should we have an Extension with an empty subkey. ${rootNode}" );
+          case Extension( EmptySubkey, _ )                 => aerr( "Huh? Under no circumstances should we have an Extension with an empty subkey. ${RootNode}" );
           case extension @ Extension( IndexedSeq( _ ), _ ) => EmptySubkeyAtOneLetterSubkeyRootExtension( extension );
           case extension : Extension                       => EmptySubkeyAtMultiLetterSubkeyRootExtension( extension );
           case branch : Branch                             => EmptySubkeyAtRootBranch( branch );
@@ -167,7 +167,7 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[EthStylePM
           val firstLetterIndex = alphabet.indexOf( searchSubkey.head );
           val childHash = branch.children( firstLetterIndex );
           childHash match {
-            case Zero                                 => TruncatedWithinBranch( branch, nextElements, firstLetterIndex, searchSubkey.tail );
+            case EmptyHash                                 => TruncatedWithinBranch( branch, nextElements, firstLetterIndex, searchSubkey.tail );
             case goodHash if searchSubkey.length == 1 => ExactBranch( branch, nextElements, firstLetterIndex );
             case goodHash                             => buildNonemptySubkey( goodHash, db( goodHash ), searchSubkey.tail, nextElements );
           }
@@ -179,7 +179,7 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[EthStylePM
           case extension : Extension => _fromExtension( nodeHash, extension, searchSubkey, parents );
           case leaf      : Leaf => _fromLeaf( nodeHash, leaf, searchSubkey, parents );
           case Empty => {
-            assert( nodeHash == Zero, s"Huh? We were asked to build a path from the Empty node, yet it's claimed hash is nonzero? [nodeHash -> ${nodeHash}, node -> ${node}]" );
+            assert( nodeHash == EmptyHash, s"Huh? We were asked to build a path from the Empty node, yet it's claimed hash is nonzero? [nodeHash -> ${nodeHash}, node -> ${node}]" );
             assert( parents == Nil, s"We are asking to build a path from an Empty node which claims to have parents. [nodeHash -> ${nodeHash}, node -> ${node}, parents -> ${parents}]" );
             _fromEmpty( searchSubkey );
           }
@@ -214,8 +214,8 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[EthStylePM
       }
     }
     object Element {
-      lazy val Root = Element( root, rootNode );
-      val Deletion = Element( Zero, null );
+      lazy val Root = Element( RootHash, RootNode );
+      val Deletion = Element( EmptyHash, null );
 
       def apply( node : Node ) : Element = Element( db.hash( node ), node );
     }
@@ -252,7 +252,7 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[EthStylePM
 
 
           def updatedChildren( branch : Branch, h : H ) = branch.children.map( childHash => if ( childHash == oldChild.hash ) h else childHash );
-          def culledChildren( branch : Branch )         = updatedChildren( branch, Zero );
+          def culledChildren( branch : Branch )         = updatedChildren( branch, EmptyHash );
           def replacedChildren( branch : Branch )       = updatedChildren( branch, newChild.hash );
 
           // remember that "newChild" is Deletion in this case, don't try to condense with it!
@@ -370,7 +370,7 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[EthStylePM
           val survivingChild = survivingChildren.head;
           condenseDownward( Extension( IndexedSeq( alphabet( survivingChild._1 ) ), survivingChild._2 ) )
         }
-        case _                  => droppingBranch.copy( children=droppingBranch.children.updated( dropLetterIndex, Zero ) )
+        case _                  => droppingBranch.copy( children=droppingBranch.children.updated( dropLetterIndex, EmptyHash ) )
       }
     }
 
@@ -477,7 +477,7 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[EthStylePM
       // Per ethereum spec, Branches must have a child Branch or empty-key Leaf as "terminator" if it is to be associated with a value
       def mbValue : Option[V] = {
         val childHash = branch.children( matchLetterIndex );
-        assert( childHash != Zero, "In an ExactBranch, the last letter should be matched, so the child should be nonzero." );
+        assert( childHash != EmptyHash, "In an ExactBranch, the last letter should be matched, so the child should be nonzero." );
         val child = db( childHash );
         child match {
           case Branch( _, maybe )         => maybe;
@@ -565,7 +565,7 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[EthStylePM
 
         // method implementation -- replacementForIncluding
         val childHash = branch.children( matchLetterIndex );
-        assert( childHash != Zero, s"To be an ExactBranch match, the branch should have consumed the match letter, so its hash should not be Zero: childHash -> ${childHash}" );
+        assert( childHash != EmptyHash, s"To be an ExactBranch match, the branch should have consumed the match letter, so its hash should not be EmptyHash: childHash -> ${childHash}" );
         val childNode = db( childHash );
         childNode match {
           case childLeaf      : Leaf      => handleChildLeaf( childLeaf );
@@ -684,7 +684,7 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[EthStylePM
         val extraLettersLeaf = Leaf( extraLetters, v );
         val extraLettersLeafHash = db.hash( extraLettersLeaf );
         def msg = s"Huh? Truncation within a branch means that trying to traverse our next letter hits an empty child! branchLetterIndex -> ${branchLetterIndex}, branch -> ${branch}";
-        assert( branch.children( branchLetterIndex ) == Zero, msg );
+        assert( branch.children( branchLetterIndex ) == EmptyHash, msg );
         val newBranchChildren = branch.children.updated( branchLetterIndex, extraLettersLeafHash );
         val newBranch = Branch( newBranchChildren, branch.mbValue );
         NewElements( Element( newBranch ), Element( extraLettersLeafHash, extraLettersLeaf ) )

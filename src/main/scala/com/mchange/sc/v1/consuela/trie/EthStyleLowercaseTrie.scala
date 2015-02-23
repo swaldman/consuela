@@ -7,7 +7,7 @@ import EthStylePMTrie.Empty;
 object EthStyleLowercaseTrie {
 
   val alphabet : IndexedSeq[Char] = IndexedSeq( 'a' to 'z' : _* );
-  val Zero : Hash.SHA3_256 = Hash.SHA3_256.Zero;
+  val EmptyHash : Hash.SHA3_256 = Hash.SHA3_256.Zero;
 
   type Node      = EthStylePMTrie.Node[Char,String,Hash.SHA3_256];
   type Branch    = EthStylePMTrie.Branch[Char,String,Hash.SHA3_256];
@@ -21,7 +21,7 @@ object EthStyleLowercaseTrie {
       with PMTrie.Database.RootTracking[Hash.SHA3_256] {
 
     private[this] val _map = scala.collection.mutable.Map.empty[Hash.SHA3_256,Node];
-    _map += ( EthStyleLowercaseTrie.Zero -> Empty );
+    _map += ( EthStyleLowercaseTrie.EmptyHash -> Empty );
 
     private[this] val _roots = scala.collection.mutable.Set.empty[Hash.SHA3_256];
 
@@ -29,14 +29,14 @@ object EthStyleLowercaseTrie {
     def markRoot( root : Hash.SHA3_256 ) : Unit = this.synchronized( _roots += root );
     def knowsRoot( h : Hash.SHA3_256 ) : Boolean = this.synchronized{ _roots.contains( h) } 
 
-    val Zero : Hash.SHA3_256                = EthStyleLowercaseTrie.Zero;
+    val EmptyHash : Hash.SHA3_256                = EthStyleLowercaseTrie.EmptyHash;
     def apply( h : Hash.SHA3_256 ) : Node   = this.synchronized( _map(h) ); 
     def hash( node : Node ) : Hash.SHA3_256 = {
       import java.io._;
       import com.mchange.sc.v2.lang.borrow;
 
       node match {
-        case Empty => Zero;
+        case Empty => EmptyHash;
         case extension : Extension => {
           borrow( new ByteArrayOutputStream ) { baos =>
             borrow( new DataOutputStream( baos ) ) { dos =>
@@ -80,7 +80,7 @@ object EthStyleLowercaseTrie {
   }
 }
 
-class EthStyleLowercaseTrie( val mdb : EthStyleLowercaseTrie.MapDatabase = new EthStyleLowercaseTrie.MapDatabase, r : Hash.SHA3_256 = EthStyleLowercaseTrie.Zero ) extends {
+class EthStyleLowercaseTrie( val mdb : EthStyleLowercaseTrie.MapDatabase = new EthStyleLowercaseTrie.MapDatabase, r : Hash.SHA3_256 = EthStyleLowercaseTrie.EmptyHash ) extends {
   val earlyInit = ( mdb, r );
 } with EthStylePMTrie[Char,String,Hash.SHA3_256] {
   import EthStyleLowercaseTrie._;

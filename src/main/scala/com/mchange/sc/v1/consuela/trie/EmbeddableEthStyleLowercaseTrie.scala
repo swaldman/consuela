@@ -6,14 +6,14 @@ import EmbeddableEthStylePMTrie.EarlyInit;
 
 object EmbeddableEthStyleLowercaseTrie {
   val alphabet : IndexedSeq[Char] = IndexedSeq( 'a' to 'z' : _* );
-  val Zero : SHA3_256 = SHA3_256.Zero;
+  val EmptyHash : SHA3_256 = SHA3_256.Zero;
 
   class MapDatabase extends EmbeddableEthStylePMTrie.Database[Char,String,SHA3_256] {
 
     import EmbeddableEthStylePMTrie.NodeSource;
 
     private[this] val _map = scala.collection.mutable.Map.empty[SHA3_256,Node];
-    _map += ( SHA3_256.Zero -> Empty );
+    _map += ( EmptyHash -> Empty );
 
     def put( hash : SHA3_256, node : Node ) : Unit = this.synchronized{ _map += Tuple2( hash, node ) }
     def apply( hash : SHA3_256 ) : Node = this.synchronized{ _map(hash) }; 
@@ -34,7 +34,7 @@ object EmbeddableEthStyleLowercaseTrie {
     }
     def rootReference( node : Node ) : NodeSource = if (node == Empty) NodeSource.Empty else NodeSource.Hash( hash( node ) );
 
-    val Zero : SHA3_256 = SHA3_256.Zero;
+    def EmptyHash : SHA3_256 = EmbeddableEthStyleLowercaseTrie.EmptyHash
 
     private[this] def hash( node : Node ) : SHA3_256 = {
       import java.io._;
@@ -53,7 +53,7 @@ object EmbeddableEthStyleLowercaseTrie {
       }
       def nodeToBytes( node : Node ) : Seq[Byte] = {
         node match {
-          case Empty => Zero.bytes;
+          case Empty => EmptyHash.bytes;
           case extension : Extension => {
             borrow( new ByteArrayOutputStream ) { baos =>
               baos.write( subkeyToBytes( extension.subkey ).toArray );
@@ -82,14 +82,16 @@ object EmbeddableEthStyleLowercaseTrie {
   }
 }
 
-class EmbeddableEthStyleLowercaseTrie( val mdb : EmbeddableEthStyleLowercaseTrie.MapDatabase = new EmbeddableEthStyleLowercaseTrie.MapDatabase, r : SHA3_256 = SHA3_256.Zero ) extends {
+class EmbeddableEthStyleLowercaseTrie( 
+  mdb : EmbeddableEthStyleLowercaseTrie.MapDatabase = new EmbeddableEthStyleLowercaseTrie.MapDatabase, 
+  r : SHA3_256 = EmbeddableEthStyleLowercaseTrie.EmptyHash 
+) extends {
   val earlyInit = EarlyInit( EmbeddableEthStyleLowercaseTrie.alphabet, mdb, r );
 } with EmbeddableEthStylePMTrie[Char,String,SHA3_256] {
   import EmbeddableEthStyleLowercaseTrie._;
 
-  def instantiateSuccessor( newRootHash : SHA3_256 ) : EmbeddableEthStyleLowercaseTrie = {
-    new EmbeddableEthStyleLowercaseTrie( mdb, newRootHash );
-  }
+  def instantiateSuccessor( newRootHash : SHA3_256 ) : EmbeddableEthStyleLowercaseTrie = new EmbeddableEthStyleLowercaseTrie( mdb, newRootHash );
+
   override def excluding( key : Subkey ) : EmbeddableEthStyleLowercaseTrie = super.excluding( key ).asInstanceOf[EmbeddableEthStyleLowercaseTrie];
   override def including( key : Subkey, value : String ) : EmbeddableEthStyleLowercaseTrie = super.including( key, value ).asInstanceOf[EmbeddableEthStyleLowercaseTrie];
 }

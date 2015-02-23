@@ -52,7 +52,7 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[
   implicit val hashTypeClassTag : ClassTag[H];
 
   val alphabet : IndexedSeq[L];
-  val earlyInit : ( Database, H ); /* ( Database, root at time of instance construction ) */
+  val earlyInit : ( Database, H ); /* ( Database, RootHash at time of instance construction ) */
 
   /**
     *  all nodes in the updated path will already have been persisted before this method is called.
@@ -72,8 +72,8 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[
   //def db = if ( rawDb.knowsRoot( root ) ) rawDb else throw new AltPMTrie.FutureDatabaseException( root );
 
   val db : Database = earlyInit._1;
-  val root : H      = earlyInit._2; 
-  val Zero : H      = db.Zero;
+  val RootHash : H      = earlyInit._2; 
+  val EmptyHash : H      = db.EmptyHash;
 
   def hash( node : Node ) : H = db.hash( node );
 
@@ -97,9 +97,9 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[
     def dumpNode( h : H ) : Unit = {
       val node = db( h )
       println( s"${h} -> ${node}" );
-      node.children.filter( _ != Zero ).foreach( dumpNode(_) );
+      node.children.filter( _ != EmptyHash ).foreach( dumpNode(_) );
     }
-    dumpNode( root );
+    dumpNode( RootHash );
   }
   def pathAsString( key : IndexedSeq[L] ) : String = path( key ).toString
 
@@ -110,7 +110,7 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[
   }
   private[this] def persistClone( updated : Path.UpdatedPath ) : Trie[L,V] = {
     persist( updated );
-    updated.newRoot.fold( newTrie( Zero ) )( element => newTrie( element.hash ) )
+    updated.newRoot.fold( newTrie( EmptyHash ) )( element => newTrie( element.hash ) )
   }
 
   private[this] def newTrie( newRootHash : H ) : Trie[L,V] = {
@@ -125,7 +125,7 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[
 
     def build( key : IndexedSeq[L] ) : Path = { 
       //println( s"root->${root} db(root)->${db(root)}" ); 
-      build( root, db( root ), key, Nil )
+      build( RootHash, db( RootHash ), key, Nil )
     }
 
     private[this] val EmptyKey = IndexedSeq.empty[L];
@@ -135,7 +135,7 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[
         case branch : Branch => buildBranch( nodeHash, branch, searchSubkey, parents );
         case extension : Extension => buildExtension( nodeHash, extension, searchSubkey, parents );
         case Empty => {
-          assert( nodeHash == Zero, s"Huh? We were asked to build a path from the Empty node, yet it's claimed hash is nonzero? [nodeHash -> ${nodeHash}, node -> ${node}]" );
+          assert( nodeHash == EmptyHash, s"Huh? We were asked to build a path from the Empty node, yet it's claimed hash is nonzero? [nodeHash -> ${nodeHash}, node -> ${node}]" );
           assert( parents == Nil, s"We are asking to build a path from an Empty node which claims to have parents. [nodeHash -> ${nodeHash}, node -> ${node}, parents -> ${parents}]" );
           buildEmpty( searchSubkey );
         }
@@ -234,7 +234,7 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[
         val nextLetter = nextKey.head;
         val nextLetterIndex = alphabet.indexOf( nextKey.head );
         val nextHash = branch.children( nextLetterIndex );
-        if ( nextHash != Zero )
+        if ( nextHash != EmptyHash )
           build( nextHash, db( nextHash ), nextKey, _elements );
         else
           Truncated( _elements, nextKey );
@@ -256,8 +256,8 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[
       }
     }
     object Element {
-      val Root     = Element( Zero, Empty );
-      val Deletion = Element( Zero, null );
+      val Root     = Element( EmptyHash, Empty );
+      val Deletion = Element( EmptyHash, null );
 
       def apply( node : Node ) : Element = Element( db.hash( node ), node );
     }
@@ -329,7 +329,7 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[
       def including( value : V ) : UpdatedPath = {
         def _newBranchForSplittableExtension( extension : Extension ) : NewElements = {
           val oldValueTail = Extension( extension.subkey.drop( commonPrefix.length ), extension.child, extension.value );
-          val newValueTail = Extension( newDivergence, Zero, Some( value ) );
+          val newValueTail = Extension( newDivergence, EmptyHash, Some( value ) );
           val oldValueTailHash = db.hash( oldValueTail );
           val newValueTailHash = db.hash( newValueTail );
           val oldValueTailIndex = alphabet.indexOf( oldValueTail.subkey.head );
@@ -374,7 +374,7 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[
         val Element( _, currentLastNode ) = elements.head;
         currentLastNode match {
           case Branch( letter, children, _ ) => updatedPath( NewElements( Element( Branch( letter, children, None ) ) ) ); // no structural changes from eliminating the value from a branch
-          case Extension( subkey, Zero, _ )  => updatedPathForDeletion;
+          case Extension( subkey, EmptyHash, _ )  => updatedPathForDeletion;
           case Extension( subkey, child, _ ) => updatedPath( attemptCondenseToNewElements( Extension( subkey, child, None ) ) );
           case Empty                         => aerr( s"Huh? EmptyNode should never be a match to any key. ${this}" );
         }
@@ -422,31 +422,31 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[
         *  a new last element, merging a naive value-carrying Extension with the old last element
         */  
         val newElements : NewElements = {
-          val naiveValueHolder = Extension( unhandled, Zero, Some( value ) );
+          val naiveValueHolder = Extension( unhandled, EmptyHash, Some( value ) );
           val nvhHash = db.hash( naiveValueHolder );
           val nvhElement = Element( nvhHash, naiveValueHolder );
 
           def insertRootBranch = {
-            val rootNode = db( root );
+            val rootNode = db( RootHash );
             assert( rootNode.subkey.length > 0, "Path should not have been truncated at Nil if root node was empty String. [rootNode -> ${rootNode}]" );
             val rootNodeFirstLetter = rootNode.subkey.head;
             val rootNodeFirstLetterIndex = alphabet.indexOf( rootNodeFirstLetter );
             val newExtensionFirstLetter = naiveValueHolder.subkey.head;
             val newExtensionFirstLetterIndex = alphabet.indexOf( newExtensionFirstLetter );
-            val children = branchChildren( rootNodeFirstLetterIndex -> root, newExtensionFirstLetterIndex -> nvhHash )
+            val children = branchChildren( rootNodeFirstLetterIndex -> RootHash, newExtensionFirstLetterIndex -> nvhHash )
             val rootBranch = Branch( None, children, None );
-            NewElements( Element( rootBranch ), Set( Element( nvhHash, naiveValueHolder ), Element( root, rootNode ) ) )
+            NewElements( Element( rootBranch ), Set( Element( nvhHash, naiveValueHolder ), Element( RootHash, rootNode ) ) )
           }
 
           elements match {
             case Element( _, Extension( EmptyKey, _, None ) )                :: Nil => aerr( "An EmptyKey node should exist only at root and only when the EmptyKey is associated with a value." )
-            case Element( _, Extension( EmptyKey, Zero, lastValue ) )        :: Nil => attemptCondenseToNewElements( Extension( EmptyKey, nvhHash, lastValue ), Some(nvhElement) );
+            case Element( _, Extension( EmptyKey, EmptyHash, lastValue ) )        :: Nil => attemptCondenseToNewElements( Extension( EmptyKey, nvhHash, lastValue ), Some(nvhElement) );
             case Element( _, Extension( EmptyKey, lastChild, lastValue ) )   :: Nil => splitToBranched( EmptyKey, lastChild, lastValue, nvhHash, naiveValueHolder );
             case Element( _, Extension( EmptyKey, _, _ ) )                   :: _   => aerr( "EmptyKey is only a valid subkey on an element at root!" );
-            case Element( _, Extension( lastSubkey, Zero, lastValue ) )      :: _   => attemptCondenseToNewElements( Extension( lastSubkey, nvhHash, lastValue ), Some(nvhElement) );
+            case Element( _, Extension( lastSubkey, EmptyHash, lastValue ) )      :: _   => attemptCondenseToNewElements( Extension( lastSubkey, nvhHash, lastValue ), Some(nvhElement) );
             case Element( _, Extension( lastSubkey, lastChild, lastValue ) ) :: _   => splitToBranched( lastSubkey, lastChild, lastValue, nvhHash, naiveValueHolder );
             case Element( _, Branch( lastLetter, lastChildren, lastValue ) ) :: _   => augmentedBranch( lastLetter, lastChildren, lastValue, nvhHash, naiveValueHolder );
-            case Nil if (root == Zero)                                              => NewElements( Element( nvhHash, naiveValueHolder ) );
+            case Nil if (RootHash == EmptyHash)                                              => NewElements( Element( nvhHash, naiveValueHolder ) );
             case Nil                                                                => insertRootBranch;
             case unexpected @ _                                                     => aerr( s"Unexpected path form: ${unexpected}" );
           }
@@ -455,7 +455,7 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[
       }
     }
     private def branchChildren( bindings : Tuple2[Int,H]* ) = {
-      val array = Array.fill( alphabet.length )( Zero );
+      val array = Array.fill( alphabet.length )( EmptyHash );
       bindings.foreach( binding => array( binding._1 ) = binding._2 );
       IndexedSeq( array : _* );
     }
@@ -494,7 +494,7 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[
 
         Path.branchChildren( newChildLetterIndex -> newExtensionHash, oldChildLetterIndex -> lastChild )
         /*
-        val array = Array.fill( alphabet.length )( Zero );
+        val array = Array.fill( alphabet.length )( EmptyHash );
         array( newChildLetterIndex ) = newExtensionHash;
         array( oldChildLetterIndex ) = lastChild;
         IndexedSeq( array : _* );
@@ -529,7 +529,7 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[
         val newChildLetter = newChildExtension.subkey(0);
         val newChildLetterIndex = alphabet.indexOf( newChildLetter );
 
-        assert( lastChildren( newChildLetterIndex ) == Zero, "Truncated path: No prefix of the unhandled subkey should correspond to any child nodes." );
+        assert( lastChildren( newChildLetterIndex ) == EmptyHash, "Truncated path: No prefix of the unhandled subkey should correspond to any child nodes." );
 
         val array = Array( lastChildren : _* );
         array( newChildLetterIndex ) = newChildExtensionHash;
@@ -561,7 +561,7 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[
           case Path.Element.Deletion => 
             oldParentExtension match {
               case Extension(_, _, None) => Path.Element.Deletion; // our child is deleted, and we have no value, so we are deleted too.
-              case Extension( subkey, child, value @ Some(_) ) => toElement( Extension( subkey, Zero, value ) );
+              case Extension( subkey, child, value @ Some(_) ) => toElement( Extension( subkey, EmptyHash, value ) );
             }
           case _ => {
             val naiveExtension = naiveNewParentExtension( oldParentExtension );
@@ -581,7 +581,7 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[
         assert( newChild == Path.Element.Deletion, s"To go from a branch to an extension, we must have deleted, but newChild is not the Deletion token? [newChild -> ${newChild}]");
         def uniqueChild( branch : Branch ) : H = {
           def uniqueChildIndex( children : IndexedSeq[H] ) : Int = {
-            val childIndexPairs = children.zip( Stream.from(0) ).filter( _._1 != Zero );
+            val childIndexPairs = children.zip( Stream.from(0) ).filter( _._1 != EmptyHash );
             childIndexPairs.length match {
               case 1 => childIndexPairs(0)._2;
               case _ => aerr( s"children [${children}] did not contain one unique child, as required." );
@@ -604,10 +604,10 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[
     }
 
     // will we use the functions below elsewhere? or should we nest them into newParent?
-    private[this] def hasChild( extension : Extension ) = extension.child != Zero;
+    private[this] def hasChild( extension : Extension ) = extension.child != EmptyHash;
     private[this] def toElement( node : Node ) = Path.Element( db.hash( node ), node );
     private[this] def childCount( branch : Branch ) : Int = childCount( branch.children );
-    private[this] def childCount( children : IndexedSeq[H] ) : Int = children.foldLeft(0)( (count, hash) => count + (if (hash == Zero) 0 else 1) );
+    private[this] def childCount( children : IndexedSeq[H] ) : Int = children.foldLeft(0)( (count, hash) => count + (if (hash == EmptyHash) 0 else 1) );
 
     /*
      * Note that this method never creates a new child, so we don't have to bother
