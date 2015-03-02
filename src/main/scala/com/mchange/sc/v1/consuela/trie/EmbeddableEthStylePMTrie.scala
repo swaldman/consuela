@@ -172,14 +172,42 @@ trait EmbeddableEthStylePMTrie[L,V,H] extends PMTrie[L,V,H] {
       case null => None
       case _    => aerr( s"updated.newRoot is an Element that should never appear in a path. NewRootElement -> ${NewRootElement}" );
     }
-    updated.all.foreach { element => 
-      element match {
-        case NewRootElement                                                       => db.put( mbRootHash.get, NewRootElement.node );
-        case Path.Element( NodeSource.Hash( hash ), node ) => db.put( hash, node );
-        case Path.Element( NodeSource.Embedded( _ ), _ )   => /* skip. this will be persisted via a parent */;
-        case _                                                                    => aerr( s"Unexpected element in persist(...). element -> ${element}" );
+
+    // take advantage of BulkWriting databases
+    // note this is an unleaked local method, a
+    // single Thread context. we'll use mutable
+    // Maps with abandon.
+    trait Puttable {
+      def put( hash : H, node : Node ) : Unit;
+      def flush() : Unit;
+    }
+    val puttable = {
+      db match {
+        case bwdb : PMTrie.Database.BulkWriting[Node @unchecked , H @unchecked] => { // this is safe, the self-type will have enforced consistency
+          new Puttable {
+            import scala.collection._;
+            val mutableMap = mutable.Map.empty[H,Node];
+            def put( hash : H, node : Node ) : Unit = mutableMap += ( hash -> node );
+            def flush() : Unit = bwdb.put( mutableMap.toMap ) 
+          }
+        }
+        case _ => { 
+          new Puttable {
+            def put( hash : H, node : Node ) : Unit = db.put( hash, node );
+            def flush() : Unit = (); // no op
+          }
+        }
       }
     }
+    updated.all.foreach { element => 
+      element match {
+        case NewRootElement                                => puttable.put( mbRootHash.get, NewRootElement.node );
+        case Path.Element( NodeSource.Hash( hash ), node ) => puttable.put( hash, node );
+        case Path.Element( NodeSource.Embedded( _ ), _ )   => /* skip. this will be persisted via a parent */;
+        case _                                             => aerr( s"Unexpected element in persist(...). element -> ${element}" );
+      }
+    }
+    puttable.flush();
     mbRootHash
   }
   private[this] def persistClone( updated : Path.UpdatedPath ) : Trie[L,V] = {
