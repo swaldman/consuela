@@ -32,6 +32,11 @@ object PMTrie {
 
       def gc( roots : Set[H], savepoints : Set[String] ) : Unit;
     }
+    trait BulkWriting[N,H] {
+      self : Database[N,H] =>
+
+      def put( nodes : Map[H,N] ) : Unit;
+    }
   }
   trait Database[N,H] {
     // a lookup on the hash's Empty value should always return a node representing an empty Trie
