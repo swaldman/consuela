@@ -3,6 +3,7 @@ package com.mchange.sc.v1.consuela.trie;
 import scala.annotation.tailrec;
 
 object EmbeddableEthStylePMTrie {
+  val UTF_8 = java.nio.charset.Charset.forName("UTF-8");
 
   sealed trait Node[+L,+V,+H];
   case class Branch[L,V,H] ( val children : IndexedSeq[NodeSource[L,V,H]], val mbValue : Option[V] ) extends Node[L,V,H];
@@ -23,7 +24,7 @@ object EmbeddableEthStylePMTrie {
     }
     case class Hash[L,V,H]( hash : H ) extends Defaults with NodeSource[L,V,H]               { override def isHash     : Boolean = true; }
     case class Embedded[L,V,H]( node : Node[L,V,H] ) extends Defaults with NodeSource[L,V,H] { override def isEmbedded : Boolean = true; }
-    case object Empty extends Defaults with NodeSource[Nothing,Nothing,Nothing]                    { override def isEmpty    : Boolean = true; }
+    case object Empty extends Defaults with NodeSource[Nothing,Nothing,Nothing]              { override def isEmpty    : Boolean = true; }
   }
   sealed trait NodeSource[+L,+V,+H]{
     def isHash : Boolean;
@@ -31,7 +32,7 @@ object EmbeddableEthStylePMTrie {
     def isEmpty : Boolean;
   }
 
-  trait Database[L,V,H] {
+  trait Database[L,V,H] extends PMTrie.Database[Node[L,V,H],H] {
     type Node       = EmbeddableEthStylePMTrie.Node[L,V,H];
     type NodeSource = EmbeddableEthStylePMTrie.NodeSource[L,V,H];
     type Branch     = EmbeddableEthStylePMTrie.Branch[L,V,H];
@@ -131,6 +132,12 @@ trait EmbeddableEthStylePMTrie[L,V,H] extends PMTrie[L,V,H] {
   def EmptyHash = db.EmptyHash;
 
   def subkeys( branch : Branch ) : Seq[L] = branch.children.zip( Stream.from(0) ).filter( _._1 != NodeSource.Empty ).map( tup => alphabet( tup._2 ) );
+
+  def captureTrieDump : String = {
+    val baos = new java.io.ByteArrayOutputStream;
+    Console.withOut( baos ) { dumpTrie; }
+    new String( baos.toByteArray, EmbeddableEthStylePMTrie.UTF_8 )
+  }
 
   def dumpTrie : Unit = {
     def dumpNode( nodeSource : NodeSource ) : Unit = {
