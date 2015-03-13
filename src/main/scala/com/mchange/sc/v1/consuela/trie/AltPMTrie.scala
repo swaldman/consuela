@@ -30,7 +30,7 @@ object AltPMTrie {
  * This implementation is rendered unfortunately more complex by a (perhaps unnecessary, unwise)
  * decision to support the empty sequence (of generic type L) as a valid key.
  */ 
-trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[L,V,H],H] {
+trait AltPMTrie[L,V,H,I<:AltPMTrie[L,V,H,I]] extends PMTrie[L,V,H,I] with PMTrie.Regular[AltPMTrie.Node[L,V,H],H] {
 
   /*
    * First lets put some unwieldy bits from the companion object into more convenient forms
@@ -57,7 +57,7 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[
   /**
     *  all nodes in the updated path will already have been persisted before this method is called.
     */
-  protected def instantiateSuccessor( newRootHash : H ) : Trie[L,V];
+  protected def instantiateSuccessor( newRootHash : H ) : I;
 
   /*
    * And now we do our work.
@@ -83,14 +83,14 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[
       case _                  => None;
     }
   }
-  def including( key : IndexedSeq[L], value : V ) : Trie[L,V] = {
+  def including( key : IndexedSeq[L], value : V ) : I = {
     val updatedPath = path( key ).including( value );
     persistClone( updatedPath );
   }
-  def excluding( key : IndexedSeq[L] ) : Trie[L,V] = {
+  def excluding( key : IndexedSeq[L] ) : I = {
     path( key ) match {
       case exact : Path.Exact => persistClone( exact.excluding );
-      case _                  => this;
+      case _                  => this.asInstanceOf[I];
     }
   }
   def dumpTrie : Unit = {
@@ -108,15 +108,15 @@ trait AltPMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[AltPMTrie.Node[
   private[this] def persist( updated : Path.UpdatedPath ) : Unit = {
     updated.all.foreach( element => db.put( element.hash, element.node ) );
   }
-  private[this] def persistClone( updated : Path.UpdatedPath ) : Trie[L,V] = {
+  private[this] def persistClone( updated : Path.UpdatedPath ) : I = {
     persist( updated );
     updated.newRoot.fold( newTrie( EmptyHash ) )( element => newTrie( element.hash ) )
   }
 
-  private[this] def newTrie( newRootHash : H ) : Trie[L,V] = {
+  private[this] def newTrie( newRootHash : H ) : I = {
     if ( db.isInstanceOf[PMTrie.Database.RootTracking[H]] )
       db.asInstanceOf[PMTrie.Database.RootTracking[H]].markRoot( newRootHash );
-    instantiateSuccessor( newRootHash : H ) : Trie[L,V]
+    instantiateSuccessor( newRootHash : H ) : I
   }
 
   private[this] def aerr( message : String ) : Nothing = throw new AssertionError( message );

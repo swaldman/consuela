@@ -87,12 +87,9 @@ class EmbeddableEthStyleLowercaseTrie(
   r : SHA3_256 = EmbeddableEthStyleLowercaseTrie.EmptyHash 
 ) extends {
   val earlyInit = EarlyInit( EmbeddableEthStyleLowercaseTrie.alphabet, mdb, r );
-} with EmbeddableEthStylePMTrie[Char,String,SHA3_256] {
+} with EmbeddableEthStylePMTrie[Char,String,SHA3_256,EmbeddableEthStyleLowercaseTrie] {
   import EmbeddableEthStyleLowercaseTrie._;
 
   def instantiateSuccessor( newRootHash : SHA3_256 ) : EmbeddableEthStyleLowercaseTrie = new EmbeddableEthStyleLowercaseTrie( mdb, newRootHash );
-
-  override def excluding( key : Subkey ) : EmbeddableEthStyleLowercaseTrie = super.excluding( key ).asInstanceOf[EmbeddableEthStyleLowercaseTrie];
-  override def including( key : Subkey, value : String ) : EmbeddableEthStyleLowercaseTrie = super.including( key, value ).asInstanceOf[EmbeddableEthStyleLowercaseTrie];
 }
 

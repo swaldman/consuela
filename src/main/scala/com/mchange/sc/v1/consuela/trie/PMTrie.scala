@@ -52,13 +52,13 @@ object PMTrie {
 
 
   trait Regular[N,H] { // A "Regular" PMTrie has a hash for every node, i.e. no embedding
-    self : PMTrie[_,_,H] =>
+    self : PMTrie[_,_,H,_] =>
 
     def hash( node : N ) : H;
   }
 }
 
-trait PMTrie[L,V,H] extends Trie[L,V] {
+trait PMTrie[L,V,H,I<:PMTrie[L,V,H,I]] extends Trie[L,V,I] {
   def RootHash : H;
   def EmptyHash : H;
 }

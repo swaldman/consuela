@@ -17,7 +17,7 @@ object EthStylePMTrie {
   type Database[L,V,H] = PMTrie.Database[Node[L,V,H],H] with PMTrie.Database.NodeHashing[Node[L,V,H],H]
 }
 
-trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[EthStylePMTrie.Node[L,V,H],H] {
+trait EthStylePMTrie[L,V,H,I<:EthStylePMTrie[L,V,H,I]] extends PMTrie[L,V,H,I] with PMTrie.Regular[EthStylePMTrie.Node[L,V,H],H] {
 
   /*
    * First lets put some unwieldy bits from the companion object into more convenient forms
@@ -45,7 +45,7 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[EthStylePM
   /**
     *  all nodes in the updated path will already have been persisted before this method is called.
     */
-  protected def instantiateSuccessor( newRootHash : H ) : Trie[L,V];
+  protected def instantiateSuccessor( newRootHash : H ) : I;
 
   /*
    * And now we do our work.
@@ -59,6 +59,8 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[EthStylePM
 
   lazy val alphabetLen = alphabet.length;
 
+  val self : I = this.asInstanceOf[I];
+
   // useful empties
   lazy val EmptyBranchChildren = IndexedSeq.fill( alphabetLen )( EmptyHash );
   val EmptySubkey = IndexedSeq.empty[L];
@@ -71,14 +73,14 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[EthStylePM
       case _                  => None;
     }
   }
-  def including( key : Subkey, value : V ) : Trie[L,V] = {
+  def including( key : Subkey, value : V ) : I = {
     val updatedPath = path( key ).including( value );
     persistClone( updatedPath );
   }
-  def excluding( key : Subkey ) : Trie[L,V] = {
+  def excluding( key : Subkey ) : I = {
     path( key ) match {
-      case exact : Path.Exact => exact.excluding.map( persistClone( _ ) ).getOrElse( this );
-      case _                  => this;
+      case exact : Path.Exact => exact.excluding.map( persistClone( _ ) ).getOrElse( self );
+      case _                  => self;
     }
   }
 
@@ -100,15 +102,15 @@ trait EthStylePMTrie[L,V,H] extends PMTrie[L,V,H] with PMTrie.Regular[EthStylePM
   private[this] def persist( updated : Path.UpdatedPath ) : Unit = {
     updated.all.foreach( element => db.put( element.hash, element.node ) );
   }
-  private[this] def persistClone( updated : Path.UpdatedPath ) : Trie[L,V] = {
+  private[this] def persistClone( updated : Path.UpdatedPath ) : I = {
     persist( updated );
     updated.newRoot.fold( newTrie( EmptyHash ) )( element => newTrie( element.hash ) )
   }
 
-  private[this] def newTrie( newRootHash : H ) : Trie[L,V] = {
+  private[this] def newTrie( newRootHash : H ) : I = {
     if ( db.isInstanceOf[PMTrie.Database.RootTracking[H]] )
       db.asInstanceOf[PMTrie.Database.RootTracking[H]].markRoot( newRootHash );
-    instantiateSuccessor( newRootHash : H ) : Trie[L,V]
+    instantiateSuccessor( newRootHash : H ) : I
   }
 
   private[this] def indexKidPairs( children : IndexedSeq[H] ) : IndexedSeq[( Int, H )] = Stream.from( 0 ).zip( children ).filter( _._2 != EmptyHash ).toIndexedSeq;

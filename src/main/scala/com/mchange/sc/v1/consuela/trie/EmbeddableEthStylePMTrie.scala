@@ -62,7 +62,7 @@ object EmbeddableEthStylePMTrie {
   case class EarlyInit[L,V,H]( alphabet : IndexedSeq[L], database : Database[L,V,H], RootHash : H );
 }
 
-trait EmbeddableEthStylePMTrie[L,V,H] extends PMTrie[L,V,H] {
+trait EmbeddableEthStylePMTrie[L,V,H,I<:EmbeddableEthStylePMTrie[L,V,H,I]] extends PMTrie[L,V,H,I] {
 
 
   type Node       = EmbeddableEthStylePMTrie.Node[L,V,H];
@@ -93,7 +93,7 @@ trait EmbeddableEthStylePMTrie[L,V,H] extends PMTrie[L,V,H] {
   /**
     *  all nodes in the updated path will already have been persisted before this method is called.
     */
-  protected def instantiateSuccessor( newRootHash : H ) : Trie[L,V];
+  protected def instantiateSuccessor( newRootHash : H ) : I;
 
   /*
    * And now we do our work.
@@ -108,6 +108,8 @@ trait EmbeddableEthStylePMTrie[L,V,H] extends PMTrie[L,V,H] {
   lazy val RootSource = if ( RootHash == db.EmptyHash ) NodeSource.Empty else NodeSource.Hash( RootHash );
   lazy val RootNode   = db.dereference( RootSource );
 
+  val self : I = this.asInstanceOf[I];
+
   // useful empties
   val EmptyBranchChildren = IndexedSeq.fill( alphabetLen )( NodeSource.Empty );
   val EmptySubkey = IndexedSeq.empty[L];
@@ -118,14 +120,14 @@ trait EmbeddableEthStylePMTrie[L,V,H] extends PMTrie[L,V,H] {
       case _                  => None;
     }
   }
-  def including( key : Subkey, value : V ) : Trie[L,V] = {
+  def including( key : Subkey, value : V ) : I = {
     val updatedPath = path( key ).including( value );
     persistClone( updatedPath );
   }
-  def excluding( key : Subkey ) : Trie[L,V] = {
+  def excluding( key : Subkey ) : I = {
     path( key ) match {
-      case exact : Path.Exact => exact.excluding.map( persistClone( _ ) ).getOrElse( this );
-      case _                  => this;
+      case exact : Path.Exact => exact.excluding.map( persistClone( _ ) ).getOrElse( self );
+      case _                  => self;
     }
   }
 
@@ -217,15 +219,15 @@ trait EmbeddableEthStylePMTrie[L,V,H] extends PMTrie[L,V,H] {
     puttable.flush();
     mbRootHash
   }
-  private[this] def persistClone( updated : Path.UpdatedPath ) : Trie[L,V] = {
+  private[this] def persistClone( updated : Path.UpdatedPath ) : I = {
     val mbRootHash = persist( updated );
     mbRootHash.fold( newTrie( db.EmptyHash ) )( newTrie( _ ) )
   }
 
-  private[this] def newTrie( newRootHash : H ) : Trie[L,V] = {
+  private[this] def newTrie( newRootHash : H ) : I = {
 //    if ( db.isInstanceOf[PMTrie.RootTracking[H]] )
 //      db.asInstanceOf[PMTrie.RootTracking[H]].markRoot( newRootHash );
-    instantiateSuccessor( newRootHash : H ) : Trie[L,V]
+    instantiateSuccessor( newRootHash : H ) : I
   }
 
   private[this] def indexKidPairs( children : IndexedSeq[NodeSource] ) : IndexedSeq[( Int, NodeSource )] = Stream.from( 0 ).zip( children ).filter( _._2 != NodeSource.Empty ).toIndexedSeq;

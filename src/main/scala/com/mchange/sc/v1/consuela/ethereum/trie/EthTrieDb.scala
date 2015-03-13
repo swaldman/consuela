@@ -28,10 +28,8 @@ object EthTrieDb {
     }
     class Trie( testdb : Db = new Db, rootHash : EthHash = EmptyHash ) extends {
       val earlyInit = EarlyInit( Alphabet, testdb, rootHash )
-    } with EmbeddableEthStylePMTrie[Nibble,Seq[Byte],EthHash] {
+    } with EmbeddableEthStylePMTrie[Nibble,Seq[Byte],EthHash,Trie] {
       def instantiateSuccessor( newRootHash : EthHash ) : Trie =  new Trie( testdb, newRootHash );
-      override def excluding( key : Subkey ) : Trie = super.excluding( key ).asInstanceOf[Trie];
-      override def including( key : Subkey, value : Seq[Byte] ) : Trie = super.including( key, value ).asInstanceOf[Trie];
     }
   }
 }

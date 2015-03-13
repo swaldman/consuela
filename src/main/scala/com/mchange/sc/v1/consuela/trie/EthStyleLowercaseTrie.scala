@@ -82,7 +82,7 @@ object EthStyleLowercaseTrie {
 
 class EthStyleLowercaseTrie( val mdb : EthStyleLowercaseTrie.MapDatabase = new EthStyleLowercaseTrie.MapDatabase, r : Hash.SHA3_256 = EthStyleLowercaseTrie.EmptyHash ) extends {
   val earlyInit = ( mdb, r );
-} with EthStylePMTrie[Char,String,Hash.SHA3_256] {
+} with EthStylePMTrie[Char,String,Hash.SHA3_256,EthStyleLowercaseTrie] {
   import EthStyleLowercaseTrie._;
 
   val alphabet = EthStyleLowercaseTrie.alphabet;
@@ -90,7 +90,5 @@ class EthStyleLowercaseTrie( val mdb : EthStyleLowercaseTrie.MapDatabase = new E
   def instantiateSuccessor( newRootHash : Hash.SHA3_256 ) : EthStyleLowercaseTrie = {
     new EthStyleLowercaseTrie( mdb, newRootHash );
   }
-  override def excluding( key : IndexedSeq[Char] ) : EthStyleLowercaseTrie = super.excluding( key ).asInstanceOf[EthStyleLowercaseTrie];
-  override def including( key : IndexedSeq[Char], value : String ) : EthStyleLowercaseTrie = super.including( key, value ).asInstanceOf[EthStyleLowercaseTrie];
 }
 

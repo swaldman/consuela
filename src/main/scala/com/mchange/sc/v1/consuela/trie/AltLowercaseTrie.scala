@@ -75,7 +75,7 @@ object AltLowercaseTrie {
 
 class AltLowercaseTrie( val mdb : AltLowercaseTrie.MapDatabase = new AltLowercaseTrie.MapDatabase, r : Hash.SHA3_256 = AltLowercaseTrie.EmptyHash ) extends {
   val earlyInit = ( mdb, r );
-} with AltPMTrie[Char,String,Hash.SHA3_256] {
+} with AltPMTrie[Char,String,Hash.SHA3_256,AltLowercaseTrie] {
   import AltLowercaseTrie._;
 
   val hashTypeClassTag : ClassTag[Hash.SHA3_256] = classTag[Hash.SHA3_256];
@@ -85,7 +85,5 @@ class AltLowercaseTrie( val mdb : AltLowercaseTrie.MapDatabase = new AltLowercas
   def instantiateSuccessor( newRootHash : Hash.SHA3_256 ) : AltLowercaseTrie = {
     new AltLowercaseTrie( mdb, newRootHash );
   }
-  override def excluding( key : IndexedSeq[Char] ) : AltLowercaseTrie = super.excluding( key ).asInstanceOf[AltLowercaseTrie];
-  override def including( key : IndexedSeq[Char], value : String ) : AltLowercaseTrie = super.including( key, value ).asInstanceOf[AltLowercaseTrie];
 }
 
