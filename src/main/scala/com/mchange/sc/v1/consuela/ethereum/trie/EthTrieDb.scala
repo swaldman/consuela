@@ -4,9 +4,6 @@ import com.mchange.sc.v1.consuela.trie.EmbeddableEthStylePMTrie;
 import com.mchange.sc.v1.consuela.ethereum.{HP, RLP, Nibble, Nibbles};
 
 object EthTrieDb {
-  val Alphabet = Nibbles;
-  val AlphabetLen = Alphabet.length;
-
   val ExtensionLeafLength = 2;
   val BranchLength        = Nibbles.length + 1;
   val EmptyLength         = 0;
@@ -26,9 +23,7 @@ object EthTrieDb {
       def put( hash : EthHash, node : Node ) : Unit = this.synchronized{ _map += ( hash -> node ) }
       def apply( hash : EthHash ) : Node = this.synchronized{ _map( hash ) }
     }
-    class Trie( testdb : Db = new Db, rootHash : EthHash = EmptyHash ) extends {
-      val earlyInit = EarlyInit( Alphabet, testdb, rootHash )
-    } with EmbeddableEthStylePMTrie[Nibble,Seq[Byte],EthHash,Trie] {
+    class Trie( testdb : Db = new Db, rootHash : EthHash = EmptyHash ) extends AbstractEthTrie[Trie]( testdb, rootHash ) {
       def instantiateSuccessor( newRootHash : EthHash ) : Trie =  new Trie( testdb, newRootHash );
     }
   }

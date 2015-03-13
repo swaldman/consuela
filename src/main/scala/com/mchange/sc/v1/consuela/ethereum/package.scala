@@ -1,6 +1,7 @@
 package com.mchange.sc.v1.consuela;
 
 package object ethereum {
+
   type Nibble = Int;
 
   val Nibbles = (0x0 to 0xF).toIndexedSeq
@@ -15,6 +16,12 @@ package object ethereum {
   def toNibbles( key : String, charsetStr : String ) : IndexedSeq[Nibble] = toNibbles( key.getBytes( charsetStr ) );
 
   def toNibbles( key : String ) : IndexedSeq[Nibble] = toNibbles( key, "UTF-8" );
+
+  def nibbleToBytes( nibbles : Seq[Nibble] ) : Seq[Byte] = {
+    def bytify( pairAsSeq : Seq[Nibble] ) : Byte = ( (pairAsSeq.head << 4) | (pairAsSeq.last << 0) ).toByte;
+    require( nibbles.length % 2 == 0, s"Only an even number of nibbles can be concatenated into bytes! nibbles.length -> ${nibbles.length}" );
+    nibbles.sliding(2).map( bytify _ ).toSeq;
+  }
 
   /**
    *  Least significant byte nibbles, ignores top three bytes!
