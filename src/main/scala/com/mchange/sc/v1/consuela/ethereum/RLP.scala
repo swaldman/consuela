@@ -121,11 +121,11 @@ object RLP {
       def _rb( bytes : Seq[Int] ) : Seq[Byte] = {
         lazy val len = bytes.length;
         bytes match {
-          case Seq( b ) if ( b < 128 )  => Seq( b.asInstanceOf[Byte] );
-          case _        if ( len < 56 ) => ((128 + len) +: bytes).map( _.asInstanceOf[Byte] );
+          case Seq( b ) if ( b < 128 )  => Seq( b.toByte );
+          case _        if ( len < 56 ) => (((128 + len) +: bytes) : Seq[Int]).map( _.toByte );
           case _                        => {
             val lenBytes = be( len );
-            ((183 + lenBytes.length) +: (lenBytes ++: bytes)).map( byteCaster( _ ) )
+            (183 + lenBytes.length).toByte +: (lenBytes ++: bytes.map(  _.toByte ))
           }
         }
       }
@@ -143,10 +143,10 @@ object RLP {
       val sencodables = s( encodables );
       val len = sencodables.length;
       if ( len < 56 )
-        ((192 + len) +: sencodables).map( byteCaster( _ ) )
+        (192 + len).toByte +: sencodables
       else {
         val lenBytes = be( len );
-        ((247 + lenBytes.length) +: ( lenBytes ++: sencodables )).map( byteCaster( _ ) ) 
+        (247 + lenBytes.length).toByte +: ( lenBytes ++: sencodables )
       }
     }
     def s( encodables : Seq[Encodable] ) : Seq[Byte] = encodables.flatMap( encode _ );
@@ -209,11 +209,5 @@ object RLP {
 
   private[this] def be( i : Int ) = IntegerUtils.byteArrayFromInt( i ).dropWhile( _ == 0 );
   private[this] def be( bi : BigInt ) = bi.toByteArray.dropWhile( _ == 0 );
-  
-  private[this] val byteCaster : (Any => Byte) = { // this is a workaround to weird errors trying to cast to byte, should just be _.asInstanceOf[Byte]
-    case i : Int  => i.asInstanceOf[Byte]
-    case b : Byte => b;
-    case huh => throw new AssertionError( s"Expected an Int or Byte, got ${huh.getClass} [${huh}]" )
-  }
 }
 
