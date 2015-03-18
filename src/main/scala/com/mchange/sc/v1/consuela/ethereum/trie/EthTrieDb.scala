@@ -74,7 +74,7 @@ trait EthTrieDb extends EmbeddableEthStylePMTrie.Database[Nibble,Seq[Byte],EthHa
         }
         NodeSource.Embedded( node )
       }
-      case _ => aerr( "Unexpected encodabe -> ${encodable}" );
+      case _ => aerr( s"Unexpected encodable -> ${encodable}" );
     }
   }
 
