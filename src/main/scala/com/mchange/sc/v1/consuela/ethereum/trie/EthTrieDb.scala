@@ -63,7 +63,7 @@ trait EthTrieDb extends EmbeddableEthStylePMTrie.Database[Nibble,Seq[Byte],EthHa
     } 
   }
 
-  def encodableToNodeSource( encodable : RLP.Encodable, mbKnownNode : Option[Node] = None ) : NodeSource = {
+  private def encodableToNodeSource( encodable : RLP.Encodable, mbKnownNode : Option[Node] = None ) : NodeSource = {
     encodable match {
       case RLP.Encodable.EmptyByteSeq                                           => NodeSource.Empty;
       case RLP.Encodable.ByteSeq( hashBytes ) if hashBytes.length == EthHashLen => NodeSource.Hash( EthHash.withBytes( hashBytes ) )
@@ -74,11 +74,15 @@ trait EthTrieDb extends EmbeddableEthStylePMTrie.Database[Nibble,Seq[Byte],EthHa
         }
         NodeSource.Embedded( node )
       }
+      case RLP.Encodable.Seq( seq ) if seq.length == AlphabetLen + 1 => {
+        val node = mbKnownNode.getOrElse( intoBranch( seq )  )
+        NodeSource.Embedded( node );
+      }
       case _ => aerr( s"Unexpected encodable -> ${encodable}" );
     }
   }
 
-  def reviveLeafExtension( hpKeyBytes : Seq[Byte], payloadEncodable : RLP.Encodable ) : Node = {
+  private def reviveLeafExtension( hpKeyBytes : Seq[Byte], payloadEncodable : RLP.Encodable ) : Node = {
     val ( keyNibbles, terminated ) = HP.decode( hpKeyBytes );
     if ( terminated ) {
       val RLP.Encodable.ByteSeq( payloadBytes ) = payloadEncodable;
@@ -87,22 +91,21 @@ trait EthTrieDb extends EmbeddableEthStylePMTrie.Database[Nibble,Seq[Byte],EthHa
       Extension( keyNibbles.toIndexedSeq, encodableToNodeSource( payloadEncodable ) );
     }
   }
+  private def intoBranch( decoded : Seq[RLP.Encodable] ) : Node = {
+    val ( protochildren, Seq( RLP.Encodable.ByteSeq( protoMbValueBytes ) ) ) = decoded.splitAt( AlphabetLen );
+    val children = protochildren.map( encodableToNodeSource( _ ) )
 
+    //Note that the bytes of the value are an RLP-encoded... something
+    //RLP encoding never yields an empty sequence, not even of an empty Byte string
+    //So, an empty Byte string is treated as an out-of-band value signifying no value.
+    val mbValue = if (protoMbValueBytes.length == 0) None else Some( protoMbValueBytes );
+
+    Branch( children.toIndexedSeq, mbValue );
+  }
   def fromRLP( rlpBytes : Seq[Byte] ) : Node = {
     def intoExtensionLeaf( decoded : Seq[RLP.Encodable] ) : Node = {
       val Seq( RLP.Encodable.ByteSeq( hpKey ), payloadEncodable ) = decoded;
       reviveLeafExtension( hpKey, payloadEncodable )
-    }
-    def intoBranch( decoded : Seq[RLP.Encodable] ) : Node = {
-      val ( protochildren, Seq( RLP.Encodable.ByteSeq( protoMbValueBytes ) ) ) = decoded.splitAt( AlphabetLen );
-      val children = protochildren.map( encodableToNodeSource( _ ) )
-
-      //Note that the bytes of the value are an RLP-encoded... something
-      //RLP encoding never yields an empty sequence, not even of an empty Byte string
-      //So, an empty Byte string is treated as an out-of-band value signifying no value.
-      val mbValue = if (protoMbValueBytes.length == 0) None else Some( protoMbValueBytes );
-
-      Branch( children.toIndexedSeq, mbValue );
     }
 
     /* at last, the method itself */
