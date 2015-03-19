@@ -72,14 +72,17 @@ object RLP {
       if ( lengthBytes.length == 0 ) {
         0
       } else {
-        val bi = BigInt(lengthBytes.toArray);
+        val bi = BigInt(1, lengthBytes.toArray);
         if ( bi > java.lang.Integer.MAX_VALUE )
           throw new AssertionError("We only support decoding of sequences no longer than ${java.lang.Integer.MAX_VALUE}, but desired length is ${bi}.");
         bi.intValue;
       }
     }
     def encodableSeq( count : Int, reverseAccum : List[Encodable.Basic], in : Seq[Byte] ) : ( Seq[Encodable.Basic], Seq[Byte] ) = {
-      assert( count >= 0, "Count should begin with precisely the byte length of the concatenated elements, and so we should end with precisely zero bytes." );
+      assert( 
+        count >= 0,
+        s"Count should begin with precisely the byte length of the concatenated elements, and so we should end with precisely zero bytes. count -> ${count}, reverseAccum -> ${reverseAccum}" 
+      );
 
       if ( count == 0 )
         ( reverseAccum.reverse, in );
