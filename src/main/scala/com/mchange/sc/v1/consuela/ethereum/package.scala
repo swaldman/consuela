@@ -17,10 +17,10 @@ package object ethereum {
 
   def toNibbles( key : String ) : IndexedSeq[Nibble] = toNibbles( key, "UTF-8" );
 
-  def nibbleToBytes( nibbles : Seq[Nibble] ) : Seq[Byte] = {
+  def nibblesToBytes( nibbles : Seq[Nibble] ) : Seq[Byte] = {
     def bytify( pairAsSeq : Seq[Nibble] ) : Byte = ( (pairAsSeq.head << 4) | (pairAsSeq.last << 0) ).toByte;
     require( nibbles.length % 2 == 0, s"Only an even number of nibbles can be concatenated into bytes! nibbles.length -> ${nibbles.length}" );
-    nibbles.sliding(2).map( bytify _ ).toSeq;
+    nibbles.sliding(2,2).map( bytify _ ).toSeq;
   }
 
   /**

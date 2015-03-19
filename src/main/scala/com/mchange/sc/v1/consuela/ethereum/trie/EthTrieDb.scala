@@ -26,6 +26,9 @@ object EthTrieDb {
     class Trie( testdb : Db = new Db, rootHash : EthHash = EmptyHash ) extends AbstractEthTrie[Trie]( testdb, rootHash ) {
       def instantiateSuccessor( newRootHash : EthHash ) : Trie =  new Trie( testdb, newRootHash );
     }
+    class SecureTrie( testdb : Db = new Db, rootHash : EthHash = EmptyHash ) extends AbstractEthSecureTrie[SecureTrie]( testdb, rootHash ) {
+      def instantiateSuccessor( newRootHash : EthHash ) : SecureTrie =  new SecureTrie( testdb, newRootHash );
+    }
   }
 }
 trait EthTrieDb extends EmbeddableEthStylePMTrie.Database[Nibble,Seq[Byte],EthHash] {
