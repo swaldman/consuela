@@ -1,7 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum.trie;
 
 import com.mchange.sc.v1.consuela.trie.EmbeddableEthStylePMTrie;
-import com.mchange.sc.v1.consuela.ethereum.Nibble;
+import com.mchange.sc.v1.consuela.ethereum.{Nibble, EthHash};
 
 abstract class AbstractEthTrie[I<:AbstractEthTrie[I]]( db : EthTrieDb, rootHash : EthHash ) extends {
   val earlyInit = EmbeddableEthStylePMTrie.EarlyInit( Alphabet, db, rootHash )

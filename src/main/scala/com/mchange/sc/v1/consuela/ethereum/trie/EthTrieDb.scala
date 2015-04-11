@@ -1,7 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum.trie;
 
 import com.mchange.sc.v1.consuela.trie.EmbeddableEthStylePMTrie;
-import com.mchange.sc.v1.consuela.ethereum.{HP, RLP, Nibble, Nibbles};
+import com.mchange.sc.v1.consuela.ethereum.{HP, RLP, Nibble, Nibbles, EthHash, EthHashLen};
 
 object EthTrieDb {
   val ExtensionLeafLength = 2;

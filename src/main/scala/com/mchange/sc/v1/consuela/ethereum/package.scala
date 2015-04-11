@@ -1,7 +1,18 @@
 package com.mchange.sc.v1.consuela;
 
+import com.mchange.sc.v1.consuela.hash.Hash;
+
 package object ethereum {
 
+  type EthHash    = Hash.SHA3_256;
+  val  EthHash    = Hash.SHA3_256;
+  val  EthHashLen = Hash.SHA3_256.HashLength;
+
+  /*
+   * 
+   * Nibble stuff
+   * 
+   */ 
   type Nibble = Int;
 
   val Nibbles = (0x0 to 0xF).toIndexedSeq
