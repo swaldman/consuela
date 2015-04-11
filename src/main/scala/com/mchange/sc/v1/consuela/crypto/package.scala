@@ -15,6 +15,8 @@ package object crypto {
 
   object secp256k1 {
 
+    val ValueByteLength = 32;
+
     private val Spec = new ECGenParameterSpec("secp256k1");
 
     def generate_jce_keypair( randomness : SecureRandom )( implicit provider : jce.Provider ) : KeyPair = {
@@ -28,12 +30,19 @@ package object crypto {
       ( jceKeyPair.getPublic.asInstanceOf[ECPublicKey], jceKeyPair.getPrivate.asInstanceOf[ECPrivateKey] )
     }
 
-    def pubkey_bytes( ecPub : ECPublicKey ) : Array[Byte] = {
+    def pubkey_bigints( ecPub : ECPublicKey ) : ( BigInt, BigInt ) = {
       val ecPoint = ecPub.getW();
-      ecPoint.getAffineX().unsignedBytes(32) ++ ecPoint.getAffineY().unsignedBytes(32)
+      ( ecPoint.getAffineX(), ecPoint.getAffineY() )
     }
 
-    def privkey_bytes( ecPub : ECPrivateKey ) : Array[Byte] = ecPub.getS().unsignedBytes(32)
+    def privkey_bigint( ecPriv : ECPrivateKey ) : BigInt = ecPriv.getS()
+
+    def pubkey_bytes( ecPub : ECPublicKey ) : Array[Byte] = {
+      val ecPoint = ecPub.getW();
+      ecPoint.getAffineX().unsignedBytes(ValueByteLength) ++ ecPoint.getAffineY().unsignedBytes(ValueByteLength)
+    }
+
+    def privkey_bytes( ecPriv : ECPrivateKey ) : Array[Byte] = ecPriv.getS().unsignedBytes(ValueByteLength)
 
     /**
      * Derived from https://github.com/ethereum/ethereumj/blob/master/ethereumj-core/src/main/java/org/ethereum/crypto/ECKey.java
