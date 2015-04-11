@@ -3,7 +3,6 @@ package com.mchange.sc.v1.consuela.hash;
 import scala.util.hashing.MurmurHash3;
 
 import com.mchange.sc.v1.consuela.Implicits._;
-import com.mchange.sc.v1.consuela.conf.Config.Implicits._;
 
 object Hash {
   object SHA3_256 extends Hasher[SHA3_256] with Hasher.FixedLength {

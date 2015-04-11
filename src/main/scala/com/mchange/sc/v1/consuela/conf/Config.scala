@@ -15,15 +15,20 @@ object Config {
 
   val ConfigName = "consuela";
 
-  lazy val _inner : TSConfig = TRACE.attempt( TSConfigFactory.load().getConfig( ConfigName ) ).getOrElse( TSConfigFactory.empty("Default settings.") );
+  val BouncyCastleProviderCode = "BC";
+  val BouncyCastleProviderFqcn = "org.bouncycastle.jce.provider.BouncyCastleProvider";
 
-  object Implicits {
-    implicit lazy val provider : jce.Provider = jce.Provider( Item.JceProvider.get );
-  }
+  private val _inner : TSConfig = TRACE.attempt( TSConfigFactory.load().getConfig( ConfigName ) ).getOrElse( TSConfigFactory.empty("Default settings.") );
+
+  // configured values not published as implicits
+  val JceForbidOtherCrypto  = Item.JceForbidOtherCrypto.get;
+  val JceProviderClassNames = Item.JceProviderClassNames.get;
+  val JceProvider           = Item.JceProvider.get;
 
   private[this] object Item {
-    val JceProvider           = StringItem( "jce.provider", "BC" ); //bouncycastle
-    val JceProviderClassNames = StringListItem( "jce.providerClassNames", List( "org.bouncycastle.jce.provider.BouncyCastleProvider" ) );
+    val JceProvider           = StringItem( "jce.provider", BouncyCastleProviderCode ); //bouncycastle
+    val JceProviderClassNames = StringListItem( "jce.providerClassNames", List( BouncyCastleProviderFqcn ) );
+    val JceForbidOtherCrypto  = BooleanItem("jce.forbidOtherCrypto", false);
   }
   private[this] trait Item[T] {
     def path : String;
@@ -37,7 +42,7 @@ object Config {
     import scala.collection.JavaConverters._;
     def get : List[String] =  TRACE.attempt( _inner.getStringList( path ).asScala.toList ).getOrElse( dflt );
   }
-
-  // bring in the JCE providers.
-  Item.JceProviderClassNames.get.foreach( name => FINER.attempt( Security.addProvider( Class.forName( name ).newInstance().asInstanceOf[Provider] ) ) )
+  private[this] case class BooleanItem( path : String, dflt : Boolean ) extends Item[Boolean] {
+    def get : Boolean = TRACE.attempt( _inner.getBoolean( path ) ).getOrElse( dflt );
+  }
 }
