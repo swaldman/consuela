@@ -25,9 +25,9 @@ package object crypto {
       generator.generateKeyPair();
     }
 
-    def generate_jce_keys( randomness : SecureRandom )( implicit provider : jce.Provider ) : (ECPublicKey, ECPrivateKey) = {
+    def generate_jce_keys( randomness : SecureRandom )( implicit provider : jce.Provider ) : (ECPrivateKey, ECPublicKey) = {
       val jceKeyPair = generate_jce_keypair( randomness )( provider );
-      ( jceKeyPair.getPublic.asInstanceOf[ECPublicKey], jceKeyPair.getPrivate.asInstanceOf[ECPrivateKey] )
+      ( jceKeyPair.getPrivate.asInstanceOf[ECPrivateKey], jceKeyPair.getPublic.asInstanceOf[ECPublicKey] )
     }
 
     def pubkey_bigints( ecPub : ECPublicKey ) : ( BigInt, BigInt ) = {
@@ -43,6 +43,11 @@ package object crypto {
     }
 
     def privkey_bytes( ecPriv : ECPrivateKey ) : Array[Byte] = ecPriv.getS().unsignedBytes(ValueByteLength)
+
+    def generate_bytes_keypair( randomness : SecureRandom )( implicit provider : jce.Provider ) : (Array[Byte], Array[Byte]) = {
+      val ( ecpriv, ecpub ) = generate_jce_keys( randomness )( provider );
+      ( privkey_bytes( ecpriv ), pubkey_bytes( ecpub ) )
+    }
 
     /**
      * Derived from https://github.com/ethereum/ethereumj/blob/master/ethereumj-core/src/main/java/org/ethereum/crypto/ECKey.java

@@ -3,38 +3,26 @@ package com.mchange.sc.v1.consuela.ethereum;
 import com.mchange.sc.v1.consuela.crypto;
 import com.mchange.sc.v1.consuela.Implicits._;
 
-import scala.collection._;
+import com.mchange.sc.v1.consuela.util.ByteArrayValue;
+
+import java.security.SecureRandom;
 
 object EthPrivateKey {
   val ByteLength = crypto.secp256k1.ValueByteLength;
 
-  def apply( bytes : Seq[Byte] ) : EthPrivateKey = {
-    bytes match {
-      case safe : immutable.Seq[Byte] => EthPrivateKey( safe );
-      case unsafe => EthPrivateKey( immutable.Seq( unsafe : _* ) );
-    }
+  def apply( bytes  : Seq[Byte] )    : EthPrivateKey = new EthPrivateKey( bytes.toArray );
+  def apply( bytes  : Array[Byte] )  : EthPrivateKey = new EthPrivateKey( bytes.clone() );
+  def apply( bigInt : BigInt )       : EthPrivateKey = new EthPrivateKey( bigInt.unsignedBytes( ByteLength ) );
+  def apply( random : SecureRandom ) : EthPrivateKey = {
+    val bytes = Array.ofDim[Byte](ByteLength);
+    random.nextBytes( bytes );
+    new EthPrivateKey( bytes );
   }
-  def apply( bytes : Array[Byte] ) : EthPrivateKey = EthPrivateKey( immutable.Seq( bytes : _* ) );
-  def apply( bigInt : BigInt ) : EthPrivateKey     = this.apply( bigInt.unsignedBytes( ByteLength ) );
 
   private val HashSalt = -1507782977; // a randomly generated Int
 }
 
-final class EthPrivateKey private( val bytes : immutable.Seq[Byte] ) {
-  require( bytes.length == EthPrivateKey.ByteLength );
-
-  lazy val toByteArray  = bytes.toArray;
-  lazy val toBigInteger = new java.math.BigInteger(1, bytes.toArray);
-  lazy val toBigInt     = BigInt( this.toBigInteger );
-
-  override def toString() : String = s"EthPrivateKey [${bytes.hex}]";
-
-  override def equals( o : Any ) : Boolean = {
-    o match {
-      case epk : EthPrivateKey => this.bytes == epk.bytes;
-      case _ => false;
-    }
-  }
-  override def hashCode() : Int = bytes.hashCode() ^ EthPrivateKey.HashSalt; 
+final class EthPrivateKey private( protected val _bytes : Array[Byte] ) extends ByteArrayValue with ByteArrayValue.UnsignedBigIntegral {
+  require( _bytes.length == EthPrivateKey.ByteLength );
 }
 

@@ -6,6 +6,12 @@ import scala.language.implicitConversions;
 object Implicits {
   implicit val MainProvider : jce.Provider = jce.Provider.ConfiguredProvider;
 
+  implicit class RichString( string : String ) {
+    def decodeHex : Array[Byte] = {
+      val hexstring = if ( string.startsWith( "0x" ) ) string.substring(2) else string;
+      ByteUtils.fromHexAscii( hexstring );
+    }
+  }
   implicit class RichByteSeq( bytes : Seq[Byte] ) {
     def hex : String = ByteUtils.toLowercaseHexAscii( bytes.toArray )
   }
