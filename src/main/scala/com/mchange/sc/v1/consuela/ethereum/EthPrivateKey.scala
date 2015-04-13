@@ -1,5 +1,6 @@
 package com.mchange.sc.v1.consuela.ethereum;
 
+import com.mchange.sc.v1.consuela.jce;
 import com.mchange.sc.v1.consuela.crypto;
 import com.mchange.sc.v1.consuela.Implicits._;
 
@@ -18,11 +19,21 @@ object EthPrivateKey {
     random.nextBytes( bytes );
     new EthPrivateKey( bytes );
   }
-
-  private val HashSalt = -1507782977; // a randomly generated Int
 }
 
 final class EthPrivateKey private( protected val _bytes : Array[Byte] ) extends ByteArrayValue with ByteArrayValue.UnsignedBigIntegral {
   require( _bytes.length == EthPrivateKey.ByteLength );
+
+  def s = this.toBigInt;
+
+  def sign( document : Array[Byte] )( implicit provider : jce.Provider ) : EthSignature = { 
+    val docHash = EthHash.hash( document ); // ethereum signatures are (as usual) of hashes, not documents directly
+    crypto.secp256k1.signature( this.toBigInteger, docHash.toByteArray )( provider ) match {
+      case Left( bytes ) => throw new UnexpectedSignatureFormatException( bytes.hex );
+      case Right( signature ) => EthSignature( signature.r, signature.s );
+    }
+  }
+
+  lazy val toPublicKey = EthPublicKey( this );
 }
 
