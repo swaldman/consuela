@@ -7,7 +7,7 @@ abstract class AbstractEthTrie[I<:AbstractEthTrie[I]]( db : EthTrieDb, rootHash 
   val earlyInit = EmbeddableEthStylePMTrie.EarlyInit( Alphabet, db, rootHash )
 } with EmbeddableEthStylePMTrie[Nibble,Seq[Byte],EthHash,I] {
   override def including( key : IndexedSeq[Nibble], value : Seq[Byte] ) : I = {
-    require( value.length > 0, "EthTries cannot store empty Strings as values!" );
+    require( value.length > 0, "EthTries cannot store empty byte sequences as values!" );
     super.including( key, value )
   }
 }

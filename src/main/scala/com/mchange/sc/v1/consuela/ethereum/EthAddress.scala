@@ -4,6 +4,7 @@ import com.mchange.sc.v1.consuela.crypto;
 import com.mchange.sc.v1.consuela.Implicits._;
 
 import com.mchange.sc.v1.consuela.util.ByteArrayValue;
+import com.mchange.sc.v1.consuela.ethereum.util.EthByteArrayValue;
 
 import java.util.Arrays;
 
@@ -15,7 +16,7 @@ object EthAddress {
 
   def computeBytes( pub : EthPublicKey ) : Array[Byte] = EthHash.hash(pub.toByteArray).toByteArray.drop(12);
 }
-final class EthAddress private ( protected val _bytes : Array[Byte] ) extends ByteArrayValue {
+final class EthAddress private ( protected val _bytes : Array[Byte] ) extends ByteArrayValue with EthByteArrayValue.Nibbly {
   require( _bytes.length == EthAddress.ByteLength );
 
   def matches( pub : EthPublicKey ) : Boolean = Arrays.equals( _bytes, EthAddress.computeBytes( pub ) );
