@@ -120,7 +120,7 @@ package object crypto {
       verifySignatureBytes( signed, parser.encode( signature ), pubKeyX, pubKeyY )( provider )
     }
 
-    case class Signature( val r : BigInteger, s : BigInteger, v : Option[Int] = None);
+    case class Signature( val r : BigInteger, s : BigInteger, v : Option[Byte] = None);
     trait SignatureParser {
       def parse( sigBytes : Array[Byte] ) : Either[Array[Byte],Signature];
       def encode( sig : Signature ) : Array[Byte];

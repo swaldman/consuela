@@ -27,10 +27,12 @@ final class EthPrivateKey private( protected val _bytes : Array[Byte] ) extends 
   def s = this.toBigInt;
 
   def sign( document : Array[Byte] )( implicit provider : jce.Provider ) : EthSignature = { 
+    import crypto.secp256k1._;
     val docHash = EthHash.hash( document ); // ethereum signatures are (as usual) of hashes, not documents directly
-    crypto.secp256k1.signature( this.toBigInteger, docHash.toByteArray )( provider ) match {
+    signature( this.toBigInteger, docHash.toByteArray )( provider ) match {
       case Left( bytes ) => throw new UnexpectedSignatureFormatException( bytes.hex );
-      case Right( signature ) => EthSignature( signature.r, signature.s );
+      case Right( Signature( r, s, Some( v ) ) ) => ExactEthSignature( v, r, s );
+      case Right( Signature( r, s, None ) )      => ApproximateEthSignature( r, s );
     }
   }
 

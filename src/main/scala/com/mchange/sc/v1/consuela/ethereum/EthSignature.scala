@@ -5,10 +5,25 @@ import scala.collection._;
 
 
 object EthSignature {
-  val PossibleVs = List( 27.toByte, 28.toByte );
-}
-case class EthSignature( val r : BigInt, val s : BigInt ) {
-  private lazy val tailByteSeq = Vector( (r.unsignedBytes(32) ++ s.unsignedBytes(32)) : _* );
+  val PossibleVs = Set( 27.toByte, 28.toByte );
 
+  trait Exact {
+    self : EthSignature =>
+
+    def v : Byte;
+  }
+}
+sealed trait EthSignature {
+  def r : BigInt;
+  def s : BigInt;
+
+  protected lazy val tailByteSeq = Vector( (r.unsignedBytes(32) ++ s.unsignedBytes(32)) : _* );
+}
+case class ApproximateEthSignature( val r : BigInt, val s : BigInt ) extends EthSignature {
   lazy val exportByteSeqs = EthSignature.PossibleVs.map( _ +: tailByteSeq );
+}
+case class ExactEthSignature( val v : Byte, val r : BigInt, val s : BigInt ) extends EthSignature with EthSignature.Exact {
+  require( EthSignature.PossibleVs(v) );
+
+  lazy val exportByteSeq = v.toByte +: tailByteSeq;
 }
