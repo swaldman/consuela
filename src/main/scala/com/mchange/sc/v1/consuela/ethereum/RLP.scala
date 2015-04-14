@@ -28,11 +28,15 @@ object RLP {
       def isSimple = true;
       def simplify = this;
     }
-    case class Int( value : scala.Int ) extends Encodable {
+    case class UnsignedInt( value : scala.Int ) extends Encodable {
+      require( value >= 0 );
+
       def isSimple = false;
       def simplify = Encodable.ByteSeq( be( value ) )
     }
-    case class BigInt( value : scala.BigInt ) extends Encodable {
+    case class UnsignedBigInt( value : scala.BigInt ) extends Encodable {
+      require( value >= 0 );
+
       def isSimple = false;
       def simplify = Encodable.ByteSeq( be( value ) )
     }
@@ -155,15 +159,15 @@ object RLP {
     def s( encodables : Seq[Encodable] ) : Seq[Byte] = encodables.flatMap( encode _ );
 
     encodable match {
-      case bse : Encodable.ByteSeq => rb( bse.bytes );
-      case ie  : Encodable.Int     => rb( be( ie.value ) );
-      case bie : Encodable.BigInt  => rb( be( bie.value ) );
-      case ese : Encodable.Seq     => rl( ese.seq );
+      case bse : Encodable.ByteSeq        => rb( bse.bytes );
+      case ie  : Encodable.UnsignedInt    => rb( be( ie.value ) );
+      case bie : Encodable.UnsignedBigInt => rb( be( bie.value ) );
+      case ese : Encodable.Seq            => rl( ese.seq );
     }
   }
   def encodeBytes( bytes : Seq[Byte] )                : Seq[Byte] = encode( Encodable.ByteSeq( bytes ) );
-  def encodeInt( i : Int )                            : Seq[Byte] = encode( Encodable.Int( i ) );
-  def encodeBigInt( bi : BigInt )                     : Seq[Byte] = encode( Encodable.BigInt( bi ) );
+  def encodeUnsignedInt( i : Int )                    : Seq[Byte] = encode( Encodable.UnsignedInt( i ) );
+  def encodeUnsignedBigInt( bi : BigInt )             : Seq[Byte] = encode( Encodable.UnsignedBigInt( bi ) );
   def encodeString( str : String, charset : Charset ) : Seq[Byte] = encode( Encodable.ByteSeq( str.getBytes( charset ).toSeq ) );
   /**
    * Strings can be empty, other empty sequences interpreted as structure
@@ -171,10 +175,10 @@ object RLP {
   def fastEncodableWithStrings( obj : Any, charset : Charset ) : Option[Encodable] = {
     def tryAsAtom : Option[Encodable] = {
       obj match {
-        case i   : Int    => Some( Encodable.Int( i ) )
-        case bi  : BigInt => Some( Encodable.BigInt( bi ) )
-        case str : String => Some( Encodable.ByteSeq( str.getBytes( charset ) ) )
-        case _            => None
+        case i   : Int    if (i >= 0)  => Some( Encodable.UnsignedInt( i ) )
+        case bi  : BigInt if (bi >= 0) => Some( Encodable.UnsignedBigInt( bi ) )
+        case str : String              => Some( Encodable.ByteSeq( str.getBytes( charset ) ) )
+        case _                         => None
       }
     }
     def tryAsSeq : Option[Encodable] = {

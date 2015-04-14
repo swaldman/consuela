@@ -32,11 +32,11 @@ object RLPSpec {
           case und   : JsUndefined => throw new AssertionError( s"Undefined input values not expected: ${und}" );
           case array : JsArray     => RLP.Encodable.Seq( List( array.value.map( parseIn ) : _*) );
           case bool  : JsBoolean   => throw new AssertionError( s"Boolean input values not expected: ${bool}" );
-          case num   : JsNumber    => RLP.Encodable.Int( num.value.toIntExact );
+          case num   : JsNumber    => RLP.Encodable.UnsignedInt( num.value.toIntExact );
           case obj   : JsObject    => throw new AssertionError( s"Object input values not expected: ${obj}" );
           case str   : JsString    => {
             if ( str.value.length > 0 && str.value.charAt(0) == '#' )
-              RLP.Encodable.BigInt( BigInt( str.value.substring(1) ) ) 
+              RLP.Encodable.UnsignedBigInt( BigInt( str.value.substring(1) ) ) 
             else
               RLP.Encodable.ByteSeq( str.value.getBytes( charset ) );
           }
