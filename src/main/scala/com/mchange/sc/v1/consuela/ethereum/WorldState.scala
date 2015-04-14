@@ -40,6 +40,8 @@ object WorldState {
     }
   }
   case class Account( nonce : BigInt, balance : BigInt, storageRoot : EthHash, codeHash : EthHash ) {
+    require( (nonce elem_: Unsigned256) && (balance elem_: Unsigned256) );
+
     lazy val rlpBytes = Account.encodeRLP( this );
   }
 }

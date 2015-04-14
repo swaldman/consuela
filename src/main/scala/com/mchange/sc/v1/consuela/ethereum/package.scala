@@ -10,6 +10,11 @@ package object ethereum {
   val  EthHash    = Hash.SHA3_256;
   val  EthHashLen = Hash.SHA3_256.HashLength;
 
+  object Unsigned256 {
+    val MAX_VALUE_EXCLUSIVE = BigInt(2).pow(256);
+    def elem_: ( bi : BigInt ) : Boolean= bi >= 0 && bi < MAX_VALUE_EXCLUSIVE;
+  }
+
   /*
    * 
    * Nibble stuff
