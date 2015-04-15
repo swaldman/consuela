@@ -58,6 +58,11 @@ object Set {
     final def elem_: ( i : Int)        : Boolean = this.contains( i );
     final def elem_: ( i : Long)       : Boolean = this.contains( i );
     final def elem_: ( i : BigInt)     : Boolean = this.contains( i );
+
+    final def elem_!: ( i : BigInteger) : Boolean = this.contains( i ) || ( throw new IllegalArgumentException( badValueMessage(i) ) );
+    final def elem_!: ( i : Int)        : Boolean = this.contains( i ) || ( throw new IllegalArgumentException( badValueMessage(i) ) );
+    final def elem_!: ( i : Long)       : Boolean = this.contains( i ) || ( throw new IllegalArgumentException( badValueMessage(i) ) );
+    final def elem_!: ( i : BigInt)     : Boolean = this.contains( i ) || ( throw new IllegalArgumentException( badValueMessage(i) ) );
   }
 }
 trait Set {

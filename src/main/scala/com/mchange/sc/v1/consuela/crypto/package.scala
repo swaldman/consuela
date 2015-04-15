@@ -219,9 +219,9 @@ package object crypto {
       def recoverPublicKeyAndV( sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] ) : Option[RecoveredPublicKeyAndV] = {
         (0 to 3).foldLeft( None : Option[RecoveredPublicKeyAndV] ){ ( mbr, i ) =>
           if (mbr == None) {
-            mbr
-          } else { 
             recoverPublicKeyBytes( i, sigR, sigS, signed ).fold( None : Option[RecoveredPublicKeyAndV] )( bytes => Some( new RecoveredPublicKeyAndV( i, bytes ) ) )
+          } else { 
+            mbr
           }
         }
       }
@@ -249,12 +249,14 @@ package object crypto {
 
         val prime = curve.getQ();  // Bouncy Castle is not consistent about the letter it uses for the prime.
         if (x.compareTo(prime) >= 0) {
-          TRACE.log("recoverPublicKeyBytes(...) returning NONE: Public key cannot have implied x value ${x}, as that is greater than its prime modulus ${prime}");
+          TRACE.log(
+            s"recoverPublicKeyBytes(...) returning NONE for recId ${recId}: Public key cannot have implied x value ${x}, as that is greater than its prime modulus ${prime}"
+          );
           None
         } else {
           val R = decompressKey(x, (recId & 1) == 1);
           if (!R.multiply(n).isInfinity()) {
-            TRACE.log( "recoverPublicKeyBytes(...) returning NONE: Unexpectedly non-infinte value of nR; try another recId [current recId: ${recId}]." )
+            TRACE.log( s"recoverPublicKeyBytes(...) returning NONE: Unexpectedly non-infinte value of nR; try another recId [current recId: ${recId}]." )
             None
           } else {
             val e = new BigInteger(1, signed);
