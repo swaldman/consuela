@@ -8,6 +8,7 @@ object Set {
     override def contains( i : Int )        : Boolean = i >= 0;
     override def contains( i : Long )       : Boolean = i >= 0L;
     override def contains( i : BigInteger ) : Boolean = i.compareTo( BigInteger.ZERO ) >= 0;
+    override def mathRep : String = s"[0,\u221E)"
   }
   object Unsigned256 extends Integral.ZeroUntil {
     val MaxValueExclusive : BigInt = BigInt(2).pow(256);
@@ -35,13 +36,16 @@ object Set {
       val MaxValueExclusive : BigInt;
       override def contains( i : BigInt ) : Boolean = i >= MinValueInclusive && i < MaxValueExclusive;
       override def contains( i : BigInteger ) : Boolean = MinValueInclusive.bigInteger.compareTo(i) <= 0 && MaxValueExclusive.bigInteger.compareTo(i) > 0;
-      override def toString : String = this.getClass.getName + s"[${MinValueInclusive},${MaxValueExclusive})"
+      override def mathRep : String = s"[${MinValueInclusive},${MaxValueExclusive})"
     }
     trait ZeroUntil extends MinUntil {
       override val MinValueInclusive = BigInt(0);
     }
   }
-  trait Integral {
+
+  // it feels like I should be making use of generics somehow to avoid the code repetion
+  // but i'm not sure just how
+  trait Integral extends Set {
     // always override this
     def contains( i : BigInt) : Boolean;
 
@@ -56,5 +60,10 @@ object Set {
     final def elem_: ( i : BigInt)     : Boolean = this.contains( i );
   }
 }
-
+trait Set {
+  def mathRep : String;
+  override def toString : String = this.getClass.getName + mathRep;
+  def notMemberMessage( a : Any ) = s"${a} \u2209 ${mathRep}";
+  def badValueMessage( a : Any ) = "Bad value: " + notMemberMessage( a )
+}
 
