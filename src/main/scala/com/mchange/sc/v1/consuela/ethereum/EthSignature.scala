@@ -3,15 +3,15 @@ package com.mchange.sc.v1.consuela.ethereum;
 import com.mchange.sc.v1.consuela.Implicits._;
 import scala.collection._;
 
+import specification.Set.SignatureV;
+import specification.Set.SignatureR;
+import specification.Set.SignatureS;
+
 object EthSignature {
 
-  // signature constraints taken from the ethereum yellow paper (current github version, 2015-04-10)
   val PossibleVs = Set( 27.toByte, 28.toByte );
-  val MAX_EXCLUSIVE_r = BigInt("115792089237316195423570985008687907852837564279074904382605163141518161494337", 10);
-  val MAX_EXCLUSIVE_s = {
-    val TWO = BigInt(2);
-    (TWO.pow(256)) - (TWO.pow(32)) - BigInt(977)
-  }
+  val MAX_EXCLUSIVE_r = SignatureR.MaxValueExclusive;
+  val MAX_EXCLUSIVE_s = SignatureS.MaxValueExclusive;
 
   trait Exact {
     self : EthSignature =>
