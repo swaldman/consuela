@@ -14,7 +14,7 @@ object EthPublicKey {
   def apply( bytes : Array[Byte] )   : EthPublicKey = new EthPublicKey( bytes.clone() );
   def apply( priv  : EthPrivateKey ) : EthPublicKey = new EthPublicKey( this.computeBytes( priv ) );
 
-  def computeBytes( priv : EthPrivateKey ) : Array[Byte] = crypto.secp256k1.PublicKeyComputer.computePublicKeyBytes( priv.toBigInteger );
+  def computeBytes( priv : EthPrivateKey ) : Array[Byte] = crypto.secp256k1.BouncyCastlePublicKeyComputer.computePublicKeyBytes( priv.toBigInteger );
 }
 final class EthPublicKey private ( protected val _bytes : Array[Byte] ) extends ByteArrayValue {
   require( _bytes.length == EthPublicKey.ByteLength );

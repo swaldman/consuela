@@ -16,6 +16,8 @@ import com.mchange.sc.v1.consuela.hash.Hash;
 import com.mchange.sc.v1.consuela.Implicits._;
 
 package object crypto {
+  class InvalidSignatureException( message : String, t : Throwable = null ) extends ConsuelaException( message, t );
+
   implicit val logger = MLogger( this );
 
   object secp256k1 {
@@ -127,6 +129,8 @@ package object crypto {
     }
 
     object BouncyCastleSignatureParser extends SignatureParser {
+      jce.Provider.warnForbidUnconfiguredUseOfBouncyCastle( this.getClass.getName )
+
       import java.io._;
       import org.bouncycastle.asn1._;
       import com.mchange.sc.v2.lang.borrow;
@@ -168,22 +172,103 @@ package object crypto {
      * Derived from https://github.com/ethereum/ethereumj/blob/master/ethereumj-core/src/main/java/org/ethereum/crypto/ECKey.java
      * which is in turn derived from https://github.com/bitcoinj/bitcoinj/blob/master/core/src/main/java/com/google/bitcoin/core/ECKey.java
      */   
-    object PublicKeyComputer {
+    object BouncyCastlePublicKeyComputer {
       import org.bouncycastle.asn1.sec.SECNamedCurves;
+      import org.bouncycastle.asn1.x9.X9IntegerConverter;
       import org.bouncycastle.asn1.x9.X9ECParameters;
       import org.bouncycastle.crypto.params.ECDomainParameters;
+      import org.bouncycastle.math.ec.ECAlgorithms;
+      import org.bouncycastle.math.ec.ECCurve;
+      import org.bouncycastle.math.ec.ECPoint;
+      import java.util.Arrays;
 
       val Params = SECNamedCurves.getByName(ECParamBundleName);
       val Curve = new ECDomainParameters(Params.getCurve(), Params.getG(), Params.getN(), Params.getH());
 
-      private val WarningSource = this.getClass.getName;
-      jce.Provider.warnForbidUnconfiguredUseOfBouncyCastle( WarningSource )
+      jce.Provider.warnForbidUnconfiguredUseOfBouncyCastle( this.getClass.getName )
 
+      /**
+       *  @return a 64 byte / 512 bit byte array which is the concatenation of the byte representations
+       *          of two 256 bit big-endian ints X and Y
+       */ 
       def computePublicKeyBytes( privateKeyAsBigInteger : BigInteger ) : Array[Byte] = {
-        Curve.getG().multiply( privateKeyAsBigInteger ).getEncoded( false ).drop(1); // false means uncompressed, we drop the header byte that says so
+        Curve.getG().multiply( privateKeyAsBigInteger ).getEncoded( false ).drop(1) // false means uncompressed, we drop the header byte that says so
+      } ensuring( _.length == 64 )
+
+      /*
+       * Note that "v" here refers to a standardized attribute of our signature (not "value" as
+       * the pairing with "key" might suggest). See e.g. the Ethereum yellow paper for information.
+       *
+       * recId should fall in the range [0,3]; v within [27,30]
+       *
+       * we don't test the constructor arguments, since they will have all been tested as pre- 
+       * or post-conditions of recoverPublicKeyBytes(...)
+       */ 
+      final class RecoveredPublicKeyAndV private[BouncyCastlePublicKeyComputer]( val recId : Int, val publicKeyBytes : Array[Byte] ) {
+        override def equals( other : Any ) : Boolean = {
+          other match {
+            case rkv : RecoveredPublicKeyAndV => this.recId == rkv.recId && Arrays.equals( this.publicKeyBytes, rkv.publicKeyBytes );
+            case _                            => false;
+          }
+        }
+        override def hashCode : Int = this.recId ^ Arrays.hashCode( this.publicKeyBytes );
+
+        def v = recId + 27;
       }
 
-      def computePublicKeyBytes( privateKeyAsBigInt : BigInt ) : Array[Byte] = computePublicKeyBytes( privateKeyAsBigInt.bigInteger );
+      def recoverPublicKeyAndV( sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] ) : Option[RecoveredPublicKeyAndV] = {
+        (0 to 3).foldLeft( None : Option[RecoveredPublicKeyAndV] ){ ( mbr, i ) =>
+          if (mbr == None) {
+            mbr
+          } else { 
+            recoverPublicKeyBytes( i, sigR, sigS, signed ).fold( None : Option[RecoveredPublicKeyAndV] )( bytes => Some( new RecoveredPublicKeyAndV( i, bytes ) ) )
+          }
+        }
+      }
+
+      /**
+       *  @return a 64 byte / 512 bit byte array which is the concatenation of the byte representations
+       *          of two 256 bit big-endian ints X and Y
+       */ 
+      def recoverPublicKeyBytes( recId : Int, sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] ) : Option[Array[Byte]] = {
+        require(recId >= 0);
+        require(sigR.signum() >= 0);
+        require(sigS.signum() >= 0);
+        require(signed != null);
+        val n     = Curve.getN();  // Curve order.
+        val i     = BigInteger.valueOf(recId / 2);
+        val x     = sigR.add(i.multiply(n));
+        val curve = Curve.getCurve().asInstanceOf[ECCurve.Fp];
+
+        def decompressKey( xBN : BigInteger, yBit : Boolean) : ECPoint = {
+          val x9 = new X9IntegerConverter();
+          val compEnc = x9.integerToBytes(xBN, 1 + x9.getByteLength(curve));
+          compEnc(0) = (if (yBit) 0x03 else 0x02).toByte;
+          curve.decodePoint(compEnc);
+        }
+
+        val prime = curve.getQ();  // Bouncy Castle is not consistent about the letter it uses for the prime.
+        if (x.compareTo(prime) >= 0) {
+          TRACE.log("recoverPublicKeyBytes(...) returning NONE: Public key cannot have implied x value ${x}, as that is greater than its prime modulus ${prime}");
+          None
+        } else {
+          val R = decompressKey(x, (recId & 1) == 1);
+          if (!R.multiply(n).isInfinity()) {
+            TRACE.log( "recoverPublicKeyBytes(...) returning NONE: Unexpectedly non-infinte value of nR; try another recId [current recId: ${recId}]." )
+            None
+          } else {
+            val e = new BigInteger(1, signed);
+            val eInv = BigInteger.ZERO.subtract(e).mod(n);
+            val rInv = sigR.modInverse(n);
+            val srInv = rInv.multiply(sigS).mod(n);
+            val eInvrInv = rInv.multiply(eInv).mod(n);
+            val q = ECAlgorithms.sumOfTwoMultiplies(Curve.getG(), eInvrInv, R, srInv).asInstanceOf[ECPoint.Fp];
+
+            // we have to drop a header byte indicating the lack of encodedness
+            Some( q.getEncoded(false).drop(1).ensuring( _.length == 64 ) )
+          }
+        }
+      }
     }
 
     /*
