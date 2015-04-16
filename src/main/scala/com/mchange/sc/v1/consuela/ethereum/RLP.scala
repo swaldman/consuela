@@ -40,6 +40,9 @@ object RLP {
       def isSimple = false;
       def simplify = Encodable.ByteSeq( be( value ) )
     }
+    object Seq {
+      def of( encodables : Encodable* ) = new Seq( encodables );
+    }
     case class Seq( seq : scala.Seq[Encodable] ) extends Encodable.Basic {
       lazy val isSimple = seq.forall( _.isSimple )
       def simplify = if ( this.isSimple ) this else Seq( seq.map( _.simplify ) )
