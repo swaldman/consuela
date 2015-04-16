@@ -26,21 +26,27 @@ final class EthPrivateKey private( protected val _bytes : Array[Byte] ) extends 
 
   def s = this.toBigInt;
 
-  def sign( document : Array[Byte] )( implicit provider : jce.Provider ) : EthSignature = { 
+  private def signRawBytes( rawBytes : Array[Byte] )( implicit provider : jce.Provider ) : EthSignature = { 
+    //XXX TODO: Do the best that can be done to make this more sensitive to provider
+    jce.Provider.warnForbidUnconfiguredUseOfBouncyCastle( this )( provider )
+
     import crypto.secp256k1._;
-    val docHash = EthHash.hash( document ); // ethereum signatures are (as usual) of hashes, not documents directly
-    val docHashBytes = docHash.toByteArray
-    signature( this.toBigInteger, docHashBytes )( provider ) match {
+    signature( this.toBigInteger, rawBytes )( provider ) match {
       case Left( bytes ) => throw new UnexpectedSignatureFormatException( bytes.hex );
       case Right( Signature( r, s, Some( v ) ) ) => EthSignature( v, r, s );
       case Right( Signature( r, s, None ) )      => {
-        val mbRecovered = BouncyCastlePublicKeyComputer.recoverPublicKeyAndV( r, s, docHashBytes );
+        val mbRecovered = BouncyCastlePublicKeyComputer.recoverPublicKeyAndV( r, s, rawBytes );
         mbRecovered.fold( throw new EthereumException( s"Could find only partial signature [ v -> ???, r -> ${r}, s -> ${s} ]" ) ) { recovered =>
           EthSignature( recovered.v.toByte, r, s )
         }
       }
     }
   }
+  private def signEthHash( hash : EthHash )( implicit provider : jce.Provider ) = this.signRawBytes( hash.toByteArray )( provider );
+  private def signEthHash( document : Array[Byte] )( implicit provider : jce.Provider ) : EthSignature = this.signEthHash( EthHash.hash( document ) )( provider );
+
+  // default signing scheme
+  def sign( document : Array[Byte] )( implicit provider : jce.Provider ) : EthSignature = this.signEthHash( document )( provider );
 
   lazy val toPublicKey = EthPublicKey( this );
 }

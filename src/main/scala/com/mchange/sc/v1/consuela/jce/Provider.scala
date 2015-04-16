@@ -44,16 +44,16 @@ object Provider{
     configuredProvider
   }
 
-  def warnForbidUnconfiguredUseOfBouncyCastle( source : AnyRef )( implicit configuredProvider : Provider ) {
-    if ( configuredProvider.code != BouncyCastleProviderCode ) {
+  def warnForbidUnconfiguredUseOfBouncyCastle( source : AnyRef )( implicit desiredProvider : Provider ) {
+    if ( desiredProvider.code != BouncyCastleProviderCode ) {
       if ( JceForbidOtherCrypto ) {
         throw new ForbiddenProviderException(
           s"'${source}' attempted to use code from default JCE provider bouncycastle rather than " +
-           "configured provider '${configuredProvider.code}', but such use has been forbidden."
+           "configured provider '${desiredProvider.code}', but such use has been forbidden."
         )
       } else {
         WARNING.log(
-          s"Although the configured JCE provider is ${configuredProvider.code}, '${source}' is using APIs of the bouncycastle crypto library not supported by JCE. "
+          s"Although the configured JCE provider is ${desiredProvider.code}, '${source}' is using APIs of the bouncycastle crypto library not supported by JCE. "
         )
       }
     }

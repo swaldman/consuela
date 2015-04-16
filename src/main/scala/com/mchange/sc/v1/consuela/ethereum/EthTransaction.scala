@@ -22,8 +22,14 @@ object EthTransaction {
       def init : IndexedSeq[Byte] = payload;
     }
   }
-  abstract class Abstract( val nonce : BigInt, val gasPrice : BigInt, val gasLimit : BigInt, val to : Option[EthAddress], val value : BigInt, protected val payloadBytes : Array[Byte] ) 
-      extends EthTransaction {
+  abstract class Abstract( 
+    val nonce : BigInt,
+    val gasPrice : BigInt, 
+    val gasLimit : BigInt, 
+    val to : Option[EthAddress], 
+    val value : BigInt, 
+    private[EthTransaction] val payloadBytes : Array[Byte] 
+  ) extends EthTransaction {
     require( (nonce elem_!: Unsigned256) && (gasPrice elem_!: Unsigned256) && (gasLimit elem_!: Unsigned256) );
 
     protected lazy val payload : IndexedSeq[Byte] = Vector( payloadBytes : _* );
@@ -52,16 +58,22 @@ object EthTransaction {
       }
     }
     final class Message private ( nonce : BigInt, gasPrice : BigInt, gasLimit : BigInt, to : EthAddress, value : BigInt, dataBytes : Array[Byte] ) 
-        extends Abstract.Message( nonce, gasPrice, gasLimit, to, value, dataBytes ) with Unsigned;
+        extends Abstract.Message( nonce, gasPrice, gasLimit, to, value, dataBytes ) with Unsigned {
+      def sign( privateKey : EthPrivateKey )( implicit provider : jce.Provider ) : Signed.Message = Signed.Message( this, privateKey.sign( this.baseRLP.toArray )( provider ) );
+    }
 
     object ContractCreation { // note the defensive array clone()!
       def apply( nonce : BigInt, gasPrice : BigInt, gasLimit : BigInt, value : BigInt, initBytes : Array[Byte] ) = new ContractCreation( nonce, gasPrice, gasLimit, value, initBytes.clone() )
     }
     final class ContractCreation private ( nonce : BigInt, gasPrice : BigInt, gasLimit : BigInt, value : BigInt, initBytes : Array[Byte] ) 
-        extends Abstract.ContractCreation( nonce, gasPrice, gasLimit, value, initBytes ) with Unsigned;
+        extends Abstract.ContractCreation( nonce, gasPrice, gasLimit, value, initBytes ) with Unsigned {
+      def sign( privateKey : EthPrivateKey )( implicit provider : jce.Provider ) : Signed.ContractCreation = Signed.ContractCreation( this, privateKey.sign( this.baseRLP.toArray )( provider ) );
+    }
   }
   sealed trait Unsigned extends Abstract {
     override def signed = false;
+
+    def sign( privateKey : EthPrivateKey )( implicit provider : jce.Provider ) : Signed;
 
     override def equals( a : Any ) : Boolean = {
       a match {
@@ -69,12 +81,15 @@ object EthTransaction {
         case _                => false;
       }
     }
-    override def hashCode()        : Int     = baseHash;
+    override def hashCode() : Int = baseHash;
   }
   object Signed {
     object Message { // note the defensive array clone()!
       def apply( nonce : BigInt, gasPrice : BigInt, gasLimit : BigInt, to : EthAddress, value : BigInt, dataBytes : Array[Byte], signature : EthSignature ) = {
         new Message( nonce, gasPrice, gasLimit, to, value, dataBytes.clone(), signature )
+      }
+      private[EthTransaction] def apply( unsigned : Unsigned.Message, signature : EthSignature ) = { // no need for defensive array clone(), both signed and unsigned are immutable
+        new Message( unsigned.nonce, unsigned.gasPrice, unsigned.gasLimit, unsigned.to.get, unsigned.value, unsigned.payloadBytes, signature )
       }
     }
     final class Message private ( nonce : BigInt, gasPrice : BigInt, gasLimit : BigInt, to : EthAddress, value : BigInt, dataBytes : Array[Byte], val signature : EthSignature ) 
@@ -83,6 +98,9 @@ object EthTransaction {
     object ContractCreation { // note the defensive array clone()!
       def apply( nonce : BigInt, gasPrice : BigInt, gasLimit : BigInt, value : BigInt, initBytes : Array[Byte], signature : EthSignature ) = {
         new ContractCreation( nonce, gasPrice, gasLimit, value, initBytes.clone(), signature )
+      }
+      private[EthTransaction] def apply( unsigned : Unsigned.ContractCreation, signature : EthSignature ) = { // no need for defensive array clone(), both signed and unsigned are immutable
+        new ContractCreation( unsigned.nonce, unsigned.gasPrice, unsigned.gasLimit, unsigned.value, unsigned.payloadBytes, signature )
       }
     }
     final class ContractCreation private ( nonce : BigInt, gasPrice : BigInt, gasLimit : BigInt, value : BigInt, initBytes : Array[Byte], val signature : EthSignature ) 
@@ -98,6 +116,9 @@ object EthTransaction {
     def s : BigInt = signature.s;
 
     lazy val senderPublicKey : EthPublicKey = {
+      //XXX TODO: Do the best that can be done to make this more sensitive to provider
+      jce.Provider.warnForbidUnconfiguredUseOfBouncyCastle( this )
+
       def fail : EthPublicKey = throw new EthereumException(s"Could not recover public key for signature ${signature} with signed hash '${signedHash}'");
       crypto.secp256k1.BouncyCastlePublicKeyComputer.recoverPublicKeyBytesV( v, r.bigInteger, s.bigInteger, signedHash.toByteArray ).fold( fail )( pubKeyBytes => EthPublicKey( pubKeyBytes ) );
     }

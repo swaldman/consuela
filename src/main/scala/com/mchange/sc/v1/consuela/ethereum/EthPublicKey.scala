@@ -27,12 +27,21 @@ final class EthPublicKey private ( protected val _bytes : Array[Byte] ) extends 
 
   def matches( priv : EthPrivateKey ) : Boolean = Arrays.equals( _bytes, EthPublicKey.computeBytes( priv ) );
 
-  def verify( document : Array[Byte], signature : EthSignature )( implicit provider : jce.Provider ) : Boolean = {
-    val docHash = EthHash.hash( document ); // ethereum signatures are (as usual) of hashes, not documents directly
+  private def verifyRawBytes( rawBytes : Array[Byte], signature : EthSignature )( implicit provider : jce.Provider ) : Boolean = {
+    //XXX TODO: Do the best that can be done to make this more sensitive to provider
+    jce.Provider.warnForbidUnconfiguredUseOfBouncyCastle( this )( provider )
+
     val _signature = crypto.secp256k1.Signature( signature.r.bigInteger, signature.s.bigInteger )
-    val signed = EthHash.hash( document );
-    crypto.secp256k1.verifySignature( docHash.toByteArray, _signature, this.x.bigInteger, this.y.bigInteger )( provider )
+    crypto.secp256k1.verifySignature( rawBytes, _signature, this.x.bigInteger, this.y.bigInteger )( provider )
   }
+  private def verifyEthHash( hash : EthHash, signature : EthSignature )( implicit provider : jce.Provider ) : Boolean = this.verifyRawBytes( hash.toByteArray, signature )( provider );
+
+  private def verifyEthHash( document : Array[Byte], signature : EthSignature )( implicit provider : jce.Provider ) : Boolean = {
+    this.verifyEthHash( EthHash.hash( document ), signature )( provider );
+  }
+
+  // default scheme
+  def verify( document : Array[Byte], signature : EthSignature )( implicit provider : jce.Provider ) : Boolean = this.verifyEthHash( document, signature )( provider );
 }
 
 
