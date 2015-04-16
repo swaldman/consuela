@@ -49,7 +49,8 @@ object EthTransaction {
     protected def encodableValue    = RLP.Encodable.UnsignedBigInt( value );
     protected def encodablePayload  = RLP.Encodable.ByteSeq( payloadBytes );
 
-    protected def baseRLP : Seq[Byte] = RLP.encode( RLP.Encodable.Seq.of( encodableNonce, encodableGasPrice, encodableTo, encodableValue, encodablePayload ) );
+    protected def baseRlpElements : Seq[RLP.Encodable] = Seq( encodableNonce, encodableGasPrice, encodableTo, encodableValue, encodablePayload );
+    protected def baseRlp         : Seq[Byte]          = RLP.encode( RLP.Encodable.Seq( baseRlpElements ) );
   }
   object Unsigned {
     object Message { // note the defensive array clone()!
@@ -59,7 +60,7 @@ object EthTransaction {
     }
     final class Message private ( nonce : BigInt, gasPrice : BigInt, gasLimit : BigInt, to : EthAddress, value : BigInt, dataBytes : Array[Byte] ) 
         extends Abstract.Message( nonce, gasPrice, gasLimit, to, value, dataBytes ) with Unsigned {
-      def sign( privateKey : EthPrivateKey )( implicit provider : jce.Provider ) : Signed.Message = Signed.Message( this, privateKey.sign( this.baseRLP.toArray )( provider ) );
+      def sign( privateKey : EthPrivateKey )( implicit provider : jce.Provider ) : Signed.Message = Signed.Message( this, privateKey.sign( this.baseRlp.toArray )( provider ) );
     }
 
     object ContractCreation { // note the defensive array clone()!
@@ -67,7 +68,7 @@ object EthTransaction {
     }
     final class ContractCreation private ( nonce : BigInt, gasPrice : BigInt, gasLimit : BigInt, value : BigInt, initBytes : Array[Byte] ) 
         extends Abstract.ContractCreation( nonce, gasPrice, gasLimit, value, initBytes ) with Unsigned {
-      def sign( privateKey : EthPrivateKey )( implicit provider : jce.Provider ) : Signed.ContractCreation = Signed.ContractCreation( this, privateKey.sign( this.baseRLP.toArray )( provider ) );
+      def sign( privateKey : EthPrivateKey )( implicit provider : jce.Provider ) : Signed.ContractCreation = Signed.ContractCreation( this, privateKey.sign( this.baseRlp.toArray )( provider ) );
     }
   }
   sealed trait Unsigned extends Abstract {
@@ -109,7 +110,7 @@ object EthTransaction {
   sealed trait Signed extends Abstract {
     val signature   : EthSignature;
 
-    lazy val signedHash = EthHash.hash(baseRLP.toArray);
+    lazy val signedHash = EthHash.hash(baseRlp.toArray);
 
     def v : Byte   = signature.v;
     def r : BigInt = signature.r;
@@ -133,6 +134,9 @@ object EthTransaction {
       }
     }
     override def hashCode() : Int = baseHash ^ signature.##;
+
+    private def sigRlpElements : Seq[RLP.Encodable] = Seq( RLP.Encodable.UnsignedInt( v.toInt ), RLP.Encodable.UnsignedBigInt( r ), RLP.Encodable.UnsignedBigInt( s ) );
+    lazy val rlpBytes : Seq[Byte] = RLP.encode( RLP.Encodable.Seq( baseRlpElements ++ sigRlpElements ) );
   }
   trait Message extends EthTransaction {
     def data : IndexedSeq[Byte];
