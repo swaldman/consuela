@@ -25,7 +25,7 @@ object ByteArrayValue {
 }
 
 trait ByteArrayValue {
-  protected val _bytes : Array[Byte];
+  protected val _bytes : Array[Byte]; // should be protected by a defensive copy if references may have leaked
 
   private lazy val classSimpleName = this.getClass.getSimpleName;
   protected def stringTag : String = classSimpleName;

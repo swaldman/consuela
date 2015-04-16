@@ -11,7 +11,7 @@ object Hash {
   object SHA3_256 extends Hasher[SHA3_256] with Hasher.FixedLength {
     def withBytes( bytes : Array[Byte] ) : SHA3_256 = {
       require( bytes.length == HashLength, s"An SHA3_356 hash must have a fixed length of ${HashLength} bytes, cannot create with ${bytes.length} bytes. bytes -> ${bytes}" )
-      new SHA3_256(bytes);
+      new SHA3_256(bytes.clone());
     }
     def withBytes( bytes : Seq[Byte] ) : SHA3_256 = withBytes( bytes.toArray );
     def hash( bytes : Array[Byte] ) : SHA3_256 = new SHA3_256(hash_SHA3_256(bytes));
