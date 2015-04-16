@@ -8,9 +8,6 @@ object EthTrieDb {
   val BranchLength        = Nibbles.length + 1;
   val EmptyLength         = 0;
 
-  val EmptyByteSeq        = Seq.empty[Byte];
-  val EmptyHash           = EthHash.hash( RLP.Encoded.EmptyByteSeq )
-
   private def aerr( msg : String ) = throw new AssertionError( msg );
 
   object Test {
@@ -18,15 +15,15 @@ object EthTrieDb {
 
     class Db extends EthTrieDb {
       private[this] val _map = scala.collection.mutable.Map.empty[EthHash,Node];
-      _map += ( EmptyHash -> Empty );
+      _map += ( EmptyTrieHash -> Empty );
 
       def put( hash : EthHash, node : Node ) : Unit = this.synchronized{ _map += ( hash -> node ) }
       def apply( hash : EthHash ) : Node = this.synchronized{ _map( hash ) }
     }
-    class Trie( testdb : Db = new Db, rootHash : EthHash = EmptyHash ) extends AbstractEthTrie[Trie]( testdb, rootHash ) {
+    class Trie( testdb : Db = new Db, rootHash : EthHash = EmptyTrieHash ) extends AbstractEthTrie[Trie]( testdb, rootHash ) {
       def instantiateSuccessor( newRootHash : EthHash ) : Trie =  new Trie( testdb, newRootHash );
     }
-    class SecureTrie( testdb : Db = new Db, rootHash : EthHash = EmptyHash ) extends AbstractEthSecureTrie[SecureTrie]( testdb, rootHash ) {
+    class SecureTrie( testdb : Db = new Db, rootHash : EthHash = EmptyTrieHash ) extends AbstractEthSecureTrie[SecureTrie]( testdb, rootHash ) {
       def instantiateSuccessor( newRootHash : EthHash ) : SecureTrie =  new SecureTrie( testdb, newRootHash );
     }
   }
@@ -54,7 +51,7 @@ trait EthTrieDb extends EmbeddableEthStylePMTrie.Database[Nibble,Seq[Byte],EthHa
     val nodeRLP = toRLP( node );
     if (nodeRLP.length == 0) NodeSource.Empty else NodeSource.Hash( EthHash.hash( nodeRLP ) )
   }
-  def EmptyHash = EthTrieDb.EmptyHash;
+  def EmptyHash = EmptyTrieHash;
 
   def rlpToNodeSource( nodeRLP : Seq[Byte], mbKnownNode : Option[Node] = None ) : NodeSource = {
     if (nodeRLP == RLP.Encoded.EmptyByteSeq) {
