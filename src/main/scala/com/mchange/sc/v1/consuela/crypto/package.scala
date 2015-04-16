@@ -213,8 +213,11 @@ package object crypto {
         }
         override def hashCode : Int = this.recId ^ Arrays.hashCode( this.publicKeyBytes );
 
-        def v = recId + 27;
+        def v = vFromRecId( recId );
       }
+
+      private def vFromRecId( recId : Int ) = recId + 27;
+      private def recIdFromV( v : Int ) = v - 27;
 
       def recoverPublicKeyAndV( sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] ) : Option[RecoveredPublicKeyAndV] = {
         (0 to 3).foldLeft( None : Option[RecoveredPublicKeyAndV] ){ ( mbr, i ) =>
@@ -225,6 +228,12 @@ package object crypto {
           }
         }
       }
+
+      /**
+       *  @return a 64 byte / 512 bit byte array which is the concatenation of the byte representations
+       *          of two 256 bit big-endian ints X and Y
+       */ 
+      def recoverPublicKeyBytesV( v : Int, sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] ) : Option[Array[Byte]] = recoverPublicKeyBytes( recIdFromV(v), sigR, sigS, signed );
 
       /**
        *  @return a 64 byte / 512 bit byte array which is the concatenation of the byte representations
