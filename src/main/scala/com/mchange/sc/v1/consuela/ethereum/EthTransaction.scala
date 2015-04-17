@@ -26,7 +26,7 @@ object EthTransaction {
     val nonce : BigInt,
     val gasPrice : BigInt, 
     val gasLimit : BigInt, 
-    val mbto : Option[EthAddress], 
+    val mbTo : Option[EthAddress], 
     val value : BigInt, 
     private[EthTransaction] val payloadBytes : Array[Byte] 
   ) extends EthTransaction {
@@ -38,20 +38,22 @@ object EthTransaction {
       this.nonce == other.nonce &&
       this.gasPrice == other.gasPrice &&
       this.gasLimit == other.gasLimit &&
-      this.mbto == other.mbto &&
+      this.mbTo == other.mbTo &&
       Arrays.equals( this.payloadBytes, other.payloadBytes )
     }
-    protected lazy val baseHash = nonce.## ^ gasPrice.## ^ gasLimit.## ^ mbto.## ^ MurmurHash3.bytesHash( payloadBytes )
+    protected lazy val baseHash = nonce.## ^ gasPrice.## ^ gasLimit.## ^ mbTo.## ^ MurmurHash3.bytesHash( payloadBytes )
 
     protected def encodableNonce    = RLP.Encodable.UnsignedBigInt( nonce );
     protected def encodableGasPrice = RLP.Encodable.UnsignedBigInt( gasPrice );
-    protected def encodableMbto       = mbto.fold( RLP.Encodable.EmptyByteSeq )( address => RLP.Encodable.ByteSeq( address.bytes ) );
+    protected def encodableMbTo     = mbTo.fold( RLP.Encodable.EmptyByteSeq )( address => RLP.Encodable.ByteSeq( address.bytes ) );
     protected def encodableValue    = RLP.Encodable.UnsignedBigInt( value );
     protected def encodablePayload  = RLP.Encodable.ByteSeq( payloadBytes );
 
-    protected def baseRlpElements : Seq[RLP.Encodable] = Seq( encodableNonce, encodableGasPrice, encodableMbto, encodableValue, encodablePayload );
+    protected def baseRlpElements : Seq[RLP.Encodable] = Seq( encodableNonce, encodableGasPrice, encodableMbTo, encodableValue, encodablePayload );
     protected def baseRlp         : Seq[Byte]          = RLP.encode( RLP.Encodable.Seq( baseRlpElements ) );
   }
+
+
   object Unsigned {
     object Message { // note the defensive array clone()!
       def apply( nonce : BigInt, gasPrice : BigInt, gasLimit : BigInt, to : EthAddress, value : BigInt, dataBytes : Array[Byte] ) = {
@@ -84,6 +86,8 @@ object EthTransaction {
     }
     override def hashCode() : Int = baseHash;
   }
+
+
   object Signed {
     object Message { // note the defensive array clone()!
       def apply( nonce : BigInt, gasPrice : BigInt, gasLimit : BigInt, to : EthAddress, value : BigInt, dataBytes : Array[Byte], signature : EthSignature ) = {
@@ -154,7 +158,7 @@ sealed trait EthTransaction {
   def nonce    : BigInt;
   def gasPrice : BigInt;
   def gasLimit : BigInt;
-  def mbto     : Option[EthAddress];
+  def mbTo     : Option[EthAddress];
   def value    : BigInt;
 
   def signed   : Boolean;
