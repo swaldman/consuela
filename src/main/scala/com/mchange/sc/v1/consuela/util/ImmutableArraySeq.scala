@@ -8,11 +8,11 @@ object ImmutableArraySeq {
   def apply[A]( source : Array[A] )( implicit atag : scala.reflect.ClassTag[A] ) = new ImmutableArraySeq[A]( source.clone() )( atag );
 
   abstract class Abstract[A] protected ( private val inner : Array[A] )( implicit atag : scala.reflect.ClassTag[A] ) extends immutable.IndexedSeq[A] {
-    override def apply( i : Int ) : A = inner.apply(i);
+    override def apply( i : scala.Int ) : A = inner.apply(i);
 
     override def iterator : Iterator[A] = inner.iterator;
 
-    override def length : Int = inner.length;
+    override def length : scala.Int = inner.length;
 
     override def toArray[B >: A](implicit btag : scala.reflect.ClassTag[B]) : Array[B] = {
       try {
@@ -41,6 +41,19 @@ object ImmutableArraySeq {
       o match {
         case other : ImmutableArraySeq.Byte => Arrays.equals( this.byteInner, other.byteInner );
         case whatever                       => super.equals( whatever );
+      }
+    }
+  }
+
+
+  object Int {
+    def apply( source : Array[scala.Int] )( implicit atag : scala.reflect.ClassTag[scala.Int] ) = new ImmutableArraySeq.Int( source.clone() )( atag );
+  }
+  final class Int private ( private val intInner : Array[scala.Int] )( implicit atag : scala.reflect.ClassTag[scala.Int] ) extends Abstract[scala.Int]( intInner ) {
+    override def equals( o : Any ) : Boolean = {
+      o match {
+        case other : ImmutableArraySeq.Int => Arrays.equals( this.intInner, other.intInner );
+        case whatever                      => super.equals( whatever );
       }
     }
   }
