@@ -3,7 +3,7 @@ package com.mchange.sc.v1.consuela.conf;
 import java.security.Provider;
 import java.security.Security;
 
-import com.mchange.sc.v1.consuela.jce;
+import com.mchange.sc.v1.consuela.crypto.jce;
 
 import com.typesafe.config.{Config => TSConfig, ConfigFactory => TSConfigFactory};
 
@@ -15,20 +15,16 @@ object Config {
 
   val ConfigName = "consuela";
 
-  val BouncyCastleProviderCode = "BC";
-  val BouncyCastleProviderFqcn = "org.bouncycastle.jce.provider.BouncyCastleProvider";
-
   private val _inner : TSConfig = TRACE.attempt( TSConfigFactory.load().getConfig( ConfigName ) ).getOrElse( TSConfigFactory.empty("Default settings.") );
 
-  // configured values not published as implicits
-  val JceForbidOtherCrypto  = Item.JceForbidOtherCrypto.get;
-  val JceProviderClassNames = Item.JceProviderClassNames.get;
-  val JceProvider           = Item.JceProvider.get;
+  val CryptoJceProviderName               = Item.CryptoJceProviderName.get;
+  val CryptoJceProviderClassNames         = Item.CryptoJceProviderClassNames.get;
+  val CryptoJceForbidUseOfOtherProviders  = Item.CryptoJceForbidUseOfOtherProviders.get;
 
   private[this] object Item {
-    val JceProvider           = StringItem( "jce.provider", BouncyCastleProviderCode ); //bouncycastle
-    val JceProviderClassNames = StringListItem( "jce.providerClassNames", List( BouncyCastleProviderFqcn ) );
-    val JceForbidOtherCrypto  = BooleanItem("jce.forbidOtherCrypto", false);
+    val CryptoJceProviderName              = StringItem( "crypto.jce.providerName", "BC" ); //bouncycastle
+    val CryptoJceProviderClassNames        = StringListItem( "crypto.jce.providerClassNames", List( "org.bouncycastle.jce.provider.BouncyCastleProvider" ) );
+    val CryptoJceForbidUseOfOtherProviders = BooleanItem("crypto.jce.forbidUseOfOtherProviders", false);
   }
   private[this] trait Item[T] {
     def path : String;

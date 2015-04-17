@@ -1,6 +1,5 @@
 package com.mchange.sc.v1.consuela.ethereum;
 
-import com.mchange.sc.v1.consuela.jce;
 import com.mchange.sc.v1.consuela.crypto;
 import com.mchange.sc.v1.consuela.Implicits._;
 
@@ -26,27 +25,24 @@ final class EthPrivateKey private( protected val _bytes : Array[Byte] ) extends 
 
   def s = this.toBigInt;
 
-  private def signRawBytes( rawBytes : Array[Byte] )( implicit provider : jce.Provider ) : EthSignature = { 
-    //XXX TODO: Do the best that can be done to make this more sensitive to provider
-    jce.Provider.warnForbidUnconfiguredUseOfBouncyCastle( this )( provider )
-
+  private def signRawBytes( rawBytes : Array[Byte] ) : EthSignature = { 
     import crypto.secp256k1._;
-    signature( this.toBigInteger, rawBytes )( provider ) match {
+    signature( this.toBigInteger, rawBytes ) match {
       case Left( bytes ) => throw new UnexpectedSignatureFormatException( bytes.hex );
       case Right( Signature( r, s, Some( v ) ) ) => EthSignature( v, r, s );
       case Right( Signature( r, s, None ) )      => {
-        val mbRecovered = BouncyCastlePublicKeyComputer.recoverPublicKeyAndV( r, s, rawBytes );
+        val mbRecovered = recoverPublicKeyAndV( r, s, rawBytes );
         mbRecovered.fold( throw new EthereumException( s"Could find only partial signature [ v -> ???, r -> ${r}, s -> ${s} ]" ) ) { recovered =>
           EthSignature( recovered.v.toByte, r, s )
         }
       }
     }
   }
-  private def signEthHash( hash : EthHash )( implicit provider : jce.Provider ) = this.signRawBytes( hash.toByteArray )( provider );
-  private def signEthHash( document : Array[Byte] )( implicit provider : jce.Provider ) : EthSignature = this.signEthHash( EthHash.hash( document ) )( provider );
+  private def signEthHash( hash : EthHash ) = this.signRawBytes( hash.toByteArray );
+  private def signEthHash( document : Array[Byte] ) : EthSignature = this.signEthHash( EthHash.hash( document ) );
 
   // default signing scheme
-  def sign( document : Array[Byte] )( implicit provider : jce.Provider ) : EthSignature = this.signEthHash( document )( provider );
+  def sign( document : Array[Byte] ) : EthSignature = this.signEthHash( document );
 
   lazy val toPublicKey = EthPublicKey( this );
 }

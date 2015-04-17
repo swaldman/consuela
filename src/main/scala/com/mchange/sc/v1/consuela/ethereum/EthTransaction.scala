@@ -62,7 +62,7 @@ object EthTransaction {
     }
     final class Message private ( nonce : BigInt, gasPrice : BigInt, gasLimit : BigInt, to : EthAddress, value : BigInt, dataBytes : Array[Byte] ) 
         extends Abstract.Message( nonce, gasPrice, gasLimit, to, value, dataBytes ) with Unsigned {
-      def sign( privateKey : EthPrivateKey )( implicit provider : jce.Provider ) : Signed.Message = Signed.Message( this, privateKey.sign( this.baseRlp.toArray )( provider ) );
+      def sign( privateKey : EthPrivateKey ) : Signed.Message = Signed.Message( this, privateKey.sign( this.baseRlp.toArray ) );
     }
 
     object ContractCreation { // note the defensive array clone()!
@@ -70,13 +70,13 @@ object EthTransaction {
     }
     final class ContractCreation private ( nonce : BigInt, gasPrice : BigInt, gasLimit : BigInt, value : BigInt, initBytes : Array[Byte] ) 
         extends Abstract.ContractCreation( nonce, gasPrice, gasLimit, value, initBytes ) with Unsigned {
-      def sign( privateKey : EthPrivateKey )( implicit provider : jce.Provider ) : Signed.ContractCreation = Signed.ContractCreation( this, privateKey.sign( this.baseRlp.toArray )( provider ) );
+      def sign( privateKey : EthPrivateKey ) : Signed.ContractCreation = Signed.ContractCreation( this, privateKey.sign( this.baseRlp.toArray ) );
     }
   }
   sealed trait Unsigned extends Abstract {
     override def signed = false;
 
-    def sign( privateKey : EthPrivateKey )( implicit provider : jce.Provider ) : Signed;
+    def sign( privateKey : EthPrivateKey ) : Signed;
 
     override def equals( a : Any ) : Boolean = {
       a match {
@@ -121,11 +121,8 @@ object EthTransaction {
     def s : BigInt = signature.s;
 
     lazy val senderPublicKey : EthPublicKey = {
-      //XXX TODO: Do the best that can be done to make this more sensitive to provider
-      jce.Provider.warnForbidUnconfiguredUseOfBouncyCastle( this )
-
       def fail : EthPublicKey = throw new EthereumException(s"Could not recover public key for signature ${signature} with signed hash '${signedHash}'");
-      crypto.secp256k1.BouncyCastlePublicKeyComputer.recoverPublicKeyBytesV( v, r.bigInteger, s.bigInteger, signedHash.toByteArray ).fold( fail )( pubKeyBytes => EthPublicKey( pubKeyBytes ) );
+      crypto.secp256k1.recoverPublicKeyBytesV( v, r.bigInteger, s.bigInteger, signedHash.toByteArray ).fold( fail )( pubKeyBytes => EthPublicKey( pubKeyBytes ) );
     }
     lazy val sender : EthAddress = senderPublicKey.toAddress;
 

@@ -11,12 +11,15 @@ import java.security.spec._;
 import java.security.{Signature => JcaSignature};
 
 import java.math.BigInteger;
+import java.util.Arrays;
+import scala.util.hashing.MurmurHash3;
 
 import com.mchange.sc.v1.consuela.hash.Hash;
 import com.mchange.sc.v1.consuela.Implicits._;
 
 package object crypto {
   class InvalidSignatureException( message : String, t : Throwable = null ) extends ConsuelaException( message, t );
+  class ForbiddenProviderException( message : String, t : Throwable = null ) extends ConsuelaException( message, t );
 
   implicit val logger = MLogger( this );
 
@@ -38,7 +41,7 @@ package object crypto {
     }
 
     def generate_jce_keypair( randomness : SecureRandom )( implicit provider : jce.Provider ) : KeyPair = {
-      val generator = KeyPairGenerator.getInstance(SigAlgoName, provider.code);
+      val generator = KeyPairGenerator.getInstance(SigAlgoName, provider.name);
       generator.initialize( ECGenParamSpec, randomness );
       generator.generateKeyPair();
     }
@@ -82,7 +85,7 @@ package object crypto {
 
     def signatureBytes( privateKeyAsS : BigInteger, signMe : Array[Byte] )( implicit provider : jce.Provider ) : Array[Byte] = {
       val ecPrivKey = jce_private_key_from_S( privateKeyAsS )( provider ); //algo params are encoded here
-      val signer = JcaSignature.getInstance(SigAlgoName, provider.code);
+      val signer = JcaSignature.getInstance(SigAlgoName, provider.name);
       signer.initSign( ecPrivKey );
       signer.update( signMe );
       signer.sign()
@@ -103,15 +106,30 @@ package object crypto {
     }
 
     private def findSignatureParser( implicit provider : jce.Provider ) : SignatureParser = {
-      provider.code match {
-        case "BC" => BouncyCastleSignatureParser;
-        case _    => BouncyCastleSignatureParser; //all we have for now, but we'll see over time...
+      val out = {
+        provider match {
+          case jce.Provider.BouncyCastle => BouncyCastleSignatureParser;
+          case _                         => BouncyCastleSignatureParser;
+        }
       }
+      jce.Provider.warnForbidUnavailableProvider( "findSignatureParser(...)", out.implementingProvider )( provider )
+      out
+    }
+
+    private def findPublicKeyComputer( implicit provider : jce.Provider ) : PublicKeyComputer = {
+      val out = {
+        provider match {
+          case jce.Provider.BouncyCastle => BouncyCastlePublicKeyComputer;
+          case _                         => BouncyCastlePublicKeyComputer;
+        }
+      }
+      jce.Provider.warnForbidUnavailableProvider( "findPublicKeyComputer(...)", out.implementingProvider )( provider )
+      out
     }
 
     def verifySignatureBytes( signed : Array[Byte], signatureBytes : Array[Byte], pubKeyX : BigInteger, pubKeyY : BigInteger )( implicit provider : jce.Provider ) : Boolean = {
       val ecPubKey = jce_public_key_from_XY( pubKeyX, pubKeyY )( provider ); //algo params are encoded here
-      val signer = JcaSignature.getInstance(SigAlgoName, provider.code);
+      val signer = JcaSignature.getInstance(SigAlgoName, provider.name);
       signer.initVerify( ecPubKey );
       signer.update( signed );
       signer.verify( signatureBytes )
@@ -124,55 +142,100 @@ package object crypto {
 
     case class Signature( val r : BigInteger, s : BigInteger, v : Option[Byte] = None);
     trait SignatureParser {
+      def implementingProvider : jce.Provider;
       def parse( sigBytes : Array[Byte] ) : Either[Array[Byte],Signature];
       def encode( sig : Signature ) : Array[Byte];
     }
 
-    object BouncyCastleSignatureParser extends SignatureParser {
-      jce.Provider.warnForbidUnconfiguredUseOfBouncyCastle( this.getClass.getName )
-
-      import java.io._;
-      import org.bouncycastle.asn1._;
-      import com.mchange.sc.v2.lang.borrow;
-
-      def parse( sigBytes : Array[Byte] ) : Either[Array[Byte],Signature] = {
-        def decodeInteger( i : ASN1Integer ) : BigInteger = i.getValue();
-
-        borrow( new ASN1InputStream( new ByteArrayInputStream( sigBytes ) ) ) { ais =>
-          try {
-            val primitive : ASN1Primitive = ais.readObject();
-            val sequence  : DLSequence = primitive.asInstanceOf[DLSequence];
-            Right( Signature( decodeInteger( sequence.getObjectAt(0).asInstanceOf[ASN1Integer] ), decodeInteger( sequence.getObjectAt(1).asInstanceOf[ASN1Integer] ) ) )
-          } catch {
-            case e : Exception => {
-              WARNING.log( s"Unable to parse signature '${sigBytes.hex}'", e );
-              Left(sigBytes)
-            }
-          }
+    /*
+     * Note that "v" here refers to a standardized attribute of our signature (not "value" as
+     * the pairing with "key" might suggest). See e.g. the Ethereum yellow paper for information.
+     *
+     * recId should fall in the range [0,3]; v within [27,30]; they represent the same value, just offset by 27
+     *
+     * we don't test the constructor arguments, since they will have all been tested as pre- 
+     * or post-conditions of recoverPublicKeyBytes(...)
+     */ 
+    final class RecoveredPublicKeyAndV private[crypto]( val recId : Int, val publicKeyBytes : Array[Byte] ) {
+      override def equals( other : Any ) : Boolean = {
+        other match {
+          case rkv : RecoveredPublicKeyAndV => this.recId == rkv.recId && Arrays.equals( this.publicKeyBytes, rkv.publicKeyBytes );
+          case _                            => false;
         }
       }
-      def encode( sig : Signature ) : Array[Byte] = {
-        // grrr...
-        class AutocloseableASN1OutputStream( os : OutputStream ) extends ASN1OutputStream( os ) with AutoCloseable;
-        borrow( new ByteArrayOutputStream() ) { baos =>
-          borrow( new AutocloseableASN1OutputStream( baos ) ) { aos =>
-            val encodedR = new ASN1Integer( sig.r );
-            val encodedS = new ASN1Integer( sig.s );
-            val sequence = new DLSequence( Array[ASN1Encodable]( encodedR, encodedS ) );
-            aos.writeObject( sequence );
-            aos.close();
-            sig.v.foreach( v => WARNING.log( s"Found v value ${v}; It will not be encoded as ${this} does not include v in its binary signature format." ) );
-            baos.toByteArray
-          }
-        }
-      }
+      override def hashCode : Int = this.recId ^ MurmurHash3.bytesHash( this.publicKeyBytes );
+
+      def v = vFromRecId( recId );
+    }
+
+    def vFromRecId( recId : Int ) = recId + 27;
+    def recIdFromV( v : Int )     = v     - 27;
+
+    /**
+      *  @return a 64 byte / 512 bit byte array which is the concatenation of the byte representations
+      *          of two 256 bit big-endian ints X and Y
+      */ 
+    def computePublicKeyBytes( privateKeyAsBigInteger : BigInteger )( implicit provider : jce.Provider ) : Array[Byte] = {
+      findPublicKeyComputer( provider ).computePublicKeyBytes( privateKeyAsBigInteger )( provider )
     }
 
     /**
-     * Derived from https://github.com/ethereum/ethereumj/blob/master/ethereumj-core/src/main/java/org/ethereum/crypto/ECKey.java
-     * which is in turn derived from https://github.com/bitcoinj/bitcoinj/blob/master/core/src/main/java/com/google/bitcoin/core/ECKey.java
-     */   
-    object BouncyCastlePublicKeyComputer {
+      *  @return a 64 byte / 512 bit byte array which is the concatenation of the byte representations
+      *          of two 256 bit big-endian ints X and Y
+      */ 
+    def recoverPublicKeyBytesV( v : Int, sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] )( implicit provider : jce.Provider ) : Option[Array[Byte]] = {
+      findPublicKeyComputer( provider ).recoverPublicKeyBytesV( v, sigR, sigS, signed )( provider )
+    }
+
+    /**
+      *  @return a 64 byte / 512 bit byte array which is the concatenation of the byte representations
+      *          of two 256 bit big-endian ints X and Y
+      */ 
+    def recoverPublicKeyBytesRecId( recId : Int, sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] )( implicit provider : jce.Provider ) : Option[Array[Byte]] = {
+      findPublicKeyComputer( provider ).recoverPublicKeyBytesRecId( recId, sigR, sigS, signed )( provider )
+    }
+
+    def recoverPublicKeyAndV( sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] )( implicit provider : jce.Provider ) : Option[RecoveredPublicKeyAndV] = {
+      findPublicKeyComputer( provider ).recoverPublicKeyAndV( sigR, sigS, signed )( provider )
+    }
+
+    private trait PublicKeyComputer {
+      def implementingProvider : jce.Provider;
+
+      /**
+        *  @return a 64 byte / 512 bit byte array which is the concatenation of the byte representations
+        *          of two 256 bit big-endian ints X and Y
+        */ 
+      def computePublicKeyBytes( privateKeyAsBigInteger : BigInteger )( implicit provider : jce.Provider ) : Array[Byte];
+
+      /**
+        *  @return a 64 byte / 512 bit byte array which is the concatenation of the byte representations
+        *          of two 256 bit big-endian ints X and Y
+        */ 
+      def recoverPublicKeyBytesV( v : Int, sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] )( implicit provider : jce.Provider ) : Option[Array[Byte]];
+
+      /**
+        *  @return a 64 byte / 512 bit byte array which is the concatenation of the byte representations
+        *          of two 256 bit big-endian ints X and Y
+        */ 
+      def recoverPublicKeyBytesRecId( recId : Int, sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] )( implicit provider : jce.Provider ) : Option[Array[Byte]];
+
+      def recoverPublicKeyAndV( sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] )( implicit provider : jce.Provider ) : Option[RecoveredPublicKeyAndV];
+    }
+
+    /*
+     * 
+     * (Unfortunately) Provider-specific APIs
+     * 
+     */ 
+
+    // BouncyCastle
+
+    /**
+      * Derived from https://github.com/ethereum/ethereumj/blob/master/ethereumj-core/src/main/java/org/ethereum/crypto/ECKey.java
+      * which is in turn derived from https://github.com/bitcoinj/bitcoinj/blob/master/core/src/main/java/com/google/bitcoin/core/ECKey.java
+      */   
+    private object BouncyCastlePublicKeyComputer extends PublicKeyComputer {
       import org.bouncycastle.asn1.sec.SECNamedCurves;
       import org.bouncycastle.asn1.x9.X9IntegerConverter;
       import org.bouncycastle.asn1.x9.X9ECParameters;
@@ -180,49 +243,25 @@ package object crypto {
       import org.bouncycastle.math.ec.ECAlgorithms;
       import org.bouncycastle.math.ec.ECCurve;
       import org.bouncycastle.math.ec.ECPoint;
-      import java.util.Arrays;
+
+      override val implementingProvider : jce.Provider = jce.Provider.BouncyCastle;
 
       val Params = SECNamedCurves.getByName(ECParamBundleName);
       val Curve = new ECDomainParameters(Params.getCurve(), Params.getG(), Params.getN(), Params.getH());
-
-      jce.Provider.warnForbidUnconfiguredUseOfBouncyCastle( this.getClass.getName )
 
       /**
        *  @return a 64 byte / 512 bit byte array which is the concatenation of the byte representations
        *          of two 256 bit big-endian ints X and Y
        */ 
-      def computePublicKeyBytes( privateKeyAsBigInteger : BigInteger ) : Array[Byte] = {
+      def computePublicKeyBytes( privateKeyAsBigInteger : BigInteger )( implicit provider : jce.Provider ) : Array[Byte] = {
         Curve.getG().multiply( privateKeyAsBigInteger ).getEncoded( false ).drop(1) // false means uncompressed, we drop the header byte that says so
       } ensuring( _.length == 64 )
 
-      /*
-       * Note that "v" here refers to a standardized attribute of our signature (not "value" as
-       * the pairing with "key" might suggest). See e.g. the Ethereum yellow paper for information.
-       *
-       * recId should fall in the range [0,3]; v within [27,30]
-       *
-       * we don't test the constructor arguments, since they will have all been tested as pre- 
-       * or post-conditions of recoverPublicKeyBytes(...)
-       */ 
-      final class RecoveredPublicKeyAndV private[BouncyCastlePublicKeyComputer]( val recId : Int, val publicKeyBytes : Array[Byte] ) {
-        override def equals( other : Any ) : Boolean = {
-          other match {
-            case rkv : RecoveredPublicKeyAndV => this.recId == rkv.recId && Arrays.equals( this.publicKeyBytes, rkv.publicKeyBytes );
-            case _                            => false;
-          }
-        }
-        override def hashCode : Int = this.recId ^ Arrays.hashCode( this.publicKeyBytes );
 
-        def v = vFromRecId( recId );
-      }
-
-      private def vFromRecId( recId : Int ) = recId + 27;
-      private def recIdFromV( v : Int ) = v - 27;
-
-      def recoverPublicKeyAndV( sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] ) : Option[RecoveredPublicKeyAndV] = {
+      def recoverPublicKeyAndV( sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] )( implicit provider : jce.Provider ) : Option[RecoveredPublicKeyAndV] = {
         (0 to 3).foldLeft( None : Option[RecoveredPublicKeyAndV] ){ ( mbr, i ) =>
           if (mbr == None) {
-            recoverPublicKeyBytes( i, sigR, sigS, signed ).fold( None : Option[RecoveredPublicKeyAndV] )( bytes => Some( new RecoveredPublicKeyAndV( i, bytes ) ) )
+            recoverPublicKeyBytesRecId( i, sigR, sigS, signed )( provider ).fold( None : Option[RecoveredPublicKeyAndV] )( bytes => Some( new RecoveredPublicKeyAndV( i, bytes ) ) )
           } else { 
             mbr
           }
@@ -233,13 +272,15 @@ package object crypto {
        *  @return a 64 byte / 512 bit byte array which is the concatenation of the byte representations
        *          of two 256 bit big-endian ints X and Y
        */ 
-      def recoverPublicKeyBytesV( v : Int, sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] ) : Option[Array[Byte]] = recoverPublicKeyBytes( recIdFromV(v), sigR, sigS, signed );
+      def recoverPublicKeyBytesV( v : Int, sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] )( implicit provider : jce.Provider ) : Option[Array[Byte]] = {
+        recoverPublicKeyBytesRecId( recIdFromV(v), sigR, sigS, signed )( provider );
+      }
 
       /**
        *  @return a 64 byte / 512 bit byte array which is the concatenation of the byte representations
        *          of two 256 bit big-endian ints X and Y
        */ 
-      def recoverPublicKeyBytes( recId : Int, sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] ) : Option[Array[Byte]] = {
+      def recoverPublicKeyBytesRecId( recId : Int, sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] )( implicit provider : jce.Provider ) : Option[Array[Byte]] = {
         require(recId >= 0);
         require(sigR.signum() >= 0);
         require(sigS.signum() >= 0);
@@ -277,6 +318,46 @@ package object crypto {
 
             // we have to drop a header byte indicating the lack of encodedness
             Some( q.getEncoded(false).drop(1).ensuring( _.length == 64 ) )
+          }
+        }
+      }
+    }
+
+    private object BouncyCastleSignatureParser extends SignatureParser {
+      import java.io._;
+      import org.bouncycastle.asn1._;
+      import com.mchange.sc.v2.lang.borrow;
+
+      override val implementingProvider : jce.Provider = jce.Provider.BouncyCastle;
+
+      def parse( sigBytes : Array[Byte] ) : Either[Array[Byte],Signature] = {
+        def decodeInteger( i : ASN1Integer ) : BigInteger = i.getValue();
+
+        borrow( new ASN1InputStream( new ByteArrayInputStream( sigBytes ) ) ) { ais =>
+          try {
+            val primitive : ASN1Primitive = ais.readObject();
+            val sequence  : DLSequence = primitive.asInstanceOf[DLSequence];
+            Right( Signature( decodeInteger( sequence.getObjectAt(0).asInstanceOf[ASN1Integer] ), decodeInteger( sequence.getObjectAt(1).asInstanceOf[ASN1Integer] ) ) )
+          } catch {
+            case e : Exception => {
+              WARNING.log( s"Unable to parse signature '${sigBytes.hex}'", e );
+              Left(sigBytes)
+            }
+          }
+        }
+      }
+      def encode( sig : Signature ) : Array[Byte] = {
+        // grrr...
+        class AutocloseableASN1OutputStream( os : OutputStream ) extends ASN1OutputStream( os ) with AutoCloseable;
+        borrow( new ByteArrayOutputStream() ) { baos =>
+          borrow( new AutocloseableASN1OutputStream( baos ) ) { aos =>
+            val encodedR = new ASN1Integer( sig.r );
+            val encodedS = new ASN1Integer( sig.s );
+            val sequence = new DLSequence( Array[ASN1Encodable]( encodedR, encodedS ) );
+            aos.writeObject( sequence );
+            aos.close();
+            sig.v.foreach( v => WARNING.log( s"Found v value ${v}; It will not be encoded as ${this} does not include v in its binary signature format." ) );
+            baos.toByteArray
           }
         }
       }

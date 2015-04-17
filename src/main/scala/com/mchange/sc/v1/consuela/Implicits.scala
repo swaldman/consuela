@@ -7,7 +7,7 @@ import java.math.BigInteger;
 import javax.xml.bind.DatatypeConverter;
 
 object Implicits {
-  implicit val MainProvider : jce.Provider = jce.Provider.ConfiguredProvider;
+  implicit val MainProvider : crypto.jce.Provider = crypto.jce.Provider.ConfiguredProvider;
 
   implicit class RichString( string : String ) {
     def decodeHex : Array[Byte] = {
