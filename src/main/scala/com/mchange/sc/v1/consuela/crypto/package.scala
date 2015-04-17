@@ -109,6 +109,7 @@ package object crypto {
       val out = {
         provider match {
           case jce.Provider.BouncyCastle => BouncyCastleSignatureParser;
+          case jce.Provider.SpongyCastle => SpongyCastleSignatureParser;
           case _                         => BouncyCastleSignatureParser;
         }
       }
@@ -120,6 +121,7 @@ package object crypto {
       val out = {
         provider match {
           case jce.Provider.BouncyCastle => BouncyCastlePublicKeyComputer;
+          case jce.Provider.SpongyCastle => SpongyCastlePublicKeyComputer;
           case _                         => BouncyCastlePublicKeyComputer;
         }
       }
@@ -329,6 +331,140 @@ package object crypto {
       import com.mchange.sc.v2.lang.borrow;
 
       override val implementingProvider : jce.Provider = jce.Provider.BouncyCastle;
+
+      def parse( sigBytes : Array[Byte] ) : Either[Array[Byte],Signature] = {
+        def decodeInteger( i : ASN1Integer ) : BigInteger = i.getValue();
+
+        borrow( new ASN1InputStream( new ByteArrayInputStream( sigBytes ) ) ) { ais =>
+          try {
+            val primitive : ASN1Primitive = ais.readObject();
+            val sequence  : DLSequence = primitive.asInstanceOf[DLSequence];
+            Right( Signature( decodeInteger( sequence.getObjectAt(0).asInstanceOf[ASN1Integer] ), decodeInteger( sequence.getObjectAt(1).asInstanceOf[ASN1Integer] ) ) )
+          } catch {
+            case e : Exception => {
+              WARNING.log( s"Unable to parse signature '${sigBytes.hex}'", e );
+              Left(sigBytes)
+            }
+          }
+        }
+      }
+      def encode( sig : Signature ) : Array[Byte] = {
+        // grrr...
+        class AutocloseableASN1OutputStream( os : OutputStream ) extends ASN1OutputStream( os ) with AutoCloseable;
+        borrow( new ByteArrayOutputStream() ) { baos =>
+          borrow( new AutocloseableASN1OutputStream( baos ) ) { aos =>
+            val encodedR = new ASN1Integer( sig.r );
+            val encodedS = new ASN1Integer( sig.s );
+            val sequence = new DLSequence( Array[ASN1Encodable]( encodedR, encodedS ) );
+            aos.writeObject( sequence );
+            aos.close();
+            sig.v.foreach( v => WARNING.log( s"Found v value ${v}; It will not be encoded as ${this} does not include v in its binary signature format." ) );
+            baos.toByteArray
+          }
+        }
+      }
+    }
+
+    // SpongyCastle for Android
+
+    /**
+      * Derived from https://github.com/ethereum/ethereumj/blob/master/ethereumj-core/src/main/java/org/ethereum/crypto/ECKey.java
+      * which is in turn derived from https://github.com/bitcoinj/bitcoinj/blob/master/core/src/main/java/com/google/bitcoin/core/ECKey.java
+      */   
+    private object SpongyCastlePublicKeyComputer extends PublicKeyComputer {
+      import org.spongycastle.asn1.sec.SECNamedCurves;
+      import org.spongycastle.asn1.x9.X9IntegerConverter;
+      import org.spongycastle.asn1.x9.X9ECParameters;
+      import org.spongycastle.crypto.params.ECDomainParameters;
+      import org.spongycastle.math.ec.ECAlgorithms;
+      import org.spongycastle.math.ec.ECCurve;
+      import org.spongycastle.math.ec.ECPoint;
+
+      override val implementingProvider : jce.Provider = jce.Provider.SpongyCastle;
+
+      val Params = SECNamedCurves.getByName(ECParamBundleName);
+      val Curve = new ECDomainParameters(Params.getCurve(), Params.getG(), Params.getN(), Params.getH());
+
+      /**
+       *  @return a 64 byte / 512 bit byte array which is the concatenation of the byte representations
+       *          of two 256 bit big-endian ints X and Y
+       */ 
+      def computePublicKeyBytes( privateKeyAsBigInteger : BigInteger )( implicit provider : jce.Provider ) : Array[Byte] = {
+        Curve.getG().multiply( privateKeyAsBigInteger ).getEncoded( false ).drop(1) // false means uncompressed, we drop the header byte that says so
+      } ensuring( _.length == 64 )
+
+
+      def recoverPublicKeyAndV( sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] )( implicit provider : jce.Provider ) : Option[RecoveredPublicKeyAndV] = {
+        (0 to 3).foldLeft( None : Option[RecoveredPublicKeyAndV] ){ ( mbr, i ) =>
+          if (mbr == None) {
+            recoverPublicKeyBytesRecId( i, sigR, sigS, signed )( provider ).fold( None : Option[RecoveredPublicKeyAndV] )( bytes => Some( new RecoveredPublicKeyAndV( i, bytes ) ) )
+          } else { 
+            mbr
+          }
+        }
+      }
+
+      /**
+       *  @return a 64 byte / 512 bit byte array which is the concatenation of the byte representations
+       *          of two 256 bit big-endian ints X and Y
+       */ 
+      def recoverPublicKeyBytesV( v : Int, sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] )( implicit provider : jce.Provider ) : Option[Array[Byte]] = {
+        recoverPublicKeyBytesRecId( recIdFromV(v), sigR, sigS, signed )( provider );
+      }
+
+      /**
+       *  @return a 64 byte / 512 bit byte array which is the concatenation of the byte representations
+       *          of two 256 bit big-endian ints X and Y
+       */ 
+      def recoverPublicKeyBytesRecId( recId : Int, sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] )( implicit provider : jce.Provider ) : Option[Array[Byte]] = {
+        require(recId >= 0);
+        require(sigR.signum() >= 0);
+        require(sigS.signum() >= 0);
+        require(signed != null);
+        val n     = Curve.getN();  // Curve order.
+        val i     = BigInteger.valueOf(recId / 2);
+        val x     = sigR.add(i.multiply(n));
+        val curve = Curve.getCurve().asInstanceOf[ECCurve.Fp];
+
+        def decompressKey( xBN : BigInteger, yBit : Boolean) : ECPoint = {
+          val x9 = new X9IntegerConverter();
+          val compEnc = x9.integerToBytes(xBN, 1 + x9.getByteLength(curve));
+          compEnc(0) = (if (yBit) 0x03 else 0x02).toByte;
+          curve.decodePoint(compEnc);
+        }
+
+        val prime = curve.getQ();  // Bouncy Castle is not consistent about the letter it uses for the prime.
+        if (x.compareTo(prime) >= 0) {
+          TRACE.log(
+            s"recoverPublicKeyBytes(...) returning NONE for recId ${recId}: Public key cannot have implied x value ${x}, as that is greater than its prime modulus ${prime}"
+          );
+          None
+        } else {
+          val R = decompressKey(x, (recId & 1) == 1);
+          if (!R.multiply(n).isInfinity()) {
+            TRACE.log( s"recoverPublicKeyBytes(...) returning NONE: Unexpectedly non-infinte value of nR; try another recId [current recId: ${recId}]." )
+            None
+          } else {
+            val e = new BigInteger(1, signed);
+            val eInv = BigInteger.ZERO.subtract(e).mod(n);
+            val rInv = sigR.modInverse(n);
+            val srInv = rInv.multiply(sigS).mod(n);
+            val eInvrInv = rInv.multiply(eInv).mod(n);
+            val q = ECAlgorithms.sumOfTwoMultiplies(Curve.getG(), eInvrInv, R, srInv).asInstanceOf[ECPoint.Fp];
+
+            // we have to drop a header byte indicating the lack of encodedness
+            Some( q.getEncoded(false).drop(1).ensuring( _.length == 64 ) )
+          }
+        }
+      }
+    }
+
+    private object SpongyCastleSignatureParser extends SignatureParser {
+      import java.io._;
+      import org.spongycastle.asn1._;
+      import com.mchange.sc.v2.lang.borrow;
+
+      override val implementingProvider : jce.Provider = jce.Provider.SpongyCastle;
 
       def parse( sigBytes : Array[Byte] ) : Either[Array[Byte],Signature] = {
         def decodeInteger( i : ASN1Integer ) : BigInteger = i.getValue();

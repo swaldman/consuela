@@ -17,9 +17,9 @@ object Config {
 
   private val _inner : TSConfig = TRACE.attempt( TSConfigFactory.load().getConfig( ConfigName ) ).getOrElse( TSConfigFactory.empty("Default settings.") );
 
-  val CryptoJceProviderName               = Item.CryptoJceProviderName.get;
-  val CryptoJceProviderClassNames         = Item.CryptoJceProviderClassNames.get;
-  val CryptoJceForbidUseOfOtherProviders  = Item.CryptoJceForbidUseOfOtherProviders.get;
+  val CryptoJceProviderName               = Item.CryptoJceProviderName.get;                 // Note: For android use "SC"
+  val CryptoJceProviderClassNames         = Item.CryptoJceProviderClassNames.get;           // Note: For android include "org.spongycastle.jce.provider.BouncyCastleProvider"
+  val CryptoJceForbidUseOfOtherProviders  = Item.CryptoJceForbidUseOfOtherProviders.get;    //       and ensure the spongycastle jce prov lib is bundled, it's not a consuela dependency!
 
   private[this] object Item {
     val CryptoJceProviderName              = StringItem( "crypto.jce.providerName", "BC" ); //bouncycastle

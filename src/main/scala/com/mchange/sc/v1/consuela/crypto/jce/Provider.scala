@@ -12,6 +12,7 @@ object Provider{
   implicit val logger = MLogger( this );
 
   val BouncyCastle = Provider("BC");
+  val SpongyCastle = Provider("SC");
 
   val nameToProviderListMap = {
     CryptoJceProviderClassNames
