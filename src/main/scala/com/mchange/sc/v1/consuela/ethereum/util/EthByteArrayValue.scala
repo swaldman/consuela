@@ -1,6 +1,6 @@
 package com.mchange.sc.v1.consuela.ethereum.util;
 
-import com.mchange.sc.v1.consuela.ethereum.{Nibble, toNibbles => nibbles};
+import com.mchange.sc.v1.consuela.ethereum.encoding.{Nibble, toNibbles => nibbles};
 import com.mchange.sc.v1.consuela.util.ByteArrayValue;
 
 object EthByteArrayValue {

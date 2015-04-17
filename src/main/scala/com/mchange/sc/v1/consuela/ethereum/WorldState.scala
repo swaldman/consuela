@@ -3,6 +3,7 @@ package com.mchange.sc.v1.consuela.ethereum;
 import com.mchange.sc.v1.consuela.Implicits._
 import com.mchange.sc.v1.consuela.ethereum._;
 import com.mchange.sc.v1.consuela.ethereum.trie._;
+import com.mchange.sc.v1.consuela.ethereum.encoding.RLP;
 
 import scala.collection.Traversable;
 

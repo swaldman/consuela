@@ -1,4 +1,4 @@
-package com.mchange.sc.v1.consuela.ethereum;
+package com.mchange.sc.v1.consuela.ethereum.encoding;
 
 import scala.util.Try;
 import java.nio.charset.Charset;

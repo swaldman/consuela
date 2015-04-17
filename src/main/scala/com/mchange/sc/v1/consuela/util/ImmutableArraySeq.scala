@@ -32,6 +32,7 @@ object ImmutableArraySeq {
       }
     }
   }
+
   object Byte {
     def apply( source : Array[scala.Byte] )( implicit atag : scala.reflect.ClassTag[scala.Byte] ) = new ImmutableArraySeq.Byte( source.clone() )( atag );
   }

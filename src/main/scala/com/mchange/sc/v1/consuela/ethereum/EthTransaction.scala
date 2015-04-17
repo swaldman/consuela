@@ -9,6 +9,7 @@ import scala.collection.immutable.IndexedSeq;
 import java.util.Arrays;
 import scala.util.hashing.MurmurHash3;
 
+import encoding.RLP;
 import specification.Set.Unsigned256;
 
 object EthTransaction {

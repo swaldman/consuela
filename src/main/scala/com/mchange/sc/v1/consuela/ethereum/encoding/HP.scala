@@ -1,4 +1,4 @@
-package com.mchange.sc.v1.consuela.ethereum;
+package com.mchange.sc.v1.consuela.ethereum.encoding;
 
 object HP {
   def encode( nibbles : Seq[Nibble], flag : Boolean ) : Seq[Byte] = {

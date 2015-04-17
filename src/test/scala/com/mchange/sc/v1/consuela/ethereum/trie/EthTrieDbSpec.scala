@@ -10,6 +10,7 @@ import java.nio.charset.Charset;
 import com.mchange.lang.ByteUtils;
 import com.mchange.sc.v1.consuela.Implicits._
 import com.mchange.sc.v1.consuela.ethereum._
+import com.mchange.sc.v1.consuela.ethereum.encoding._
 
 import org.specs2._;
 
