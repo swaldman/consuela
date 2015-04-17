@@ -2,6 +2,7 @@ package com.mchange.sc.v1.consuela.ethereum;
 
 import scala.util.Try;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import com.mchange.lang.IntegerUtils;
 
 object RLP {
@@ -10,7 +11,7 @@ object RLP {
     val EmptySeq     = encode( Encodable.EmptySeq );
   }
   object UTF_8 {
-    val _Charset = Charset.forName("UTF-8");
+    val _Charset = StandardCharsets.UTF_8;
 
     /**
      * Strings interpreted as UTF-8 bytes. Strings can be empty, other empty sequences interpreted as structure
@@ -19,6 +20,16 @@ object RLP {
 
     def encodeString( str : String ) : Seq[Byte] = RLP.encodeString( str, _Charset )
   }
+
+  /**
+   * Note that Encodables are net necessarily formally immutable.
+   * But you should take care to treat them as if they are, 
+   * and also not to mutate any array you use to construct an Encodable.ByteSeq,
+   * as that will yield a WrappedArray without copy!
+   *
+   * Perhaps we should convert these to be in terms of immutable.Seq always,
+   * although there probably would be a performance hit. Hmmm. 
+   */ 
   object Encodable {
     sealed trait Basic extends Encodable;
 
