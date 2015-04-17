@@ -1,4 +1,4 @@
-package com.mchange.sc.v1.consuela.ethereum.util;
+package com.mchange.sc.v1.consuela.util;
 
 import scala.collection._;
 

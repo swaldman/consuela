@@ -22,20 +22,22 @@ object RLP {
   }
 
   /**
-   * Note that Encodables are net necessarily formally immutable.
-   * But you should take care to treat them as if they are, 
-   * and also not to mutate any array you use to construct an Encodable.ByteSeq,
-   * as that will yield a WrappedArray without copy!
-   *
-   * Perhaps we should convert these to be in terms of immutable.Seq always,
-   * although there probably would be a performance hit. Hmmm. 
+   * Encodables are now formally immutable.
    */ 
   object Encodable {
+    import scala.collection._;
+    import scala.reflect.ClassTag;
+    import com.mchange.sc.v1.consuela.util.ImmutableArraySeq;
+
     sealed trait Basic extends Encodable;
 
     def sameBytes( a : Encodable, b : Encodable ) = a.simplify == b.simplify
 
-    case class ByteSeq( bytes : scala.Seq[Byte] ) extends Encodable.Basic {
+    object ByteSeq {
+      def apply( array : Array[Byte] )   : ByteSeq = new ByteSeq( ImmutableArraySeq.Byte( array ) );
+      def apply( seq : scala.Seq[Byte] ) : ByteSeq = new ByteSeq( toImmutableBytes( seq ) );
+    }
+    case class ByteSeq( bytes : immutable.Seq[Byte] ) extends Encodable.Basic {
       def isSimple = true;
       def simplify = this;
     }
@@ -52,14 +54,33 @@ object RLP {
       def simplify = Encodable.ByteSeq( be( value ) )
     }
     object Seq {
-      def of( encodables : Encodable* ) = new Seq( encodables );
+      def of( encodables : Encodable* )       = new Seq( ImmutableArraySeq( encodables.toArray ) );
+      def apply( array : Array[Encodable] )   = new Seq( ImmutableArraySeq( array ) );
+      def apply( seq : scala.Seq[Encodable] ) = new Seq( toImmutable( seq ) );
     }
-    case class Seq( seq : scala.Seq[Encodable] ) extends Encodable.Basic {
+    case class Seq( seq : immutable.Seq[Encodable] ) extends Encodable.Basic {
       lazy val isSimple = seq.forall( _.isSimple )
       def simplify = if ( this.isSimple ) this else Seq( seq.map( _.simplify ) )
     }
     val EmptyByteSeq = ByteSeq( Nil );
     val EmptySeq = Seq( Nil );
+
+    private def toImmutable[T : ClassTag]( seq : scala.Seq[T] ) : immutable.Seq[T] = {
+      seq match {
+        case list   : scala.List[T]           => list;
+        case vector : immutable.Vector[T]     => vector;
+        case lb     : mutable.ListBuffer[T]   => lb.toList;
+        case wa     : mutable.WrappedArray[T] => ImmutableArraySeq( wa.toArray );
+        case other                            => immutable.Vector( other : _* );
+      }
+    }
+
+    private def toImmutableBytes( seq : scala.Seq[Byte] ) : immutable.Seq[Byte] = {
+      seq match {
+        case wa : mutable.WrappedArray[Byte] => ImmutableArraySeq.Byte( wa.toArray );
+        case other                           => toImmutable( other );
+      }
+    }
   }
   sealed trait Encodable {
     def isSimple : Boolean;
