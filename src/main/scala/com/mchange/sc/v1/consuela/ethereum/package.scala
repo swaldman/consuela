@@ -9,4 +9,6 @@ package object ethereum {
   type EthHash    = Hash.SHA3_256;
   val  EthHash    = Hash.SHA3_256;
   val  EthHashLen = Hash.SHA3_256.HashLength;
+
+  val EmptyByteSeqHash = EthHash.hash( encoding.RLP.Encoded.EmptyByteSeq )
 }

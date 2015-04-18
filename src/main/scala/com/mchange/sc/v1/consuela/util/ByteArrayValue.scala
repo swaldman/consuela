@@ -8,6 +8,8 @@ import scala.util.hashing.MurmurHash3;
 import java.math.BigInteger;
 import java.util.Arrays;
 
+import scala.collection.immutable.IndexedSeq;
+
 object ByteArrayValue {
   trait BigIntegral {
     self : ByteArrayValue =>
@@ -31,7 +33,7 @@ trait ByteArrayValue {
   protected def stringTag : String = classSimpleName;
   protected def sameClass( other : Any ) : Boolean = this.getClass == other.getClass;
 
-  lazy val bytes : IndexedSeq[Byte] = Vector( _bytes : _* );
+  lazy val bytes : IndexedSeq[Byte] = ImmutableArraySeq( _bytes );
 
   lazy val toByteArray : Array[Byte] = _bytes.clone();
   lazy val hexbytes    : String = _bytes.hex

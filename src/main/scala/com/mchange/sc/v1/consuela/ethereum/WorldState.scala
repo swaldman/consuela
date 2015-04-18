@@ -2,40 +2,19 @@ package com.mchange.sc.v1.consuela.ethereum;
 
 import com.mchange.sc.v1.consuela.Implicits._
 import com.mchange.sc.v1.consuela.ethereum._;
+import com.mchange.sc.v1.consuela.ethereum.Implicits._;
 import com.mchange.sc.v1.consuela.ethereum.trie._;
-import com.mchange.sc.v1.consuela.ethereum.encoding.{RLP, RLPSerializable};
+import com.mchange.sc.v1.consuela.ethereum.encoding.{RLP, RLPSerializer};
 
 import scala.collection.Traversable;
 
 import specification.Set.Unsigned256;
 
 object WorldState {
-  object Account extends RLPSerializable.Companion[Account]{
-    override def toRLPEncodable( account : Account ) : RLP.Encodable = {
-      val codeHash = {
-        account match {
-          case contract : Contract => contract.codeHash;
-          case agent    : Agent    => EmptyTrieHash;
-        }
-      }
+  object Account extends RLPSerializer.Wrapper[Account] {
 
-      import RLP._;
-      Encodable.Seq.of(
-        Encodable.UnsignedBigInt( account.nonce ),
-        Encodable.UnsignedBigInt( account.balance ),
-        Encodable.ByteSeq( account.storageRoot.bytes ),
-        Encodable.ByteSeq( codeHash.bytes )
-      )
-    }
-    override def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Account = {
-      import RLP._;
-      import Encodable.{ByteSeq => BS}
-      val Encodable.Seq( Seq( BS( nonceBytes ), BS( balanceBytes ), BS( storageRootBytes ), BS( codeHashBytes ) ) ) = encodable;
-      EthHash.withBytes( codeHashBytes ) match {
-        case EmptyTrieHash => Agent( BigInt(1, nonceBytes.toArray), BigInt(1, balanceBytes.toArray), EthHash.withBytes( storageRootBytes ) );
-        case codeHash      => Contract( BigInt(1, nonceBytes.toArray), BigInt(1, balanceBytes.toArray), EthHash.withBytes( storageRootBytes ), codeHash );
-      }
-    }
+    val serializer : RLPSerializer[Account] = implicitly[RLPSerializer[Account]]
+
     case class Contract( nonce : BigInt, balance : BigInt, storageRoot : EthHash, codeHash : EthHash ) extends Account {
       require( (nonce elem_: Unsigned256) && (balance elem_: Unsigned256) && codeHash != EmptyTrieHash );
     }
@@ -45,9 +24,7 @@ object WorldState {
       def codeHash = EmptyTrieHash;
     }
   }
-  sealed trait Account extends RLPSerializable.LazyVal[Account]{
-    protected val companion = WorldState.Account;
-
+  sealed trait Account {
     def nonce       : BigInt;
     def balance     : BigInt;
     def storageRoot : EthHash;
@@ -65,7 +42,7 @@ class WorldState( private val trie : SimpleEthTrie ) {
 
   val RootHash = trie.RootHash;
 
-  def apply( address : EthAddress ) : Option[WorldState.Account] = trie( address.toNibbles ).map( Account.decodeCompleteRLP )
+  def apply( address : EthAddress ) : Option[WorldState.Account] = trie( address.toNibbles ).flatMap( Account.decodeCompleteRLP )
 
   def including( address : EthAddress, account : Account ) : WorldState = new WorldState( trie.including( address.toNibbles, account.rlpBytes ) );
   def excluding( address : EthAddress ) : WorldState = new WorldState( trie.excluding( address.toNibbles ) );
