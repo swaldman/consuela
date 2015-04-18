@@ -3,53 +3,37 @@ package com.mchange.sc.v1.consuela.ethereum;
 import com.mchange.sc.v1.consuela.Implicits._
 import com.mchange.sc.v1.consuela.ethereum._;
 import com.mchange.sc.v1.consuela.ethereum.trie._;
-import com.mchange.sc.v1.consuela.ethereum.encoding.RLP;
+import com.mchange.sc.v1.consuela.ethereum.encoding.{RLP, RLPSerializable};
 
 import scala.collection.Traversable;
 
 import specification.Set.Unsigned256;
 
 object WorldState {
-  object Account {
-    def encodeRLP( account : Account ) : Seq[Byte] = {
-      import RLP._;
+  object Account extends RLPSerializable.Companion[Account]{
+    override def toRLPEncodable( account : Account ) : RLP.Encodable = {
       val codeHash = {
         account match {
           case contract : Contract => contract.codeHash;
           case agent    : Agent    => EmptyTrieHash;
         }
       }
-      val encodable = Encodable.Seq( 
-        Seq(
-          Encodable.UnsignedBigInt( account.nonce ),
-          Encodable.UnsignedBigInt( account.balance ),
-          Encodable.ByteSeq( account.storageRoot.bytes ),
-          Encodable.ByteSeq( codeHash.bytes )
-        )
-      );
-      encode( encodable )
+
+      import RLP._;
+      Encodable.Seq.of(
+        Encodable.UnsignedBigInt( account.nonce ),
+        Encodable.UnsignedBigInt( account.balance ),
+        Encodable.ByteSeq( account.storageRoot.bytes ),
+        Encodable.ByteSeq( codeHash.bytes )
+      )
     }
-    def decodeRLP( bytes : Seq[Byte] ) : (Account, Seq[Byte]) = {
+    override def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Account = {
       import RLP._;
       import Encodable.{ByteSeq => BS}
-      val (encodable, rest) = decode( bytes );
       val Encodable.Seq( Seq( BS( nonceBytes ), BS( balanceBytes ), BS( storageRootBytes ), BS( codeHashBytes ) ) ) = encodable;
-      val account = {
-        EthHash.withBytes( codeHashBytes ) match {
-          case EmptyTrieHash => Agent( BigInt(1, nonceBytes.toArray), BigInt(1, balanceBytes.toArray), EthHash.withBytes( storageRootBytes ) );
-          case codeHash      => Contract( BigInt(1, nonceBytes.toArray), BigInt(1, balanceBytes.toArray), EthHash.withBytes( storageRootBytes ), codeHash );
-        }
-      }
-      ( account, rest )
-    }
-    def decodeCompleteRLP( bytes : Seq[Byte] ) : Account = {
-      val ( account, rest ) = decodeRLP( bytes );
-      if ( rest.length > 0 ) {
-        throw new IllegalArgumentException(
-          s"Account.decodeCompleteRLP(...) expects exactly the bytes of an Account; received bytes for ${account} with 0x${rest.hex} left over."
-        )
-      } else {
-        account
+      EthHash.withBytes( codeHashBytes ) match {
+        case EmptyTrieHash => Agent( BigInt(1, nonceBytes.toArray), BigInt(1, balanceBytes.toArray), EthHash.withBytes( storageRootBytes ) );
+        case codeHash      => Contract( BigInt(1, nonceBytes.toArray), BigInt(1, balanceBytes.toArray), EthHash.withBytes( storageRootBytes ), codeHash );
       }
     }
     case class Contract( nonce : BigInt, balance : BigInt, storageRoot : EthHash, codeHash : EthHash ) extends Account {
@@ -61,13 +45,13 @@ object WorldState {
       def codeHash = EmptyTrieHash;
     }
   }
-  sealed trait Account {
+  sealed trait Account extends RLPSerializable.LazyVal[Account]{
+    protected val companion = WorldState.Account;
+
     def nonce       : BigInt;
     def balance     : BigInt;
     def storageRoot : EthHash;
     def codeHash    : EthHash;
-
-    lazy val rlpBytes = Account.encodeRLP( this );
 
     def isAgent    : Boolean = codeHash == EmptyTrieHash;
     def isContract : Boolean = !this.isAgent;
