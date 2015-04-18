@@ -233,6 +233,9 @@ package object crypto {
 
     // BouncyCastle
 
+    // ICKY, BUT REMEMBER: EDITS TO BouncyCastle STUFF IMPLY PARALLEL EDITS TO SpongyCastle STUFF.
+    // THIS SHOULD BE REPLACED BY CODEGENERATION OR MACROS OR SOMETHING SOMEDAY.
+
     /**
       * Derived from https://github.com/ethereum/ethereumj/blob/master/ethereumj-core/src/main/java/org/ethereum/crypto/ECKey.java
       * which is in turn derived from https://github.com/bitcoinj/bitcoinj/blob/master/core/src/main/java/com/google/bitcoin/core/ECKey.java
@@ -256,9 +259,10 @@ package object crypto {
        *          of two 256 bit big-endian ints X and Y
        */ 
       def computePublicKeyBytes( privateKeyAsBigInteger : BigInteger )( implicit provider : jce.Provider ) : Array[Byte] = {
-        Curve.getG().multiply( privateKeyAsBigInteger ).getEncoded( false ).drop(1) // false means uncompressed, we drop the header byte that says so
-      } ensuring( _.length == 64 )
-
+        val rawKey = Curve.getG().multiply( privateKeyAsBigInteger ).getEncoded( false );
+        assert( rawKey(0) == 0x04 && rawKey.length == 65, "Computed public key is not in the expected uncompressed format." );
+        rawKey.drop(1)  // drop the header byte 0x04 that signifies an uncompressed concatenation of values
+      }
 
       def recoverPublicKeyAndV( sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] )( implicit provider : jce.Provider ) : Option[RecoveredPublicKeyAndV] = {
         (0 to 3).foldLeft( None : Option[RecoveredPublicKeyAndV] ){ ( mbr, i ) =>
@@ -390,9 +394,10 @@ package object crypto {
        *          of two 256 bit big-endian ints X and Y
        */ 
       def computePublicKeyBytes( privateKeyAsBigInteger : BigInteger )( implicit provider : jce.Provider ) : Array[Byte] = {
-        Curve.getG().multiply( privateKeyAsBigInteger ).getEncoded( false ).drop(1) // false means uncompressed, we drop the header byte that says so
-      } ensuring( _.length == 64 )
-
+        val rawKey = Curve.getG().multiply( privateKeyAsBigInteger ).getEncoded( false );
+        assert( rawKey(0) == 0x04 && rawKey.length == 65, "Computed public key is not in the expected uncompressed format." );
+        rawKey.drop(1)  // drop the header byte 0x04 that signifies an uncompressed concatenation of values
+      }
 
       def recoverPublicKeyAndV( sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] )( implicit provider : jce.Provider ) : Option[RecoveredPublicKeyAndV] = {
         (0 to 3).foldLeft( None : Option[RecoveredPublicKeyAndV] ){ ( mbr, i ) =>
@@ -500,12 +505,25 @@ package object crypto {
     }
 
     /*
+     Public key encoding formats (from http://sourceforge.net/p/bitcoin/mailman/message/29416133/):
+     
+     In total, the following encodings exist:
+     * 0x00: point at infinity; not a valid public key
+     * 0x02 [32-byte X coord]: compressed format for even Y coords
+     * 0x03 [32-byte X coord]: compressed format for odd Y coords
+     * 0x04 [32-byte X coord] [32-byte Y coord]: uncompressed format
+     * 0x06 [32-byte X coord] [32-byte Y coord]: hybrid format for even Y coords
+     * 0x07 [32-byte X coord] [32-byte Y coord]: hybrid format for odd Y coords
+
+     */
+
+    /*
      Looks like we don't need this, we've found a standard way to get an ECParameterSpec
      by name (above). But it took me a while to find these constants, so I'm keeping this around.
 
-    private val UnseededECParamSpec = createECParamSpec( null );
-
-    private object CurveConstants {
+     private val UnseededECParamSpec = createECParamSpec( null );
+     
+     private object CurveConstants {
       private def ubi( str : String ) = str.decodeHex.toUnsignedBigInteger
 
       // Constants taken from source of Santuario, http://santuario.apache.org
