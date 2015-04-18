@@ -5,6 +5,10 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import com.mchange.lang.IntegerUtils;
 
+import scala.collection._;
+import scala.reflect.ClassTag;
+import com.mchange.sc.v1.consuela.util.ImmutableArraySeq;
+
 object RLP {
   object Encoded {
     val EmptyByteSeq = encode( Encodable.EmptyByteSeq );
@@ -25,9 +29,6 @@ object RLP {
    * Encodables are now formally immutable.
    */ 
   object Encodable {
-    import scala.collection._;
-    import scala.reflect.ClassTag;
-    import com.mchange.sc.v1.consuela.util.ImmutableArraySeq;
 
     sealed trait Basic extends Encodable;
 
@@ -95,6 +96,8 @@ object RLP {
   // long sequence could overflow the capacity of the first byte to encode the length of its 
   // length.
 
+  def decodeComplete( bytes : Seq[Byte] ) : Encodable.Basic = decode( bytes ).ensuring( _._2.isEmpty )._1
+
   /**
    *  @return a pair, decoded Encodable and unconsumed bytes
    */  
@@ -153,29 +156,32 @@ object RLP {
       splitOut(bytes, 1)
     }
   }
-  def encode( encodable : Encodable ) : Seq[Byte] = {
-    def rb( bs : Seq[Byte] ) : Seq[Byte] = {
+  def encode( encodable : Encodable ) : scala.collection.immutable.Seq[Byte] = {
+
+    def rba( arr : Array[Byte] ) : immutable.Seq[Byte] = rb( ImmutableArraySeq.Byte( arr ) )
+
+    def rb( bs : immutable.Seq[Byte] ) : immutable.Seq[Byte] = {
 
       // we pass Ints, because Bytes coerced to Ints are unsigned (as we
       // expect and require, and because the JVM'll promote them to Ints
       // anyway during various operations.
 
-      def _rb( bytes : Seq[Int] ) : Seq[Byte] = {
+      def _rb( bytes : immutable.Seq[Int] ) : immutable.Seq[Byte] = {
         lazy val len = bytes.length;
         bytes match {
-          case Seq( b ) if ( b < 128 )  => Seq( b.toByte );
-          case _        if ( len < 56 ) => (((128 + len) +: bytes) : Seq[Int]).map( _.toByte );
-          case _                        => {
+          case immutable.Seq( b ) if ( b < 128 )  => immutable.Seq( b.toByte );
+          case _                  if ( len < 56 ) => (((128 + len) +: bytes) : immutable.Seq[Int]).map( _.toByte );
+          case _                                  => {
             val lenBytes = be( len );
             (183 + lenBytes.length).toByte +: (lenBytes ++: bytes.map(  _.toByte ))
           }
         }
       }
-      def _promote( bytes : Seq[Byte] ) : Seq[Int] = bytes.map( _ & 0xFF );
+      def _promote( bytes : immutable.Seq[Byte] ) : immutable.Seq[Int] = bytes.map( _ & 0xFF );
 
       _rb( _promote( bs ) );
     }
-    def rl( encodables : Seq[Encodable] ) : Seq[Byte] = {
+    def rl( encodables : immutable.Seq[Encodable] ) : immutable.Seq[Byte] = {
 
       // note: this was a surpise to me. the length of s(x), described in the ethereum yellow paper as ||s(x)|| is
       // the *byte length of the serialized representation of all concatenated members of the sequence*, 
@@ -191,19 +197,19 @@ object RLP {
         (247 + lenBytes.length).toByte +: ( lenBytes ++: sencodables )
       }
     }
-    def s( encodables : Seq[Encodable] ) : Seq[Byte] = encodables.flatMap( encode _ );
+    def s( encodables : immutable.Seq[Encodable] ) : immutable.Seq[Byte] = encodables.flatMap( encode _ );
 
     encodable match {
       case bse : Encodable.ByteSeq        => rb( bse.bytes );
-      case ie  : Encodable.UnsignedInt    => rb( be( ie.value ) );
-      case bie : Encodable.UnsignedBigInt => rb( be( bie.value ) );
+      case ie  : Encodable.UnsignedInt    => rba( be( ie.value ) );
+      case bie : Encodable.UnsignedBigInt => rba( be( bie.value ) );
       case ese : Encodable.Seq            => rl( ese.seq );
     }
   }
-  def encodeBytes( bytes : Seq[Byte] )                : Seq[Byte] = encode( Encodable.ByteSeq( bytes ) );
-  def encodeUnsignedInt( i : Int )                    : Seq[Byte] = encode( Encodable.UnsignedInt( i ) );
-  def encodeUnsignedBigInt( bi : BigInt )             : Seq[Byte] = encode( Encodable.UnsignedBigInt( bi ) );
-  def encodeString( str : String, charset : Charset ) : Seq[Byte] = encode( Encodable.ByteSeq( str.getBytes( charset ).toSeq ) );
+  def encodeBytes( bytes : Seq[Byte] )                : immutable.Seq[Byte] = encode( Encodable.ByteSeq( bytes ) );
+  def encodeUnsignedInt( i : Int )                    : immutable.Seq[Byte] = encode( Encodable.UnsignedInt( i ) );
+  def encodeUnsignedBigInt( bi : BigInt )             : immutable.Seq[Byte] = encode( Encodable.UnsignedBigInt( bi ) );
+  def encodeString( str : String, charset : Charset ) : immutable.Seq[Byte] = encode( Encodable.ByteSeq( str.getBytes( charset ).toSeq ) );
   /**
    * Strings can be empty, other empty sequences interpreted as structure
    */  
