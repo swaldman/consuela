@@ -50,4 +50,12 @@ object Implicits {
     def rlpBytes     : immutable.Seq[Byte] = RLP.encode( this.rlpEncodable );
   }
 
+  trait LazyRLPOps[T] {
+    this : T =>
+
+    val rlpOpsView : T => RLPOps[T];
+
+    lazy val rlpEncodable : RLP.Encodable       = rlpOpsView( this ).rlpEncodable;
+    lazy val rlpBytes     : immutable.Seq[Byte] = RLP.encode( this.rlpEncodable );
+  }
 }

@@ -11,14 +11,13 @@ import scala.collection.Traversable;
 import specification.Set.Unsigned256;
 
 object WorldState {
-  object Account extends RLPSerializer.Wrapper[Account] {
-
-    val serializer : RLPSerializer[Account] = implicitly[RLPSerializer[Account]]
-
-    case class Contract( nonce : BigInt, balance : BigInt, storageRoot : EthHash, codeHash : EthHash ) extends Account {
+  object Account extends RLPSerializer.AbstractWrapper[Account] {
+    case class Contract( nonce : BigInt, balance : BigInt, storageRoot : EthHash, codeHash : EthHash )( implicit val rlpOpsView : Account => RLPOps[Account] ) 
+        extends Account with LazyRLPOps[Account] {
       require( (nonce elem_: Unsigned256) && (balance elem_: Unsigned256) && codeHash != EmptyTrieHash );
     }
-    case class Agent( nonce : BigInt, balance : BigInt, storageRoot : EthHash ) extends Account {
+    case class Agent( nonce : BigInt, balance : BigInt, storageRoot : EthHash )( implicit val rlpOpsView : Account => RLPOps[Account] ) 
+        extends Account with LazyRLPOps[Account] {
       require( (nonce elem_: Unsigned256) && (balance elem_: Unsigned256) );
 
       def codeHash = EmptyTrieHash;

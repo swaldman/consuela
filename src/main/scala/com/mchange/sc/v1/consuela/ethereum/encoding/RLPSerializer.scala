@@ -19,9 +19,11 @@ object RLPSerializer {
     def decodeCompleteRLP( bytes : Seq[Byte] ) : Option[T]                = serializer.decodeCompleteRLP( bytes );
     def encodeRLP( rlpSerializable : T ) : immutable.Seq[Byte]            = serializer.encodeRLP( rlpSerializable );
   }
+  abstract class AbstractWrapper[T : RLPSerializer] extends Wrapper[T] {
+    val serializer : RLPSerializer[T] = implicitly[RLPSerializer[T]];
+  }
 }
 abstract class RLPSerializer[T : ClassTag] {
-
   implicit val logger = MLogger( this );
 
   def toRLPEncodable( rlpSerializable : T )               : RLP.Encodable;
