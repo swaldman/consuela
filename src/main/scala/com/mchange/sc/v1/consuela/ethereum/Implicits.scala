@@ -3,19 +3,26 @@ package com.mchange.sc.v1.consuela.ethereum;
 import encoding.{RLP, RLPSerializer};
 import trie.EmptyTrieHash;
 
+import com.mchange.sc.v1.consuela.util.ByteArrayValue;
+
 import scala.collection._;
+
+import scala.reflect.ClassTag;
 
 object Implicits {
 
-  implicit object EthHashSerializer extends RLPSerializer[EthHash] {
-    def toRLPEncodable( hash : EthHash )                    : RLP.Encodable = RLP.Encodable.ByteSeq( hash.bytes );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[EthHash] = {
+  class ByteArrayValueSerializer[T <: ByteArrayValue]( factory : immutable.Seq[Byte] => T )( implicit evidence : ClassTag[T] ) extends RLPSerializer[T]()( evidence ) {
+    def toRLPEncodable( t : T )                             : RLP.Encodable = RLP.Encodable.ByteSeq( t.bytes );
+    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[T] = {
       encodable match { 
-        case RLP.Encodable.ByteSeq( bytes ) => Some( EthHash.withBytes( bytes ) )
+        case RLP.Encodable.ByteSeq( bytes ) => Some( factory( bytes ) )
         case _                              => None
       }
     }
   }
+
+  implicit object EthHashSerializer extends ByteArrayValueSerializer[EthHash]( EthHash.withBytes );
+  implicit object EthAddressSerializer extends ByteArrayValueSerializer[EthAddress]( EthAddress.apply );
 
   implicit object AccountSerializer extends RLPSerializer[WorldState.Account] {
     def toRLPEncodable( account : WorldState.Account ) : RLP.Encodable = {
