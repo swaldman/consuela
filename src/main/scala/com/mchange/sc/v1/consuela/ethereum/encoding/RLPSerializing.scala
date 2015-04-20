@@ -10,13 +10,13 @@ import MLevel._;
 
 import scala.reflect.ClassTag;
 
-object RLPSerializer {
+object RLPSerializing {
   /**
    *  If you want to hang RLP decode/encode methods off of a companion object, have it 
    *  implement Wrapper[T], where T is the type to de encoded/decode.
    */ 
   trait Wrapper[T] {
-    val serializer : RLPSerializer[T];
+    val serializer : RLPSerializing[T];
 
     def toRLPEncodable( rlpSerializable : T )               : RLP.Encodable = serializer.toRLPEncodable( rlpSerializable );
     def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[T]     = serializer.fromRLPEncodable( encodable );
@@ -25,10 +25,10 @@ object RLPSerializer {
     def decodeCompleteRLP( bytes : Seq[Byte] ) : Option[T]                = serializer.decodeCompleteRLP( bytes );
     def encodeRLP( rlpSerializable : T ) : immutable.Seq[Byte]            = serializer.encodeRLP( rlpSerializable );
   }
-  abstract class AbstractWrapper[T : RLPSerializer] extends Wrapper[T] {
-    val serializer : RLPSerializer[T] = implicitly[RLPSerializer[T]];
+  abstract class AbstractWrapper[T : RLPSerializing] extends Wrapper[T] {
+    val serializer : RLPSerializing[T] = implicitly[RLPSerializing[T]];
   }
-  class ByteArrayValue[T <: util.ByteArrayValue]( factory : immutable.Seq[Byte] => T )( implicit evidence : ClassTag[T] ) extends RLPSerializer[T]()( evidence ) {
+  class ByteArrayValue[T <: util.ByteArrayValue]( factory : immutable.Seq[Byte] => T )( implicit evidence : ClassTag[T] ) extends RLPSerializing[T]()( evidence ) {
     def toRLPEncodable( t : T )                             : RLP.Encodable = RLP.Encodable.ByteSeq( t.bytes );
     def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[T] = {
       encodable match {
@@ -37,9 +37,9 @@ object RLPSerializer {
       }
     }
   }
-  implicit class RLPOps[ T : RLPSerializer ]( rlpSerializable : T ) {
-    def rlpEncodable : RLP.Encodable       = implicitly[RLPSerializer[T]].toRLPEncodable( rlpSerializable.asInstanceOf[T] );
-    def rlpBytes     : immutable.Seq[Byte] = implicitly[RLPSerializer[T]].encodeRLP( this.rlpSerializable );
+  implicit class RLPOps[ T : RLPSerializing ]( rlpSerializable : T ) {
+    def rlpEncodable : RLP.Encodable       = implicitly[RLPSerializing[T]].toRLPEncodable( rlpSerializable.asInstanceOf[T] );
+    def rlpBytes     : immutable.Seq[Byte] = implicitly[RLPSerializing[T]].encodeRLP( this.rlpSerializable );
   }
   trait LazyRLPOps[T] {
     this : T =>
@@ -50,7 +50,7 @@ object RLPSerializer {
     lazy val rlpBytes     : immutable.Seq[Byte] = RLP.Encodable.encode( this.rlpEncodable );
   }
 }
-abstract class RLPSerializer[T : ClassTag] {
+abstract class RLPSerializing[T : ClassTag] {
   implicit val logger = MLogger( this );
 
   // extend and override these two methods. that's it!
@@ -71,7 +71,7 @@ abstract class RLPSerializer[T : ClassTag] {
     val ( mbSerializable, rest ) = decodeRLP( bytes );
     if ( rest.length > 0 ) {
       throw new IllegalArgumentException(
-        s"RLPSerializer decodeCompleteRLP(...) expects exactly the bytes of a ${SimpleName}; received bytes for ${mbSerializable} with 0x${rest.hex} left over."
+        s"RLPSerializing decodeCompleteRLP(...) expects exactly the bytes of a ${SimpleName}; received bytes for ${mbSerializable} with 0x${rest.hex} left over."
       )
     } else {
       mbSerializable

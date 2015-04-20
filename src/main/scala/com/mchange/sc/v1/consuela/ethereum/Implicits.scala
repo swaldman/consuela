@@ -1,6 +1,6 @@
 package com.mchange.sc.v1.consuela.ethereum;
 
-import encoding.{RLP, RLPSerializer};
+import encoding.{RLP, RLPSerializing};
 import trie.EmptyTrieHash;
 
 import com.mchange.sc.v1.consuela.util.ByteArrayValue;

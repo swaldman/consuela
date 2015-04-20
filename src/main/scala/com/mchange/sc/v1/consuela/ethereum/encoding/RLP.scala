@@ -12,29 +12,29 @@ import com.mchange.sc.v1.consuela.util.ImmutableArraySeq;
 object RLP {
 
 
-  def toEncodable[T : RLPSerializer]( t : T )                             : RLP.Encodable = implicitly[RLPSerializer[T]].toRLPEncodable( t );
-  def fromEncodable[T : RLPSerializer]( encodable : RLP.Encodable.Basic ) : Option[T]     = implicitly[RLPSerializer[T]].fromRLPEncodable( encodable );
+  def toEncodable[T : RLPSerializing]( t : T )                             : RLP.Encodable = implicitly[RLPSerializing[T]].toRLPEncodable( t );
+  def fromEncodable[T : RLPSerializing]( encodable : RLP.Encodable.Basic ) : Option[T]     = implicitly[RLPSerializing[T]].fromRLPEncodable( encodable );
 
-  def decode[T : RLPSerializer]( bytes : Seq[Byte] )                    : ( Option[T], Seq[Byte] ) = implicitly[RLPSerializer[T]].decodeRLP( bytes );
-  def decodeComplete[T : RLPSerializer]( bytes : Seq[Byte] )            : Option[T]                = implicitly[RLPSerializer[T]].decodeCompleteRLP( bytes ); 
-  def encode[T : RLPSerializer]( t : T )                                : immutable.Seq[Byte]      = implicitly[RLPSerializer[T]].encodeRLP( t ); 
+  def decode[T : RLPSerializing]( bytes : Seq[Byte] )                    : ( Option[T], Seq[Byte] ) = implicitly[RLPSerializing[T]].decodeRLP( bytes );
+  def decodeComplete[T : RLPSerializing]( bytes : Seq[Byte] )            : Option[T]                = implicitly[RLPSerializing[T]].decodeCompleteRLP( bytes ); 
+  def encode[T : RLPSerializing]( t : T )                                : immutable.Seq[Byte]      = implicitly[RLPSerializing[T]].encodeRLP( t ); 
 
   // basic serializers
-  implicit object ByteSeqSerializer extends RLPSerializer[Seq[Byte]] {
+  implicit object ByteSeqSerializer extends RLPSerializing[Seq[Byte]] {
     def toRLPEncodable( bytes : Seq[Byte] )                 : RLP.Encodable     = Encodable.ByteSeq( bytes );
     def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[Seq[Byte]] = encodable match {
       case Encodable.ByteSeq( bytes ) => Some( bytes );
       case _                          => None;
     }
   }
-  implicit object UnsignedIntSerializer extends RLPSerializer[Int] {
+  implicit object UnsignedIntSerializer extends RLPSerializing[Int] {
     def toRLPEncodable( i : Int )                           : RLP.Encodable = Encodable.UnsignedInt( i );
     def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[Int]     = encodable match {
       case Encodable.ByteSeq( bytes ) if (bytes.length <= 8) => Some( Encodable.unbeInt(bytes) ).filter( _ >= 0 );
       case _                                                 => None;
     }
   }
-  implicit object UnsignedBigIntSerializer extends RLPSerializer[BigInt] {
+  implicit object UnsignedBigIntSerializer extends RLPSerializing[BigInt] {
     def toRLPEncodable( bi : BigInt )                       : RLP.Encodable = Encodable.UnsignedBigInt( bi );
     def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[BigInt] = encodable match {
       case Encodable.ByteSeq( bytes ) => Some( BigInt( 1, bytes.toArray ) );

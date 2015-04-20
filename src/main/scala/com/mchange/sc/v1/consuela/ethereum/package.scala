@@ -1,6 +1,6 @@
 package com.mchange.sc.v1.consuela;
 
-import ethereum.encoding.RLPSerializer;
+import ethereum.encoding.RLPSerializing;
 
 import com.mchange.sc.v1.consuela.hash.Hash;
 
@@ -12,7 +12,7 @@ package object ethereum {
   val  EthHash    = Hash.SHA3_256;
   val  EthHashLen = Hash.SHA3_256.HashLength;
 
-  implicit object EthHashSerializer extends RLPSerializer.ByteArrayValue[EthHash]( EthHash.withBytes );
+  implicit object EthHashSerializer extends RLPSerializing.ByteArrayValue[EthHash]( EthHash.withBytes );
 
   val EmptyByteSeqHash = EthHash.hash( encoding.RLP.Encoded.EmptyByteSeq )
 }

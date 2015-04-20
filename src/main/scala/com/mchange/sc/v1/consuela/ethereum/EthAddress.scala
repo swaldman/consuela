@@ -1,6 +1,6 @@
 package com.mchange.sc.v1.consuela.ethereum;
 
-import encoding.{RLP, RLPSerializer};
+import encoding.{RLP, RLPSerializing};
 
 import com.mchange.sc.v1.consuela.crypto;
 import com.mchange.sc.v1.consuela.Implicits._;
@@ -18,7 +18,7 @@ object EthAddress {
 
   def computeBytes( pub : EthPublicKey ) : Array[Byte] = EthHash.hash(pub.toByteArray).toByteArray.drop(12);
 
-  implicit object EthAddressSerializer extends RLPSerializer.ByteArrayValue[EthAddress]( EthAddress.apply );
+  implicit object EthAddressSerializer extends RLPSerializing.ByteArrayValue[EthAddress]( EthAddress.apply );
 }
 final class EthAddress private ( protected val _bytes : Array[Byte] ) extends ByteArrayValue with EthByteArrayValue.Nibbly {
 

@@ -4,7 +4,7 @@ import com.mchange.sc.v1.consuela.Implicits._;
 import scala.collection._;
 
 object RLPSerializable {
-  trait Companion[T <: RLPSerializable[T]] extends RLPSerializer.AbstractWrapper[T];
+  trait Companion[T <: RLPSerializable[T]] extends RLPSerializing.AbstractWrapper[T];
 
   trait LazyVal[T <: LazyVal[T]] extends RLPSerializable[T] {
     protected val companion : RLPSerializable.Companion[T];

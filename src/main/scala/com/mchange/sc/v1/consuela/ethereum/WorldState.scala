@@ -3,7 +3,7 @@ package com.mchange.sc.v1.consuela.ethereum;
 import com.mchange.sc.v1.consuela.Implicits._
 import com.mchange.sc.v1.consuela.ethereum._;
 import com.mchange.sc.v1.consuela.ethereum.trie._;
-import com.mchange.sc.v1.consuela.ethereum.encoding.{RLP, RLPSerializer};
+import com.mchange.sc.v1.consuela.ethereum.encoding.{RLP, RLPSerializing};
 
 import scala.collection.Traversable;
 
@@ -20,7 +20,7 @@ object WorldState {
       def codeHash = EmptyTrieHash;
     }
 
-    implicit object AccountSerializer extends RLPSerializer[Account] {
+    implicit object AccountSerializer extends RLPSerializing[Account] {
       def toRLPEncodable( account : WorldState.Account ) : RLP.Encodable = {
         val codeHash = {
           account match {
