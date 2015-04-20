@@ -1,5 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum.encoding;
 
+import com.mchange.sc.v1.consuela.util;
+
 import com.mchange.sc.v1.consuela.Implicits._;
 import scala.collection._;
 
@@ -9,6 +11,10 @@ import MLevel._;
 import scala.reflect.ClassTag;
 
 object RLPSerializer {
+  /**
+   *  If you want to hang RLP decode/encode methods off of a companion object, have it 
+   *  implement Wrapper[T], where T is the type to de encoded/decode.
+   */ 
   trait Wrapper[T] {
     val serializer : RLPSerializer[T];
 
@@ -22,16 +28,38 @@ object RLPSerializer {
   abstract class AbstractWrapper[T : RLPSerializer] extends Wrapper[T] {
     val serializer : RLPSerializer[T] = implicitly[RLPSerializer[T]];
   }
+  class ByteArrayValue[T <: util.ByteArrayValue]( factory : immutable.Seq[Byte] => T )( implicit evidence : ClassTag[T] ) extends RLPSerializer[T]()( evidence ) {
+    def toRLPEncodable( t : T )                             : RLP.Encodable = RLP.Encodable.ByteSeq( t.bytes );
+    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[T] = {
+      encodable match {
+        case RLP.Encodable.ByteSeq( bytes ) => Some( factory( bytes ) )
+        case _                              => None
+      }
+    }
+  }
+  implicit class RLPOps[ T : RLPSerializer ]( rlpSerializable : T ) {
+    def rlpEncodable : RLP.Encodable       = implicitly[RLPSerializer[T]].toRLPEncodable( rlpSerializable.asInstanceOf[T] );
+    def rlpBytes     : immutable.Seq[Byte] = implicitly[RLPSerializer[T]].encodeRLP( this.rlpSerializable );
+  }
+  trait LazyRLPOps[T] {
+    this : T =>
+
+    val rlpOpsView : T => RLPOps[T];
+
+    lazy val rlpEncodable : RLP.Encodable       = rlpOpsView( this ).rlpEncodable;
+    lazy val rlpBytes     : immutable.Seq[Byte] = RLP.Encodable.encode( this.rlpEncodable );
+  }
 }
 abstract class RLPSerializer[T : ClassTag] {
   implicit val logger = MLogger( this );
 
+  // extend and override these two methods. that's it!
   def toRLPEncodable( rlpSerializable : T )               : RLP.Encodable;
   def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[T];
 
   def decodeRLP( bytes : Seq[Byte] ) : ( Option[T], Seq[Byte] ) = {
-    val (encodable, rest) = RLP.decode( bytes );
-    fromRLPEncodable( encodable ) match {
+    val (encodable, rest) = RLP.Encodable.decode( bytes );
+    fromRLPEncodable( encodable.simplify ) match {
       case Some( t ) => ( Some(t) , rest )
       case None      => {
         WARNING.log( s"Could not parse encodable ${encodable} to ${SimpleName}" );
@@ -49,7 +77,7 @@ abstract class RLPSerializer[T : ClassTag] {
       mbSerializable
     }
   }
-  def encodeRLP( rlpSerializable : T ) : immutable.Seq[Byte] = RLP.encode( toRLPEncodable( rlpSerializable ) );
+  def encodeRLP( rlpSerializable : T ) : immutable.Seq[Byte] = RLP.Encodable.encode( toRLPEncodable( rlpSerializable ) );
 
   private lazy val SimpleName = implicitly[ClassTag[T]].runtimeClass.getSimpleName
 }

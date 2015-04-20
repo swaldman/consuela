@@ -158,10 +158,10 @@ trait EthTrieDb extends EmbeddableEthStylePMTrie.Database[Nibble,Seq[Byte],EthHa
     }
   }
 
-  def toRLP( node : Node ) : Seq[Byte] = RLP.encode( toEncodable( node ) );
+  def toRLP( node : Node ) : Seq[Byte] = RLP.Encodable.encode( toEncodable( node ) );
 
   private[this] def completeDecode( rlpBytes : Seq[Byte] ) : RLP.Encodable = {
-    val ( decoded, rest ) = RLP.decode( rlpBytes );
+    val ( decoded, rest ) = RLP.Encodable.decode( rlpBytes );
     assert( rest.length == 0, s"We expect to decode Byte sequences that are the result of RLP encoding. There should be no extra. rest.length -> ${rest.length}" );
     decoded
   }

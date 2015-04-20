@@ -7,20 +7,20 @@ import com.mchange.sc.v1.consuela.Implicits._;
 
 import com.mchange.sc.v1.consuela.util.ByteArrayValue;
 import com.mchange.sc.v1.consuela.ethereum.util.EthByteArrayValue;
-import com.mchange.sc.v1.consuela.ethereum.Implicits._;
 
 import java.util.Arrays;
 
-object EthAddress extends RLPSerializer.AbstractWrapper[EthAddress] {
+object EthAddress {
   val ByteLength = 20;
   def apply( bytes : Seq[Byte] )     : EthAddress = new EthAddress( bytes.toArray );
   def apply( bytes : Array[Byte] )   : EthAddress = new EthAddress( bytes.clone() );
   def apply( pub   : EthPublicKey )  : EthAddress = new EthAddress( this.computeBytes( pub ) );
 
   def computeBytes( pub : EthPublicKey ) : Array[Byte] = EthHash.hash(pub.toByteArray).toByteArray.drop(12);
+
+  implicit object EthAddressSerializer extends RLPSerializer.ByteArrayValue[EthAddress]( EthAddress.apply );
 }
-final class EthAddress private ( protected val _bytes : Array[Byte] )( implicit val rlpOpsView : EthAddress => RLPOps[EthAddress] )
-    extends ByteArrayValue with EthByteArrayValue.Nibbly with LazyRLPOps[EthAddress] {
+final class EthAddress private ( protected val _bytes : Array[Byte] ) extends ByteArrayValue with EthByteArrayValue.Nibbly {
 
   require( _bytes.length == EthAddress.ByteLength );
 

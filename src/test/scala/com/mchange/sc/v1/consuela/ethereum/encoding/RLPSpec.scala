@@ -51,9 +51,9 @@ object RLPSpec {
       }
     }
     case class Item( name : String, in : RLP.Encodable, out : Seq[Byte] ) {
-      lazy val ( encodable, rest ) = RLP.decode(out);
+      lazy val ( encodable, rest ) = RLP.Encodable.decode(out);
 
-      def test : Boolean = RLP.encode( in ) == out
+      def test : Boolean = RLP.Encodable.encode( in ) == out
 
       def reverseTest : Boolean = (RLP.Encodable.sameBytes(in, encodable) && rest.length == 0);
 
@@ -61,7 +61,7 @@ object RLPSpec {
         val result = test;
         println( s"test '${name}': ${result}" );
         if (! result )
-          println(s"      expected: ${ByteUtils.toHexAscii(out.toArray)}    encoded: ${ByteUtils.toHexAscii( (RLP.encode( in )).toArray )}");
+          println(s"      expected: ${ByteUtils.toHexAscii(out.toArray)}    encoded: ${ByteUtils.toHexAscii( (RLP.Encodable.encode( in )).toArray )}");
         result
       }
       def verboseReverseTest : Boolean = {

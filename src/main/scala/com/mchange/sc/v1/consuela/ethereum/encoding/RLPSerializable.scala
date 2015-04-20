@@ -18,6 +18,6 @@ trait RLPSerializable[T <: RLPSerializable[T]] {
   protected def companion : RLPSerializable.Companion[T];
 
   def rlpEncodable : RLP.Encodable       = companion.toRLPEncodable( this.asInstanceOf[T] );
-  def rlpBytes     : immutable.Seq[Byte] = RLP.encode( this.rlpEncodable );
+  def rlpBytes     : immutable.Seq[Byte] = RLP.Encodable.encode( this.rlpEncodable );
 }
 

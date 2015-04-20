@@ -51,7 +51,7 @@ object EthTransaction {
     protected def encodablePayload  = RLP.Encodable.ByteSeq( payloadBytes );
 
     protected def baseRlpElements : Seq[RLP.Encodable] = Seq( encodableNonce, encodableGasPrice, encodableMbTo, encodableValue, encodablePayload );
-    protected def baseRlp         : Seq[Byte]          = RLP.encode( RLP.Encodable.Seq( baseRlpElements ) );
+    protected def baseRlp         : Seq[Byte]          = RLP.Encodable.encode( RLP.Encodable.Seq( baseRlpElements ) );
   }
 
 
@@ -138,7 +138,7 @@ object EthTransaction {
     override def hashCode() : Int = baseHash ^ signature.##;
 
     private def sigRlpElements : Seq[RLP.Encodable] = Seq( RLP.Encodable.UnsignedInt( v.toInt ), RLP.Encodable.UnsignedBigInt( r ), RLP.Encodable.UnsignedBigInt( s ) );
-    lazy val rlpBytes : Seq[Byte] = RLP.encode( RLP.Encodable.Seq( baseRlpElements ++ sigRlpElements ) );
+    lazy val rlpBytes : Seq[Byte] = RLP.Encodable.encode( RLP.Encodable.Seq( baseRlpElements ++ sigRlpElements ) );
   }
   trait Message extends EthTransaction {
     def to   : EthAddress; // not optional once we know we are a message
