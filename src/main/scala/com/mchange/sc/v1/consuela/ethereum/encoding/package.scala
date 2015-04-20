@@ -1,5 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum;
 
+import scala.collection._;
+
 package object encoding {
   /*
    * 
@@ -41,5 +43,20 @@ package object encoding {
       idx += 2
     }
     out.toIndexedSeq
+  }
+
+  object RLPOps {
+    trait Lazy[T] {
+      this : T =>
+
+      val rlpOpsView : T => RLPOps[T];
+
+      lazy val rlpEncodable : RLP.Encodable       = rlpOpsView( this ).rlpEncodable;
+      lazy val rlpBytes     : immutable.Seq[Byte] = RLP.Encodable.encode( this.rlpEncodable );
+    }
+  }
+  implicit class RLPOps[ T : RLPSerializing ]( rlpSerializable : T ) {
+    def rlpEncodable : RLP.Encodable       = implicitly[RLPSerializing[T]].toRLPEncodable( rlpSerializable.asInstanceOf[T] );
+    def rlpBytes     : immutable.Seq[Byte] = implicitly[RLPSerializing[T]].encodeRLP( this.rlpSerializable );
   }
 }

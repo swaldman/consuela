@@ -37,18 +37,6 @@ object RLPSerializing {
       }
     }
   }
-  implicit class RLPOps[ T : RLPSerializing ]( rlpSerializable : T ) {
-    def rlpEncodable : RLP.Encodable       = implicitly[RLPSerializing[T]].toRLPEncodable( rlpSerializable.asInstanceOf[T] );
-    def rlpBytes     : immutable.Seq[Byte] = implicitly[RLPSerializing[T]].encodeRLP( this.rlpSerializable );
-  }
-  trait LazyRLPOps[T] {
-    this : T =>
-
-    val rlpOpsView : T => RLPOps[T];
-
-    lazy val rlpEncodable : RLP.Encodable       = rlpOpsView( this ).rlpEncodable;
-    lazy val rlpBytes     : immutable.Seq[Byte] = RLP.Encodable.encode( this.rlpEncodable );
-  }
 }
 abstract class RLPSerializing[T : ClassTag] {
   implicit val logger = MLogger( this );
