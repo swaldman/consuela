@@ -9,14 +9,14 @@ import javax.xml.bind.DatatypeConverter;
 object Implicits {
   implicit val MainProvider : crypto.jce.Provider = crypto.jce.Provider.ConfiguredProvider;
 
-  implicit class RichString( string : String ) {
+  implicit class RichString( val string : String ) extends AnyVal {
     def decodeHex : Array[Byte] = {
       val hexstring = if ( string.startsWith( "0x" ) ) string.substring(2) else string;
       ByteUtils.fromHexAscii( hexstring ); // should we switch to the DatatypeConverter implementation of hex encoding/decoding?
     }
     def decodeBase64 : Array[Byte] = DatatypeConverter.parseBase64Binary( string );
   }
-  trait RichBytes {
+  trait RichBytes { // if we accept code duplication, we can inline this stuff and let the subclasses extend AnyVal. Hmmm....
     protected val _bytes     : Array[Byte];
     def base64               : String     = DatatypeConverter.printBase64Binary( _bytes )
     def hex                  : String     = ByteUtils.toLowercaseHexAscii( _bytes ); // should we switch to the DatatypeConverter implementation of hex encoding/decoding?
@@ -31,7 +31,7 @@ object Implicits {
   implicit class RichByteArray( bytes : Array[Byte] ) extends RichBytes {
     protected val _bytes = bytes;
   }
-  implicit class RichBigInt( bi : BigInt ) {
+  implicit class RichBigInt( val bi : BigInt ) extends AnyVal {
     /**
      * Ignores sign and converts the byte representation
      * of the BigInt to the desired len by removing or padding
