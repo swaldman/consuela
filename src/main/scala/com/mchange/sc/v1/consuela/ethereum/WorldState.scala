@@ -20,33 +20,6 @@ object WorldState {
       def codeHash = EmptyTrieHash;
     }
 
-    implicit object AccountSerializer extends RLPSerializing[Account] {
-      def toRLPEncodable( account : WorldState.Account ) : RLP.Encodable = {
-        val codeHash = {
-          account match {
-            case contract : WorldState.Account.Contract => contract.codeHash;
-            case agent    : WorldState.Account.Agent    => EmptyTrieHash;
-          }
-        }
-
-        import RLP._;
-        Encodable.Seq.of(
-          Encodable.UnsignedBigInt( account.nonce ),
-          Encodable.UnsignedBigInt( account.balance ),
-          Encodable.ByteSeq( account.storageRoot.bytes ),
-          Encodable.ByteSeq( codeHash.bytes )
-        )
-      }
-      def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[Account] = {
-        import RLP._;
-        import Encodable.{ByteSeq => BS}
-        val Encodable.Seq( Seq( BS( nonceBytes ), BS( balanceBytes ), BS( storageRootBytes ), BS( codeHashBytes ) ) ) = encodable;
-        EthHash.withBytes( codeHashBytes ) match {
-          case EmptyTrieHash => Some( WorldState.Account.Agent( BigInt(1, nonceBytes.toArray), BigInt(1, balanceBytes.toArray), EthHash.withBytes( storageRootBytes ) ) );
-          case codeHash      => Some( WorldState.Account.Contract( BigInt(1, nonceBytes.toArray), BigInt(1, balanceBytes.toArray), EthHash.withBytes( storageRootBytes ), codeHash ) );
-        }
-      }
-    }
   }
   sealed trait Account {
     def nonce       : BigInt;

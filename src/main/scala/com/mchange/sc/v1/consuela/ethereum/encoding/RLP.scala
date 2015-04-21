@@ -19,43 +19,6 @@ object RLP {
   def decodeComplete[T : RLPSerializing]( bytes : Seq[Byte] )            : Option[T]                = implicitly[RLPSerializing[T]].decodeCompleteRLP( bytes ); 
   def encode[T : RLPSerializing]( t : T )                                : immutable.Seq[Byte]      = implicitly[RLPSerializing[T]].encodeRLP( t ); 
 
-  // basic serializers
-  implicit object ByteSeqSerializer extends RLPSerializing[Seq[Byte]] {
-    def toRLPEncodable( bytes : Seq[Byte] )                 : RLP.Encodable     = Encodable.ByteSeq( bytes );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[Seq[Byte]] = encodable match {
-      case Encodable.ByteSeq( bytes ) => Some( bytes );
-      case _                          => None;
-    }
-  }
-  implicit object ImmutableByteSeqSerializer extends RLPSerializing[immutable.Seq[Byte]] {
-    def toRLPEncodable( bytes : immutable.Seq[Byte] )                 : RLP.Encodable     = Encodable.ByteSeq( bytes );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[immutable.Seq[Byte]] = encodable match {
-      case Encodable.ByteSeq( bytes ) => Some( bytes );
-      case _                          => None;
-    }
-  }
-  implicit object ByteArraySerializer extends RLPSerializing[Array[Byte]] {
-    def toRLPEncodable( bytes : Array[Byte] )               : RLP.Encodable     = Encodable.ByteSeq( bytes );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[Array[Byte]] = encodable match {
-      case Encodable.ByteSeq( bytes ) => Some( bytes.toArray );
-      case _                          => None;
-    }
-  }
-  implicit object UnsignedIntSerializer extends RLPSerializing[Int] {
-    def toRLPEncodable( i : Int )                           : RLP.Encodable = Encodable.UnsignedInt( i );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[Int]     = encodable match {
-      case Encodable.ByteSeq( bytes ) if (bytes.length <= 8) => Some( Encodable.unbeInt(bytes) ).filter( _ >= 0 );
-      case _                                                 => None;
-    }
-  }
-  implicit object UnsignedBigIntSerializer extends RLPSerializing[BigInt] {
-    def toRLPEncodable( bi : BigInt )                       : RLP.Encodable = Encodable.UnsignedBigInt( bi );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[BigInt] = encodable match {
-      case Encodable.ByteSeq( bytes ) => Some( BigInt( 1, bytes.toArray ) );
-      case _                          => None;
-    }
-  }
-
   // convenience methods
   def encodeString( str : String, charset : Charset ) : immutable.Seq[Byte] = Encodable.encode( Encodable.ByteSeq( str.getBytes( charset ).toSeq ) );
 
@@ -95,13 +58,13 @@ object RLP {
       require( value >= 0 );
 
       def isSimple = false;
-      def simplify = Encodable.ByteSeq( be( value ) )
+      def simplify = Encodable.ByteSeq( scalarBytes( value ) )
     }
     case class UnsignedBigInt( value : scala.BigInt ) extends Encodable {
       require( value >= 0 );
 
       def isSimple = false;
-      def simplify = Encodable.ByteSeq( be( value ) )
+      def simplify = Encodable.ByteSeq( scalarBytes( value ) )
     }
     object Seq {
       object of {
@@ -220,7 +183,7 @@ object RLP {
             case immutable.Seq( b ) if ( b < 128 )  => immutable.Seq( b.toByte );
             case _                  if ( len < 56 ) => (((128 + len) +: bytes) : immutable.Seq[Int]).map( _.toByte );
             case _                                  => {
-              val lenBytes = be( len );
+              val lenBytes = scalarBytes( len );
               (183 + lenBytes.length).toByte +: (lenBytes ++: bytes.map(  _.toByte ))
             }
           }
@@ -241,7 +204,7 @@ object RLP {
         if ( len < 56 )
           (192 + len).toByte +: sencodables
         else {
-          val lenBytes = be( len );
+          val lenBytes = scalarBytes( len );
           (247 + lenBytes.length).toByte +: ( lenBytes ++: sencodables )
         }
       }
@@ -249,8 +212,8 @@ object RLP {
 
       encodable match {
         case bse : Encodable.ByteSeq        => rb( bse.bytes );
-        case ie  : Encodable.UnsignedInt    => rba( be( ie.value ) );
-        case bie : Encodable.UnsignedBigInt => rba( be( bie.value ) );
+        case ie  : Encodable.UnsignedInt    => rba( scalarBytes( ie.value ) );
+        case bie : Encodable.UnsignedBigInt => rba( scalarBytes( bie.value ) );
         case ese : Encodable.Seq            => rl( ese.seq );
       }
     }
@@ -298,11 +261,11 @@ object RLP {
 
       tryAsAtom orElse tryAsSeq
     }
-    private[this] def be( i : Int )      = IntegerUtils.byteArrayFromInt( i ).dropWhile( _ == 0 );
-    private[this] def be( bi : BigInt )  = bi.toByteArray.dropWhile( _ == 0 );
+    def scalarBytes( i : Int )      = IntegerUtils.byteArrayFromInt( i ).dropWhile( _ == 0 );
+    def scalarBytes( bi : BigInt )  = bi.toByteArray.dropWhile( _ == 0 );
 
     // Note: We're relying on the fact that an uninitialized byte is guaranteed by the JVM to be zero. 
-    private[RLP] def unbeInt( truncatedIntBytes : scala.Seq[Byte] ) = IntegerUtils.intFromByteArray( Array.ofDim[Byte](8 - truncatedIntBytes.length) ++ truncatedIntBytes, 0 ); 
+    def intFromScalarBytes( truncatedIntBytes : scala.Seq[Byte] ) = IntegerUtils.intFromByteArray( Array.ofDim[Byte](8 - truncatedIntBytes.length) ++ truncatedIntBytes, 0 ); 
   }
   sealed trait Encodable {
     def isSimple : Boolean;

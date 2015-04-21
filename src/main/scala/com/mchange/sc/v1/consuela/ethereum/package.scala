@@ -21,6 +21,8 @@ package object ethereum {
 
   implicit object EthHashRLPSerializing extends RLPSerializing.ByteArrayValue[EthHash]( EthHash.withBytes );
 
+  implicit object EthAddressSerializing extends RLPSerializing.ByteArrayValue[EthAddress]( EthAddress.apply );
+
   implicit object EthTransactionRLPSerializing extends RLPSerializing[EthTransaction] {
     import EthTransaction._;
 
@@ -43,7 +45,6 @@ package object ethereum {
       }
     }
     override def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[EthTransaction] = {
-      import RLP._;
       import RLP.Encodable.{ByteSeq => BS};
 
       // I know nested options, yuk. We want an Option[EthAddress], which discriminated betwee
@@ -79,6 +80,34 @@ package object ethereum {
         } yield {
           Signed( b, sig )
         }
+      }
+    }
+  }
+
+  implicit object WorldStateAccountSerializer extends RLPSerializing[WorldState.Account] {
+    def toRLPEncodable( account : WorldState.Account ) : RLP.Encodable = {
+      val codeHash = {
+        account match {
+          case contract : WorldState.Account.Contract => contract.codeHash;
+          case agent    : WorldState.Account.Agent    => trie.EmptyTrieHash;
+        }
+      }
+
+      import RLP._;
+      Encodable.Seq.of(
+        Encodable.UnsignedBigInt( account.nonce ),
+        Encodable.UnsignedBigInt( account.balance ),
+        Encodable.ByteSeq( account.storageRoot.bytes ),
+        Encodable.ByteSeq( codeHash.bytes )
+      )
+    }
+    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[WorldState.Account] = {
+      import RLP._;
+      import Encodable.{ByteSeq => BS}
+      val Encodable.Seq( Seq( BS( nonceBytes ), BS( balanceBytes ), BS( storageRootBytes ), BS( codeHashBytes ) ) ) = encodable;
+      EthHash.withBytes( codeHashBytes ) match {
+        case trie.EmptyTrieHash => Some( WorldState.Account.Agent( BigInt(1, nonceBytes.toArray), BigInt(1, balanceBytes.toArray), EthHash.withBytes( storageRootBytes ) ) );
+        case codeHash      => Some( WorldState.Account.Contract( BigInt(1, nonceBytes.toArray), BigInt(1, balanceBytes.toArray), EthHash.withBytes( storageRootBytes ), codeHash ) );
       }
     }
   }

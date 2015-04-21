@@ -45,6 +45,49 @@ package object encoding {
     out.toIndexedSeq
   }
 
+  /*
+   * 
+   * Basic RLP serialization implicits
+   * 
+   */ 
+  // serializers
+  implicit object ByteSeqSerializer extends RLPSerializing[Seq[Byte]] {
+    def toRLPEncodable( bytes : Seq[Byte] )                 : RLP.Encodable     = RLP.Encodable.ByteSeq( bytes );
+    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[Seq[Byte]] = encodable match {
+      case RLP.Encodable.ByteSeq( bytes ) => Some( bytes );
+      case _                              => None;
+    }
+  }
+  implicit object ImmutableByteSeqSerializer extends RLPSerializing[immutable.Seq[Byte]] {
+    def toRLPEncodable( bytes : immutable.Seq[Byte] )       : RLP.Encodable     = RLP.Encodable.ByteSeq( bytes );
+    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[immutable.Seq[Byte]] = encodable match {
+      case RLP.Encodable.ByteSeq( bytes ) => Some( bytes );
+      case _                              => None;
+    }
+  }
+  implicit object ByteArraySerializer extends RLPSerializing[Array[Byte]] {
+    def toRLPEncodable( bytes : Array[Byte] )               : RLP.Encodable       = RLP.Encodable.ByteSeq( bytes );
+    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[Array[Byte]] = encodable match {
+      case RLP.Encodable.ByteSeq( bytes ) => Some( bytes.toArray );
+      case _                              => None;
+    }
+  }
+  implicit object UnsignedIntSerializer extends RLPSerializing[Int] {
+    def toRLPEncodable( i : Int )                           : RLP.Encodable = RLP.Encodable.UnsignedInt( i );
+    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[Int]     = encodable match {
+      case RLP.Encodable.ByteSeq( bytes ) if (bytes.length <= 8) => Some( RLP.Encodable.intFromScalarBytes(bytes) ).filter( _ >= 0 );
+      case _                                                     => None;
+    }
+  }
+  implicit object UnsignedBigIntSerializer extends RLPSerializing[BigInt] {
+    def toRLPEncodable( bi : BigInt )                       : RLP.Encodable = RLP.Encodable.UnsignedBigInt( bi );
+    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[BigInt] = encodable match {
+      case RLP.Encodable.ByteSeq( bytes ) => Some( BigInt( 1, bytes.toArray ) );
+      case _                              => None;
+    }
+  }
+
+  // pimps
   object RLPOps {
     trait Lazy[T] {
       this : T =>
