@@ -2,7 +2,7 @@ package com.mchange.sc.v1.consuela.hash;
 
 import scala.collection._;
 
-import com.mchange.sc.v1.consuela.Implicits._;
+import com.mchange.sc.v1.consuela._;
 
 import com.mchange.sc.v1.consuela.util.ByteArrayValue;
 

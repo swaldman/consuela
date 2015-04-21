@@ -1,6 +1,6 @@
 package com.mchange.sc.v1.consuela.util;
 
-import com.mchange.sc.v1.consuela.Implicits._;
+import com.mchange.sc.v1.consuela._;
 
 import scala.collection.immutable.Vector;
 import scala.util.hashing.MurmurHash3;

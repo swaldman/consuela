@@ -2,8 +2,8 @@ package com.mchange.sc.v1.consuela.ethereum;
 
 import encoding.{RLP, RLPSerializing};
 
+import com.mchange.sc.v1.consuela._;
 import com.mchange.sc.v1.consuela.crypto;
-import com.mchange.sc.v1.consuela.Implicits._;
 
 import com.mchange.sc.v1.consuela.util.ByteArrayValue;
 import com.mchange.sc.v1.consuela.ethereum.util.EthByteArrayValue;

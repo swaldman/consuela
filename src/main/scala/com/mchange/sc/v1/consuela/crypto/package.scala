@@ -15,7 +15,6 @@ import java.util.Arrays;
 import scala.util.hashing.MurmurHash3;
 
 import com.mchange.sc.v1.consuela.hash.Hash;
-import com.mchange.sc.v1.consuela.Implicits._;
 
 package object crypto {
   class InvalidSignatureException( message : String, t : Throwable = null ) extends ConsuelaException( message, t );

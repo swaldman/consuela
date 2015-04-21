@@ -1,6 +1,6 @@
 package com.mchange.sc.v1.consuela.ethereum.encoding;
 
-import com.mchange.sc.v1.consuela.Implicits._;
+import com.mchange.sc.v1.consuela._;
 import scala.collection._;
 
 object RLPSerializable {

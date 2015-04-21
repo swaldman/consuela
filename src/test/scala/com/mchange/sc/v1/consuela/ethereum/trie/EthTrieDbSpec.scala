@@ -8,7 +8,7 @@ import play.api.libs.json._;
 import java.nio.charset.Charset;
 
 import com.mchange.lang.ByteUtils;
-import com.mchange.sc.v1.consuela.Implicits._
+import com.mchange.sc.v1.consuela._
 import com.mchange.sc.v1.consuela.ethereum._
 import com.mchange.sc.v1.consuela.ethereum.encoding._
 

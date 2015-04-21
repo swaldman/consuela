@@ -1,7 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum;
 
 import com.mchange.sc.v1.consuela._;
-import com.mchange.sc.v1.consuela.Implicits._;
+
 import scala.collection._;
 
 import specification.Set.SignatureV;

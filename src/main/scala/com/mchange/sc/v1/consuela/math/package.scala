@@ -33,10 +33,4 @@ package object math {
     Array.copy( bytes, 0, out, desiredLength - bytesLength, bytesLength )
     out
   }
-
-  object Implicits {
-    implicit class RichBigInt( bi : BigInt ) {
-      def asFixedLengthUnsignedByteArray( desiredLength : Int ) : Array[Byte] = math.asFixedLengthUnsignedByteArray( bi, desiredLength )
-    }
-  }
 }

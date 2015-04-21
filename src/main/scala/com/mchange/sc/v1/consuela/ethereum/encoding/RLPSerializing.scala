@@ -1,8 +1,8 @@
 package com.mchange.sc.v1.consuela.ethereum.encoding;
 
+import com.mchange.sc.v1.consuela._;
 import com.mchange.sc.v1.consuela.util;
 
-import com.mchange.sc.v1.consuela.Implicits._;
 import scala.collection._;
 
 import com.mchange.sc.v1.log._;
