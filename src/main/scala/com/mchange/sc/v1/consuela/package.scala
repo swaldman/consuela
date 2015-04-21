@@ -13,28 +13,38 @@ package object consuela {
 
   val lineSeparator = scala.util.Properties.lineSeparator;
 
-  trait MessageSource[T] {
-    def getMessage( source : T ) : String;
-
-    def getMessageWithStackTrace( source : T ) : String = (List( this.getMessage( source ) ) ++ Thread.currentThread().getStackTrace()).mkString( lineSeparator );
+  case class Failure( message : String, mbStackTrace : Option[Array[StackTraceElement]] ) {
+    override def toString() : String = mbStackTrace.fold( message ) { stackTrace =>
+      (List( message ) ++ stackTrace).mkString( lineSeparator )
+    }
   }
 
-  object StringAsMessageSource extends MessageSource[String] {
+  trait FailureSource[T] {
+    def getMessage( source : T ) : String;
+    def getStackTrace( source : T ) : Array[StackTraceElement] = Thread.currentThread().getStackTrace();
+
+    def getFailure( source : T, includeStackTrace : Boolean = true ) : Failure = {
+      val mbStackTrace = if ( includeStackTrace ) Some( getStackTrace( source ) ) else None;
+      Failure( getMessage( source ), mbStackTrace )
+    }
+  }
+
+  object StringAsFailureSource extends FailureSource[String] {
     def getMessage( source : String ) : String = source;
   }
 
-  object ThrowableAsMessageSource extends MessageSource[Throwable] {
+  object ThrowableAsFailureSource extends FailureSource[Throwable] {
     def getMessage( source : Throwable ) : String = s"${source.getClass.getName}: ${source.getMessage()}";
 
-    override def getMessageWithStackTrace( source : T ) : String = (List( this.getMessage( source ) ) ++ source.getStackTrace()).mkString( lineSeparator );
+    override def getStackTrace( source : Throwable ) = source.getStackTrace;
   }
 
-  type Failable[T] = Either[String,T];
+  type Failable[T] = Either[Failure,T];
 
-  def fail[T : MessageSource]( source : T, includeStackTrace = true ) : Failable[T] = {
-    val ms = implicitly[MessageSource[T]];
-    val message = if ( includeStackTrace ) ms.getMessageWithStackTrace( source ) else ms.getMessage( source );
-    Left( message );
+  def fail[T : FailureSource]( source : T, includeStackTrace : Boolean = true ) : Failable[T] = {
+    val ms = implicitly[FailureSource[T]];
+    val failure = ms.getFailure( source, includeStackTrace );
+    Left( failure );
   }
 
   def succeed[T]( value : T) : Failable[T] = Right( value );
