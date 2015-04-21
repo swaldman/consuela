@@ -6,7 +6,7 @@ import scala.language.implicitConversions;
 import java.math.BigInteger;
 import javax.xml.bind.DatatypeConverter;
 
-import scala.util.Try;
+import scala.util.{Try, Success, Failure};
 
 package object consuela {
   class ConsuelaException( message : String, t : Throwable = null ) extends Exception( message, t );
@@ -15,37 +15,37 @@ package object consuela {
 
   val lineSeparator = scala.util.Properties.lineSeparator;
 
-  case class Failure( message : String, mbStackTrace : Option[Array[StackTraceElement]] ) {
+  case class Fail( message : String, mbStackTrace : Option[Array[StackTraceElement]] ) {
     override def toString() : String = mbStackTrace.fold( message ) { stackTrace =>
       (List( message ) ++ stackTrace).mkString( lineSeparator )
     }
   }
 
-  trait FailureSource[T] {
+  trait FailSource[T] {
     def getMessage( source : T ) : String;
     def getStackTrace( source : T ) : Array[StackTraceElement] = Thread.currentThread().getStackTrace();
 
-    def getFailure( source : T, includeStackTrace : Boolean = true ) : Failure = {
+    def getFail( source : T, includeStackTrace : Boolean = true ) : Fail = {
       val mbStackTrace = if ( includeStackTrace ) Some( getStackTrace( source ) ) else None;
-      Failure( getMessage( source ), mbStackTrace )
+      Fail( getMessage( source ), mbStackTrace )
     }
   }
 
-  implicit object StringAsFailureSource extends FailureSource[String] {
+  implicit object StringAsFailSource extends FailSource[String] {
     def getMessage( source : String ) : String = source;
   }
 
-  implicit object ThrowableAsFailureSource extends FailureSource[Throwable] {
+  implicit object ThrowableAsFailSource extends FailSource[Throwable] {
     def getMessage( source : Throwable ) : String = s"${source.getClass.getName}: ${source.getMessage()}";
 
     override def getStackTrace( source : Throwable ) = source.getStackTrace;
   }
 
-  type Failable[+T] = Either[Failure,T];
+  type Failable[+T] = Either[Fail,T];
 
-  def fail[S : FailureSource]( source : S, includeStackTrace : Boolean = true ) : Failable[Nothing] = {
-    val ms = implicitly[FailureSource[S]];
-    val failure = ms.getFailure( source, includeStackTrace );
+  def fail[S : FailSource]( source : S, includeStackTrace : Boolean = true ) : Failable[Nothing] = {
+    val ms = implicitly[FailSource[S]];
+    val failure = ms.getFail( source, includeStackTrace );
     Left( failure ) : Failable[Nothing];
   }
 
@@ -53,8 +53,8 @@ package object consuela {
 
   implicit class FailableTry[T]( val attempt : Try[T] ) extends AnyVal {
     def toFailable : Failable[T] = attempt match {
-      case scala.util.Success( value )     => succeed( value );
-      case scala.util.Failure( exception ) => fail( exception, true );
+      case Success( value )     => succeed( value );
+      case Failure( exception ) => fail( exception, true );
     }
   }
 
