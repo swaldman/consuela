@@ -11,8 +11,12 @@ package object consuela {
 
   implicit val MainProvider : crypto.jce.Provider = crypto.jce.Provider.ConfiguredProvider;
 
+  val lineSeparator = scala.util.Properties.lineSeparator;
+
   trait MessageSource[T] {
     def getMessage( source : T ) : String;
+
+    def getMessageWithStackTrace( source : T ) : String = (List( this.getMessage( source ) ) ++ Thread.currentThread().getStackTrace()).mkString( lineSeparator );
   }
 
   object StringAsMessageSource extends MessageSource[String] {
@@ -20,13 +24,20 @@ package object consuela {
   }
 
   object ThrowableAsMessageSource extends MessageSource[Throwable] {
-    def getMessage( source : Throwable ) : String = source.getMessage();
+    def getMessage( source : Throwable ) : String = s"${source.getClass.getName}: ${source.getMessage()}";
+
+    override def getMessageWithStackTrace( source : T ) : String = (List( this.getMessage( source ) ) ++ source.getStackTrace()).mkString( lineSeparator );
   }
 
   type Failable[T] = Either[String,T];
 
-  def fail[T : MessageSource]( source : T ) : Failable[T] = Left( implicitly[MessageSource[T]].getMessage( source ) );
-  def succeed[T]( value : T) : Failable[T]                = Right( value );
+  def fail[T : MessageSource]( source : T, includeStackTrace = true ) : Failable[T] = {
+    val ms = implicitly[MessageSource[T]];
+    val message = if ( includeStackTrace ) ms.getMessageWithStackTrace( source ) else ms.getMessage( source );
+    Left( message );
+  }
+
+  def succeed[T]( value : T) : Failable[T] = Right( value );
 
   implicit class RichString( val string : String ) extends AnyVal {
     def decodeHex : Array[Byte] = {
