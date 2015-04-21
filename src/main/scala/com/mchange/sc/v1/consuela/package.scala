@@ -11,6 +11,23 @@ package object consuela {
 
   implicit val MainProvider : crypto.jce.Provider = crypto.jce.Provider.ConfiguredProvider;
 
+  trait MessageSource[T] {
+    def getMessage( source : T ) : String;
+  }
+
+  object StringAsMessageSource extends MessageSource[String] {
+    def getMessage( source : String ) : String = source;
+  }
+
+  object ThrowableAsMessageSource extends MessageSource[Throwable] {
+    def getMessage( source : Throwable ) : String = source.getMessage();
+  }
+
+  type Failable[T] = Either[String,T];
+
+  def fail[T : MessageSource]( source : T ) : Failable[T] = Left( implicitly[MessageSource[T]].getMessage( source ) );
+  def succeed[T]( value : T) : Failable[T]                = Right( value );
+
   implicit class RichString( val string : String ) extends AnyVal {
     def decodeHex : Array[Byte] = {
       val hexstring = if ( string.startsWith( "0x" ) ) string.substring(2) else string;
