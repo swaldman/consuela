@@ -27,6 +27,20 @@ object RLP {
       case _                          => None;
     }
   }
+  implicit object ImmutableByteSeqSerializer extends RLPSerializing[immutable.Seq[Byte]] {
+    def toRLPEncodable( bytes : immutable.Seq[Byte] )                 : RLP.Encodable     = Encodable.ByteSeq( bytes );
+    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[immutable.Seq[Byte]] = encodable match {
+      case Encodable.ByteSeq( bytes ) => Some( bytes );
+      case _                          => None;
+    }
+  }
+  implicit object ByteArraySerializer extends RLPSerializing[Array[Byte]] {
+    def toRLPEncodable( bytes : Array[Byte] )               : RLP.Encodable     = Encodable.ByteSeq( bytes );
+    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[Array[Byte]] = encodable match {
+      case Encodable.ByteSeq( bytes ) => Some( bytes.toArray );
+      case _                          => None;
+    }
+  }
   implicit object UnsignedIntSerializer extends RLPSerializing[Int] {
     def toRLPEncodable( i : Int )                           : RLP.Encodable = Encodable.UnsignedInt( i );
     def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[Int]     = encodable match {
@@ -90,7 +104,10 @@ object RLP {
       def simplify = Encodable.ByteSeq( be( value ) )
     }
     object Seq {
-      def of( encodables : Encodable* )       = new Seq( ImmutableArraySeq( encodables.toArray ) );
+      object of {
+        def apply( encodables : Encodable* )  : Encodable.Seq = new Seq( ImmutableArraySeq( encodables.toArray ) );
+        def unapplySeq( seq : Encodable.Seq ) : Option[immutable.Seq[Encodable]] = Some(seq.seq);
+      }
       def apply( array : Array[Encodable] )   = new Seq( ImmutableArraySeq( array ) );
       def apply( seq : scala.Seq[Encodable] ) = new Seq( toImmutable( seq ) );
     }

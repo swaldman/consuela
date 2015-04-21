@@ -1,8 +1,13 @@
 package com.mchange.sc.v1.consuela;
 
-import ethereum.encoding.RLPSerializing;
+import ethereum.encoding._;
 
 import com.mchange.sc.v1.consuela.hash.Hash;
+
+import scala.collection._;
+
+import com.mchange.sc.v1.log.MLogger;
+import com.mchange.sc.v1.log.MLevel._;
 
 package object ethereum {
   class EthereumException( message : String, t : Throwable = null ) extends ConsuelaException( message, t );
@@ -12,7 +17,73 @@ package object ethereum {
   val  EthHash    = Hash.SHA3_256;
   val  EthHashLen = Hash.SHA3_256.HashLength;
 
-  implicit object EthHashSerializer extends RLPSerializing.ByteArrayValue[EthHash]( EthHash.withBytes );
-
   val EmptyByteSeqHash = EthHash.hash( encoding.RLP.Encoded.EmptyByteSeq )
+
+  implicit object EthHashRLPSerializing extends RLPSerializing.ByteArrayValue[EthHash]( EthHash.withBytes );
+
+  implicit object EthTransactionRLPSerializing extends RLPSerializing[EthTransaction] {
+    import EthTransaction._;
+
+    override def toRLPEncodable( txn : EthTransaction ): RLP.Encodable = {
+      import RLP.Encodable.{UnsignedBigInt => UBI, ByteSeq => BS, UnsignedInt => UI};
+
+      def baseEncodables( unsigned : Unsigned ) : Vector[RLP.Encodable] = {
+        val (rlpMbTo, payload) = unsigned match {
+          case msg : Unsigned.Message          => (msg.to.bytes, msg.data);
+          case cc  : Unsigned.ContractCreation => (Nil, cc.init);
+        }
+        Vector( UBI( unsigned.nonce ), UBI( unsigned.gasPrice ), UBI( unsigned.gasLimit ), BS( rlpMbTo ), UBI( unsigned.value ), BS( payload ) );
+      }
+      def sigEncodables( signed : Signed ) : Vector[RLP.Encodable] = Vector( UI( signed.v ), UBI( signed.r ), UBI( signed.s ) ) 
+
+      txn match {
+        case unsigned : Unsigned => RLP.Encodable.Seq( baseEncodables( unsigned ) );
+        case signed   : Signed   => RLP.Encodable.Seq( baseEncodables( signed.base ) ++ sigEncodables( signed ) );
+        case other               => throw new AssertionError( s"Huh? Saw an EthTransaction that is marked neither Signed nor Unsigned: ${other}" );
+      }
+    }
+    override def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[EthTransaction] = {
+      import RLP._;
+      import RLP.Encodable.{ByteSeq => BS};
+
+      // I know nested options, yuk. We want an Option[EthAddress], which discriminated betwee
+      // Messages and ContactCreation objects. If we cannot properly parse one, we get a None at top-level.
+      def decodeMbToBytes( mbToBytes : Seq[Byte] ) : Option[Option[EthAddress]] = {
+        DEBUG.attempt( if (mbToBytes == Nil) None else Some( EthAddress( mbToBytes ) ) ).toOption
+      }
+
+      val RLP.Encodable.Seq.of( BS( nonceBytes ), BS( gasPriceBytes ), BS( gasLimitBytes), BS( mbToBytes ), BS( valueBytes ), BS( payloadBytes ), rest @ _* ) = encodable;
+
+      val base = for {
+        nonce    <- RLP.decodeComplete[BigInt]( nonceBytes );
+        gasPrice <- RLP.decodeComplete[BigInt]( gasPriceBytes );
+        gasLimit <- RLP.decodeComplete[BigInt]( gasLimitBytes );
+        mbTo     <- decodeMbToBytes( mbToBytes );
+        value    <- RLP.decodeComplete[BigInt]( valueBytes );
+        payload  <- RLP.decodeComplete[immutable.Seq[Byte]]( payloadBytes )
+      } yield {
+        mbTo.fold( new Unsigned.ContractCreation( nonce, gasPrice, gasLimit, value, payload.toIndexedSeq ) : Unsigned ){ addr =>
+          new Unsigned.Message( nonce, gasPrice, gasLimit, addr, value, payload.toIndexedSeq )
+        }
+      }
+      if ( rest.isEmpty ) {
+        base
+      } else {
+        val Seq( BS( vBytes ), BS( rBytes ), BS( sBytes ) ) = rest;
+        for {
+          b        <- base;
+          v        <- RLP.decodeComplete[Int]( vBytes );
+          r        <- RLP.decodeComplete[BigInt]( rBytes );
+          s        <- RLP.decodeComplete[BigInt]( sBytes );
+          sig      <- DEBUG.attempt( EthSignature( v.toByte, r, s ) ).toOption
+        } yield {
+          Signed( b, sig )
+        }
+      }
+    }
+  }
 }
+
+
+
+

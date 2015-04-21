@@ -3,7 +3,7 @@ package com.mchange.sc.v1.consuela.trie;
 import scala.annotation.tailrec;
 
 object EmbeddableEthStylePMTrie {
-  val UTF_8 = java.nio.charset.Charset.forName("UTF-8");
+  val UTF_8 = java.nio.charset.StandardCharsets.UTF_8;
 
   sealed trait Node[+L,+V,+H];
   case class Branch[L,V,H] ( val children : IndexedSeq[NodeSource[L,V,H]], val mbValue : Option[V] ) extends Node[L,V,H];

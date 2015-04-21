@@ -18,7 +18,7 @@ object EthAddress {
 
   def computeBytes( pub : EthPublicKey ) : Array[Byte] = EthHash.hash(pub.toByteArray).toByteArray.drop(12);
 
-  implicit object EthAddressSerializer extends RLPSerializing.ByteArrayValue[EthAddress]( EthAddress.apply );
+  implicit object AsRLPSerializing extends RLPSerializing.ByteArrayValue[EthAddress]( EthAddress.apply );
 }
 final class EthAddress private ( protected val _bytes : Array[Byte] ) extends ByteArrayValue with EthByteArrayValue.Nibbly {
 
