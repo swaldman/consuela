@@ -6,6 +6,8 @@ import scala.language.implicitConversions;
 import java.math.BigInteger;
 import javax.xml.bind.DatatypeConverter;
 
+import scala.util.Try;
+
 package object consuela {
   class ConsuelaException( message : String, t : Throwable = null ) extends Exception( message, t );
 
@@ -29,25 +31,39 @@ package object consuela {
     }
   }
 
-  object StringAsFailureSource extends FailureSource[String] {
+  implicit object StringAsFailureSource extends FailureSource[String] {
     def getMessage( source : String ) : String = source;
   }
 
-  object ThrowableAsFailureSource extends FailureSource[Throwable] {
+  implicit object ThrowableAsFailureSource extends FailureSource[Throwable] {
     def getMessage( source : Throwable ) : String = s"${source.getClass.getName}: ${source.getMessage()}";
 
     override def getStackTrace( source : Throwable ) = source.getStackTrace;
   }
 
-  type Failable[T] = Either[Failure,T];
+  type Failable[+T] = Either[Failure,T];
 
-  def fail[T : FailureSource]( source : T, includeStackTrace : Boolean = true ) : Failable[T] = {
-    val ms = implicitly[FailureSource[T]];
+  def fail[S : FailureSource]( source : S, includeStackTrace : Boolean = true ) : Failable[Nothing] = {
+    val ms = implicitly[FailureSource[S]];
     val failure = ms.getFailure( source, includeStackTrace );
-    Left( failure );
+    Left( failure ) : Failable[Nothing];
   }
 
   def succeed[T]( value : T) : Failable[T] = Right( value );
+
+  implicit class FailableTry[T]( val attempt : Try[T] ) extends AnyVal {
+    def toFailable : Failable[T] = attempt match {
+      case scala.util.Success( value )     => succeed( value );
+      case scala.util.Failure( exception ) => fail( exception, true );
+    }
+  }
+
+  implicit class FailableOption[T]( val maybe : Option[T] ) extends AnyVal {
+    def toFailable : Failable[T] = maybe match {
+      case Some( value )  => succeed( value );
+      case None           => fail( "No information available.", true );
+    }
+  }
 
   implicit class RichString( val string : String ) extends AnyVal {
     def decodeHex : Array[Byte] = {
