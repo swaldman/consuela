@@ -49,9 +49,20 @@ package object consuela {
 
   implicit class FailableOps[T]( val failable : Failable[T] ) extends AnyVal {
     def get : T = failable match {
-      case eitherL  : Left[Fail,T] => eitherL.left.get.vomit;
-      case eitherR : Right[Fail,T] => eitherR.right.get;
+      case Left( fail )   => fail.vomit;
+      case Right( value ) => value;
     }
+
+    // right-bias the Either, modified from Scala's RightProjection source
+    def foreach[U]( f : T => U )                        = failable.right.foreach( f );
+    def getOrElse[TT >: T](or : =>TT)                   = failable.right.getOrElse( or );
+    def forall( f : T => Boolean )                      = failable.right.forall( f );
+    def exists( f : T => Boolean)                       = failable.right.exists( f );
+    def flatMap[FF >: Fail, Y]( f: T => Either[FF, Y] ) = failable.right.flatMap( f );
+    def map[Y]( f: T => Y )                             = failable.right.map( f );
+    def filter( p: T => Boolean ): Option[Failable[T]]  = failable.right.filter( p );
+    def toSeq                                           = failable.right.toSeq;
+    def toOption                                        = failable.right.toOption;
   }
 
   def fail[S : FailSource]( source : S, includeStackTrace : Boolean = true ) : Failable[Nothing] = {

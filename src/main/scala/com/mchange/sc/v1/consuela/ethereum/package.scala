@@ -53,12 +53,12 @@ package object ethereum {
       val RLP.Encodable.Seq.of( BS( nonceBytes ), BS( gasPriceBytes ), BS( gasLimitBytes), BS( mbToBytes ), BS( valueBytes ), BS( payloadBytes ), rest @ _* ) = encodable;
 
       val base = for {
-        nonce    <- RLP.decodeComplete[BigInt]( nonceBytes ).right;
-        gasPrice <- RLP.decodeComplete[BigInt]( gasPriceBytes ).right;
-        gasLimit <- RLP.decodeComplete[BigInt]( gasLimitBytes ).right;
-        mbTo     <- decodeMbToBytes( mbToBytes ).right;
-        value    <- RLP.decodeComplete[BigInt]( valueBytes ).right;
-        payload  <- RLP.decodeComplete[immutable.Seq[Byte]]( payloadBytes ).right
+        nonce    <- RLP.decodeComplete[BigInt]( nonceBytes );
+        gasPrice <- RLP.decodeComplete[BigInt]( gasPriceBytes );
+        gasLimit <- RLP.decodeComplete[BigInt]( gasLimitBytes );
+        mbTo     <- decodeMbToBytes( mbToBytes );
+        value    <- RLP.decodeComplete[BigInt]( valueBytes );
+        payload  <- RLP.decodeComplete[immutable.Seq[Byte]]( payloadBytes )
       } yield {
         mbTo.fold( new Unsigned.ContractCreation( nonce, gasPrice, gasLimit, value, payload.toIndexedSeq ) : Unsigned ){ addr =>
           new Unsigned.Message( nonce, gasPrice, gasLimit, addr, value, payload.toIndexedSeq )
@@ -69,11 +69,11 @@ package object ethereum {
       } else {
         val Seq( BS( vBytes ), BS( rBytes ), BS( sBytes ) ) = rest;
         for {
-          b        <- base.right;
-          v        <- RLP.decodeComplete[Int]( vBytes ).right;
-          r        <- RLP.decodeComplete[BigInt]( rBytes ).right;
-          s        <- RLP.decodeComplete[BigInt]( sBytes ).right;
-          sig      <- Try( EthSignature( v.toByte, r, s ) ).toFailable.right
+          b        <- base;
+          v        <- RLP.decodeComplete[Int]( vBytes );
+          r        <- RLP.decodeComplete[BigInt]( rBytes );
+          s        <- RLP.decodeComplete[BigInt]( sBytes );
+          sig      <- Try( EthSignature( v.toByte, r, s ) ).toFailable
         } yield {
           Signed( b, sig )
         }
@@ -102,10 +102,10 @@ package object ethereum {
       import RLP.Encodable.{ByteSeq => BS}
       val RLP.Encodable.Seq.of( BS( nonceBytes ), BS( balanceBytes ), BS( storageRootBytes ), BS( codeHashBytes ) ) = encodable;
       for {
-        nonce       <- RLP.decodeComplete[BigInt]( nonceBytes ).right;
-        balance     <- RLP.decodeComplete[BigInt]( balanceBytes ).right;
-        storageRoot <- Try( EthHash.withBytes( storageRootBytes ) ).toFailable.right;
-        codeHash    <- Try( EthHash.withBytes( codeHashBytes ) ).toFailable.right
+        nonce       <- RLP.decodeComplete[BigInt]( nonceBytes );
+        balance     <- RLP.decodeComplete[BigInt]( balanceBytes );
+        storageRoot <- Try( EthHash.withBytes( storageRootBytes ) ).toFailable;
+        codeHash    <- Try( EthHash.withBytes( codeHashBytes ) ).toFailable
       } yield {
         codeHash match {
           case trie.EmptyTrieHash => WorldState.Account.Agent( nonce, balance, storageRoot );
