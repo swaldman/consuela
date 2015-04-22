@@ -1,5 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum.encoding;
 
+import com.mchange.sc.v1.consuela._
+
 import scala.util.Try;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -11,13 +13,12 @@ import com.mchange.sc.v1.consuela.util.ImmutableArraySeq;
 
 object RLP {
 
-
   def toEncodable[T : RLPSerializing]( t : T )                             : RLP.Encodable = implicitly[RLPSerializing[T]].toRLPEncodable( t );
-  def fromEncodable[T : RLPSerializing]( encodable : RLP.Encodable.Basic ) : Option[T]     = implicitly[RLPSerializing[T]].fromRLPEncodable( encodable );
+  def fromEncodable[T : RLPSerializing]( encodable : RLP.Encodable.Basic ) : Failable[T]   = implicitly[RLPSerializing[T]].fromRLPEncodable( encodable );
 
-  def decode[T : RLPSerializing]( bytes : Seq[Byte] )                    : ( Option[T], Seq[Byte] ) = implicitly[RLPSerializing[T]].decodeRLP( bytes );
-  def decodeComplete[T : RLPSerializing]( bytes : Seq[Byte] )            : Option[T]                = implicitly[RLPSerializing[T]].decodeCompleteRLP( bytes ); 
-  def encode[T : RLPSerializing]( t : T )                                : immutable.Seq[Byte]      = implicitly[RLPSerializing[T]].encodeRLP( t ); 
+  def decode[T : RLPSerializing]( bytes : Seq[Byte] )                    : ( Failable[T], Seq[Byte] ) = implicitly[RLPSerializing[T]].decodeRLP( bytes );
+  def decodeComplete[T : RLPSerializing]( bytes : Seq[Byte] )            : Failable[T]                = implicitly[RLPSerializing[T]].decodeCompleteRLP( bytes ); 
+  def encode[T : RLPSerializing]( t : T )                                : immutable.Seq[Byte]        = implicitly[RLPSerializing[T]].encodeRLP( t ); 
 
   // convenience methods
   def encodeString( str : String, charset : Charset ) : immutable.Seq[Byte] = Encodable.encode( Encodable.ByteSeq( str.getBytes( charset ).toSeq ) );

@@ -39,7 +39,7 @@ class WorldState( private val trie : SimpleEthTrie ) {
 
   val RootHash = trie.RootHash;
 
-  def apply( address : EthAddress ) : Option[WorldState.Account] = trie( address.toNibbles ).flatMap( RLP.decodeComplete[Account] )
+  def apply( address : EthAddress ) : Option[WorldState.Account] = trie( address.toNibbles ).map( acctBytes => RLP.decodeComplete[Account]( acctBytes ).get )
 
   def including( address : EthAddress, account : Account ) : WorldState = new WorldState( trie.including( address.toNibbles, RLP.encode(account) ) );
   def excluding( address : EthAddress ) : WorldState = new WorldState( trie.excluding( address.toNibbles ) );

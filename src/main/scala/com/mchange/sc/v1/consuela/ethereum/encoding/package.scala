@@ -1,5 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum;
 
+import com.mchange.sc.v1.consuela._;
+
 import scala.collection._;
 
 package object encoding {
@@ -52,44 +54,55 @@ package object encoding {
    */ 
   // serializers
   implicit object ByteSeqSerializer extends RLPSerializing[Seq[Byte]] {
-    def toRLPEncodable( bytes : Seq[Byte] )                 : RLP.Encodable     = RLP.Encodable.ByteSeq( bytes );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[Seq[Byte]] = encodable match {
-      case RLP.Encodable.ByteSeq( bytes ) => Some( bytes );
-      case _                              => None;
+    def toRLPEncodable( bytes : Seq[Byte] )                 : RLP.Encodable = RLP.Encodable.ByteSeq( bytes );
+    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[Seq[Byte]] = encodable match {
+      case RLP.Encodable.ByteSeq( bytes ) => succeed( bytes );
+      case _                              => failNotLeaf( encodable );
     }
   }
   implicit object ImmutableByteSeqSerializer extends RLPSerializing[immutable.Seq[Byte]] {
-    def toRLPEncodable( bytes : immutable.Seq[Byte] )       : RLP.Encodable     = RLP.Encodable.ByteSeq( bytes );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[immutable.Seq[Byte]] = encodable match {
-      case RLP.Encodable.ByteSeq( bytes ) => Some( bytes );
-      case _                              => None;
+    def toRLPEncodable( bytes : immutable.Seq[Byte] )       : RLP.Encodable = RLP.Encodable.ByteSeq( bytes );
+    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[immutable.Seq[Byte]] = encodable match {
+      case RLP.Encodable.ByteSeq( bytes ) => succeed( bytes );
+      case _                              => failNotLeaf( encodable );
     }
   }
   implicit object ByteArraySerializer extends RLPSerializing[Array[Byte]] {
-    def toRLPEncodable( bytes : Array[Byte] )               : RLP.Encodable       = RLP.Encodable.ByteSeq( bytes );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[Array[Byte]] = encodable match {
-      case RLP.Encodable.ByteSeq( bytes ) => Some( bytes.toArray );
-      case _                              => None;
+    def toRLPEncodable( bytes : Array[Byte] )               : RLP.Encodable = RLP.Encodable.ByteSeq( bytes );
+    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[Array[Byte]] = encodable match {
+      case RLP.Encodable.ByteSeq( bytes ) => succeed( bytes.toArray );
+      case _                              => failNotLeaf( encodable );
     }
   }
   implicit object UnsignedIntSerializer extends RLPSerializing[Int] {
     def toRLPEncodable( i : Int )                           : RLP.Encodable = RLP.Encodable.UnsignedInt( i );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[Int]     = encodable match {
-      case RLP.Encodable.ByteSeq( bytes ) if (bytes.length <= 8) => Some( RLP.Encodable.intFromScalarBytes(bytes) ).filter( _ >= 0 );
-      case _                                                     => None;
+    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[Int] = encodable match {
+      case RLP.Encodable.ByteSeq( bytes ) if (bytes.length <= 4) => {
+        val result = RLP.Encodable.intFromScalarBytes(bytes);
+        if ( result >= 0 ) {
+          succeed( result ) 
+        } else {
+          fail( 
+            s"Desired int would be negative (${result}); RLP scalars must be nonnegative. " +
+             "Perhaps this represents an unigned value too large to fit in a for byte Int. " +
+             "If negative values are expected, applications may read an interpret the byte sequence directly.")
+        }
+      }
+      case RLP.Encodable.ByteSeq( bytes ) if (bytes.length > 4)  => fail( "The Int value requested cannot be represented in an 4 byte Int." );
+      case _                                                     => failNotLeaf( encodable );
     }
   }
   implicit object UnsignedBigIntSerializer extends RLPSerializing[BigInt] {
     def toRLPEncodable( bi : BigInt )                       : RLP.Encodable = RLP.Encodable.UnsignedBigInt( bi );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[BigInt] = encodable match {
-      case RLP.Encodable.ByteSeq( bytes ) => Some( BigInt( 1, bytes.toArray ) );
-      case _                              => None;
+    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[BigInt] = encodable match {
+      case RLP.Encodable.ByteSeq( bytes ) => succeed( BigInt( 1, bytes.toArray ) );
+      case _                              => failNotLeaf( encodable );
     }
   }
 
   // pimps
   object RLPOps {
-    trait Lazy[T] {
+    trait Lazy[T] { // classes can implement RLPOps.Lazy if they wish to implement offer on-structure memoization
       this : T =>
 
       val rlpOpsView : T => RLPOps[T];

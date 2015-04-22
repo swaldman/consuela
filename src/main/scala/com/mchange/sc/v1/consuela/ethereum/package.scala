@@ -6,8 +6,7 @@ import com.mchange.sc.v1.consuela.hash.Hash;
 
 import scala.collection._;
 
-import com.mchange.sc.v1.log.MLogger;
-import com.mchange.sc.v1.log.MLevel._;
+import scala.util.Try;
 
 package object ethereum {
   class EthereumException( message : String, t : Throwable = null ) extends ConsuelaException( message, t );
@@ -44,24 +43,22 @@ package object ethereum {
         case other               => throw new AssertionError( s"Huh? Saw an EthTransaction that is marked neither Signed nor Unsigned: ${other}" );
       }
     }
-    override def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[EthTransaction] = {
+    override def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[EthTransaction] = {
       import RLP.Encodable.{ByteSeq => BS};
 
-      // I know nested options, yuk. We want an Option[EthAddress], which discriminated betwee
-      // Messages and ContactCreation objects. If we cannot properly parse one, we get a None at top-level.
-      def decodeMbToBytes( mbToBytes : Seq[Byte] ) : Option[Option[EthAddress]] = {
-        DEBUG.attempt( if (mbToBytes == Nil) None else Some( EthAddress( mbToBytes ) ) ).toOption
+      def decodeMbToBytes( mbToBytes : Seq[Byte] ) : Failable[Option[EthAddress]] = {
+        Try( if (mbToBytes == Nil) None else Some( EthAddress( mbToBytes ) ) ).toFailable
       }
 
       val RLP.Encodable.Seq.of( BS( nonceBytes ), BS( gasPriceBytes ), BS( gasLimitBytes), BS( mbToBytes ), BS( valueBytes ), BS( payloadBytes ), rest @ _* ) = encodable;
 
       val base = for {
-        nonce    <- RLP.decodeComplete[BigInt]( nonceBytes );
-        gasPrice <- RLP.decodeComplete[BigInt]( gasPriceBytes );
-        gasLimit <- RLP.decodeComplete[BigInt]( gasLimitBytes );
-        mbTo     <- decodeMbToBytes( mbToBytes );
-        value    <- RLP.decodeComplete[BigInt]( valueBytes );
-        payload  <- RLP.decodeComplete[immutable.Seq[Byte]]( payloadBytes )
+        nonce    <- RLP.decodeComplete[BigInt]( nonceBytes ).right;
+        gasPrice <- RLP.decodeComplete[BigInt]( gasPriceBytes ).right;
+        gasLimit <- RLP.decodeComplete[BigInt]( gasLimitBytes ).right;
+        mbTo     <- decodeMbToBytes( mbToBytes ).right;
+        value    <- RLP.decodeComplete[BigInt]( valueBytes ).right;
+        payload  <- RLP.decodeComplete[immutable.Seq[Byte]]( payloadBytes ).right
       } yield {
         mbTo.fold( new Unsigned.ContractCreation( nonce, gasPrice, gasLimit, value, payload.toIndexedSeq ) : Unsigned ){ addr =>
           new Unsigned.Message( nonce, gasPrice, gasLimit, addr, value, payload.toIndexedSeq )
@@ -72,11 +69,11 @@ package object ethereum {
       } else {
         val Seq( BS( vBytes ), BS( rBytes ), BS( sBytes ) ) = rest;
         for {
-          b        <- base;
-          v        <- RLP.decodeComplete[Int]( vBytes );
-          r        <- RLP.decodeComplete[BigInt]( rBytes );
-          s        <- RLP.decodeComplete[BigInt]( sBytes );
-          sig      <- DEBUG.attempt( EthSignature( v.toByte, r, s ) ).toOption
+          b        <- base.right;
+          v        <- RLP.decodeComplete[Int]( vBytes ).right;
+          r        <- RLP.decodeComplete[BigInt]( rBytes ).right;
+          s        <- RLP.decodeComplete[BigInt]( sBytes ).right;
+          sig      <- Try( EthSignature( v.toByte, r, s ) ).toFailable.right
         } yield {
           Signed( b, sig )
         }
@@ -101,13 +98,19 @@ package object ethereum {
         Encodable.ByteSeq( codeHash.bytes )
       )
     }
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[WorldState.Account] = {
-      import RLP._;
-      import Encodable.{ByteSeq => BS}
-      val Encodable.Seq( Seq( BS( nonceBytes ), BS( balanceBytes ), BS( storageRootBytes ), BS( codeHashBytes ) ) ) = encodable;
-      EthHash.withBytes( codeHashBytes ) match {
-        case trie.EmptyTrieHash => Some( WorldState.Account.Agent( BigInt(1, nonceBytes.toArray), BigInt(1, balanceBytes.toArray), EthHash.withBytes( storageRootBytes ) ) );
-        case codeHash      => Some( WorldState.Account.Contract( BigInt(1, nonceBytes.toArray), BigInt(1, balanceBytes.toArray), EthHash.withBytes( storageRootBytes ), codeHash ) );
+    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[WorldState.Account] = {
+      import RLP.Encodable.{ByteSeq => BS}
+      val RLP.Encodable.Seq.of( BS( nonceBytes ), BS( balanceBytes ), BS( storageRootBytes ), BS( codeHashBytes ) ) = encodable;
+      for {
+        nonce       <- RLP.decodeComplete[BigInt]( nonceBytes ).right;
+        balance     <- RLP.decodeComplete[BigInt]( balanceBytes ).right;
+        storageRoot <- Try( EthHash.withBytes( storageRootBytes ) ).toFailable.right;
+        codeHash    <- Try( EthHash.withBytes( codeHashBytes ) ).toFailable.right
+      } yield {
+        codeHash match {
+          case trie.EmptyTrieHash => WorldState.Account.Agent( nonce, balance, storageRoot );
+          case _                  => WorldState.Account.Contract( nonce, balance, storageRoot, codeHash );
+        }
       }
     }
   }

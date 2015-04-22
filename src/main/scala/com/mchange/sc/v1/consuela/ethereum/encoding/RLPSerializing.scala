@@ -19,21 +19,21 @@ object RLPSerializing {
     val serializer : RLPSerializing[T];
 
     def toRLPEncodable( rlpSerializable : T )               : RLP.Encodable = serializer.toRLPEncodable( rlpSerializable );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[T]     = serializer.fromRLPEncodable( encodable );
+    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[T]   = serializer.fromRLPEncodable( encodable );
 
-    def decodeRLP( bytes : Seq[Byte] )         : ( Option[T], Seq[Byte] ) = serializer.decodeRLP( bytes );
-    def decodeCompleteRLP( bytes : Seq[Byte] ) : Option[T]                = serializer.decodeCompleteRLP( bytes );
-    def encodeRLP( rlpSerializable : T ) : immutable.Seq[Byte]            = serializer.encodeRLP( rlpSerializable );
+    def decodeRLP( bytes : Seq[Byte] )         : ( Failable[T], Seq[Byte] ) = serializer.decodeRLP( bytes );
+    def decodeCompleteRLP( bytes : Seq[Byte] ) : Failable[T]                = serializer.decodeCompleteRLP( bytes );
+    def encodeRLP( rlpSerializable : T ) : immutable.Seq[Byte]              = serializer.encodeRLP( rlpSerializable );
   }
   abstract class AbstractWrapper[T : RLPSerializing] extends Wrapper[T] {
     val serializer : RLPSerializing[T] = implicitly[RLPSerializing[T]];
   }
   class ByteArrayValue[T <: util.ByteArrayValue]( factory : immutable.Seq[Byte] => T )( implicit evidence : ClassTag[T] ) extends RLPSerializing[T]()( evidence ) {
     def toRLPEncodable( t : T )                             : RLP.Encodable = RLP.Encodable.ByteSeq( t.bytes );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[T] = {
+    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[T] = {
       encodable match {
-        case RLP.Encodable.ByteSeq( bytes ) => Some( factory( bytes ) )
-        case _                              => None
+        case RLP.Encodable.ByteSeq( bytes ) => succeed( factory( bytes ) )
+        case _                              => failNotLeaf( encodable );
       }
     }
   }
@@ -43,29 +43,23 @@ abstract class RLPSerializing[T : ClassTag] {
 
   // extend and override these two methods. that's it!
   def toRLPEncodable( rlpSerializable : T )               : RLP.Encodable;
-  def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Option[T];
+  def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[T];
 
-  def decodeRLP( bytes : Seq[Byte] ) : ( Option[T], Seq[Byte] ) = {
+  def decodeRLP( bytes : Seq[Byte] ) : ( Failable[T], Seq[Byte] ) = {
     val (encodable, rest) = RLP.Encodable.decode( bytes );
-    fromRLPEncodable( encodable.simplify ) match {
-      case Some( t ) => ( Some(t) , rest )
-      case None      => {
-        WARNING.log( s"Could not parse encodable ${encodable} to ${SimpleName}" );
-        ( None, rest )
-      }
-    }
+    ( fromRLPEncodable( encodable.simplify ), rest )
   }
-  def decodeCompleteRLP( bytes : Seq[Byte] ) : Option[T] = {
-    val ( mbSerializable, rest ) = decodeRLP( bytes );
-    if ( rest.length > 0 ) {
-      throw new IllegalArgumentException(
-        s"RLPSerializing decodeCompleteRLP(...) expects exactly the bytes of a ${SimpleName}; received bytes for ${mbSerializable} with 0x${rest.hex} left over."
-      )
+  def decodeCompleteRLP( bytes : Seq[Byte] ) : Failable[T] = {
+    val ( mbDecoded, rest ) = decodeRLP( bytes );
+    if (mbDecoded.isRight && rest.length > 0 ) {
+      fail(s"RLPSerializing decodeCompleteRLP(...) expects exactly the bytes of a ${TargetClassName}; received bytes for ${mbDecoded} with 0x${rest.hex} left over.");
     } else {
-      mbSerializable
+      mbDecoded
     }
   }
   def encodeRLP( rlpSerializable : T ) : immutable.Seq[Byte] = RLP.Encodable.encode( toRLPEncodable( rlpSerializable ) );
 
-  private lazy val SimpleName = implicitly[ClassTag[T]].runtimeClass.getSimpleName
+  protected lazy val TargetClassName = implicitly[ClassTag[T]].runtimeClass.getSimpleName
+
+  protected def failNotLeaf( found : Any ) : Failable[Nothing] = fail(s"Expected a RLP.Encodable.ByteSeq( bytes ) when deserializing ${TargetClassName}, found ${found}.")
 }
