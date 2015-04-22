@@ -104,8 +104,8 @@ package object ethereum {
       for {
         nonce       <- RLP.decodeComplete[BigInt]( nonceBytes );
         balance     <- RLP.decodeComplete[BigInt]( balanceBytes );
-        storageRoot <- Try( EthHash.withBytes( storageRootBytes ) ).toFailable;
-        codeHash    <- Try( EthHash.withBytes( codeHashBytes ) ).toFailable
+        storageRoot <- RLP.decodeComplete[EthHash]( storageRootBytes );
+        codeHash    <- RLP.decodeComplete[EthHash]( codeHashBytes )
       } yield {
         codeHash match {
           case trie.EmptyTrieHash => WorldState.Account.Agent( nonce, balance, storageRoot );

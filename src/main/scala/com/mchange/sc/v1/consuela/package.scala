@@ -47,6 +47,7 @@ package object consuela {
 
   type Failable[+T] = Either[Fail,T];
 
+  // right-bias Failable[T], for convenience and to render its API more analogous to Option[T]
   implicit class FailableOps[T]( val failable : Failable[T] ) extends AnyVal {
     def get : T = failable match {
       case Left( fail )   => fail.vomit;

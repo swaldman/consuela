@@ -5,8 +5,7 @@ import com.mchange.sc.v1.consuela.util;
 
 import scala.collection._;
 
-import com.mchange.sc.v1.log._;
-import MLevel._;
+import scala.util.Try;
 
 import scala.reflect.ClassTag;
 
@@ -32,14 +31,13 @@ object RLPSerializing {
     def toRLPEncodable( t : T )                             : RLP.Encodable = RLP.Encodable.ByteSeq( t.bytes );
     def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[T] = {
       encodable match {
-        case RLP.Encodable.ByteSeq( bytes ) => succeed( factory( bytes ) )
+        case RLP.Encodable.ByteSeq( bytes ) => Try( factory( bytes ) ).toFailable;
         case _                              => failNotLeaf( encodable );
       }
     }
   }
 }
 abstract class RLPSerializing[T : ClassTag] {
-  implicit val logger = MLogger( this );
 
   // extend and override these two methods. that's it!
   def toRLPEncodable( rlpSerializable : T )               : RLP.Encodable;

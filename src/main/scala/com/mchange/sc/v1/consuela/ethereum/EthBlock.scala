@@ -6,15 +6,6 @@ import specification.Set.{Unsigned, Unsigned2048, ByteSeq1024};
 import scala.collection.immutable.Seq;
 
 object EthBlock {
-  object Header /*extends RLPSerializable.Companion[Header] */ { /*
-    def toRLPEncodable( rlpSerializable : T )               : RLP.Encodable = {
-      import RLP._;
-      Encodable.Seq.of(
-        ...
-      )
-    }
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : T; */
-  }
   case class Header( 
     parentHash      : EthHash, 
     ommersHash      : EthHash, 
@@ -30,7 +21,7 @@ object EthBlock {
     timestamp       : BigInt,
     extraData       : Seq[Byte],
     nonce           : EthHash
-  ) /* extends RLPSerializable[Header] */ {
+  ) {
     require(
       ( logsBloom  elem_!: Unsigned2048 ) &&
       ( difficulty elem_!: Unsigned     ) &&
