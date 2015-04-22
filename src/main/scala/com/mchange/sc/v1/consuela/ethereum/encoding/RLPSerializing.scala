@@ -38,7 +38,7 @@ object RLPSerializing {
     }
   }
   class HomogeneousEncodableSeq[U : RLPSerializing] extends RLPSerializing[immutable.Seq[U]] {
-    def toRLPEncodable( seq : immutable.Seq[U] ) : RLP.Encodable = RLP.Encodable.Seq( seq.map( elem => asEncodable( elem ) ) );
+    def toRLPEncodable( seq : immutable.Seq[U] ) : RLP.Encodable = RLP.Encodable.Seq( asEncodables( seq ) );
     def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[immutable.Seq[U]] = {
       encodable match {
         case RLP.Encodable.Seq( encodables ) => {
@@ -64,6 +64,9 @@ object RLPSerializing {
   // really useful to keep RLPSerializing instances concise
   import scala.language.implicitConversions
   implicit def asEncodable[ U : RLPSerializing ]( u : U ) : RLP.Encodable = implicitly[RLPSerializing[U]].toRLPEncodable( u )
+
+  //not implicit, use this explicitly
+  def asEncodables[U : RLPSerializing]( seq : immutable.Seq[U] ) : immutable.Seq[RLP.Encodable] = seq.map( u => asEncodable( u ) )
 }
 abstract class RLPSerializing[T] {
   // extend and override these two methods. that's it!
