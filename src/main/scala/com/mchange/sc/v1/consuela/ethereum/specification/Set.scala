@@ -15,6 +15,7 @@ object Set {
 
   object Unsigned2048 extends Integral.UnsignedWithBitLength( 2048 );
 
+  object ByteSeq8 extends ByteSeq.LimitedLength( 8 );
   object ByteSeq1024 extends ByteSeq.LimitedLength( 1024 );
 
   object SignatureR extends Integral.ZeroUntil {

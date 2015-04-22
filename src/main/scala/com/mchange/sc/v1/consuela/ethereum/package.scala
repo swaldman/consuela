@@ -1,6 +1,7 @@
 package com.mchange.sc.v1.consuela;
 
 import ethereum.encoding._;
+import RLPSerializing.asEncodable; // implicit conversion
 
 import com.mchange.sc.v1.consuela.hash.Hash;
 
@@ -20,7 +21,7 @@ package object ethereum {
 
   implicit object EthHashRLPSerializing extends RLPSerializing.ByteArrayValue[EthHash]( EthHash.withBytes );
 
-  implicit object EthAddressSerializing extends RLPSerializing.ByteArrayValue[EthAddress]( EthAddress.apply );
+  implicit object EthAddressRLPSerializing extends RLPSerializing.ByteArrayValue[EthAddress]( EthAddress.apply );
 
   implicit object EthTransactionRLPSerializing extends RLPSerializing[EthTransaction] {
     import EthTransaction._;
@@ -50,7 +51,7 @@ package object ethereum {
         Try( if (mbToBytes == Nil) None else Some( EthAddress( mbToBytes ) ) ).toFailable
       }
 
-      val RLP.Encodable.Seq.of( BS( nonceBytes ), BS( gasPriceBytes ), BS( gasLimitBytes), BS( mbToBytes ), BS( valueBytes ), BS( payloadBytes ), rest @ _* ) = encodable;
+      val RLP.Encodable.Seq.of( BS( nonceBytes ), BS( gasPriceBytes ), BS( gasLimitBytes ), BS( mbToBytes ), BS( valueBytes ), BS( payloadBytes ), rest @ _* ) = encodable;
 
       val base = for {
         nonce    <- RLP.decodeComplete[BigInt]( nonceBytes );
@@ -81,7 +82,7 @@ package object ethereum {
     }
   }
 
-  implicit object WorldStateAccountSerializer extends RLPSerializing[WorldState.Account] {
+  implicit object WorldStateAccountRLPSerializing extends RLPSerializing[WorldState.Account] {
     def toRLPEncodable( account : WorldState.Account ) : RLP.Encodable = {
       val codeHash = {
         account match {
@@ -90,13 +91,8 @@ package object ethereum {
         }
       }
 
-      import RLP._;
-      Encodable.Seq.of(
-        Encodable.UnsignedBigInt( account.nonce ),
-        Encodable.UnsignedBigInt( account.balance ),
-        Encodable.ByteSeq( account.storageRoot.bytes ),
-        Encodable.ByteSeq( codeHash.bytes )
-      )
+      import account._;
+      RLP.Encodable.Seq.of( nonce, balance, storageRoot, codeHash );
     }
     def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[WorldState.Account] = {
       import RLP.Encodable.{ByteSeq => BS}
@@ -111,6 +107,84 @@ package object ethereum {
           case trie.EmptyTrieHash => WorldState.Account.Agent( nonce, balance, storageRoot );
           case _                  => WorldState.Account.Contract( nonce, balance, storageRoot, codeHash );
         }
+      }
+    }
+  }
+
+  implicit object EthBlockHeaderRLPSerializing extends RLPSerializing[EthBlock.Header] {
+    def toRLPEncodable( header : EthBlock.Header ) : RLP.Encodable = {
+      import header._
+      RLP.Encodable.Seq.of(
+        parentHash,
+        ommersHash,
+        coinbase,
+        stateRoot,
+        transactionRoot,
+        receiptsRoot,
+        logsBloom,
+        difficulty,
+        number,
+        gasLimit,
+        gasUsed,
+        timestamp,
+        extraData,
+        mixHash,
+        nonce
+      )
+    }
+    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[EthBlock.Header] = {
+      import RLP.Encodable.{ByteSeq => BS}
+      val RLP.Encodable.Seq.of(
+        BS( parentHashBytes ),
+        BS( ommersHashBytes ),
+        BS( coinbaseBytes ),
+        BS( stateRootBytes ),
+        BS( transactionRootBytes ),
+        BS( receiptsRootBytes ),
+        BS( logsBloomBytes ),
+        BS( difficultyBytes ),
+        BS( numberBytes ),
+        BS( gasLimitBytes ),
+        BS( gasUsedBytes ),
+        BS( timestampBytes ),
+        BS( extraDataBytes ),
+        BS( mixHashBytes ),
+        BS( nonceBytes )
+      ) = encodable;
+      for {
+        parentHash      <- RLP.decodeComplete[EthHash]( parentHashBytes );
+        ommersHash      <- RLP.decodeComplete[EthHash]( ommersHashBytes );
+        coinbase        <- RLP.decodeComplete[EthAddress]( coinbaseBytes );
+        stateRoot       <- RLP.decodeComplete[EthHash]( stateRootBytes );
+        transactionRoot <- RLP.decodeComplete[EthHash]( transactionRootBytes )
+        receiptsRoot    <- RLP.decodeComplete[EthHash]( receiptsRootBytes );
+        logsBloom       <- RLP.decodeComplete[BigInt]( logsBloomBytes );
+        difficulty      <- RLP.decodeComplete[BigInt]( difficultyBytes );
+        number          <- RLP.decodeComplete[BigInt]( numberBytes );
+        gasLimit        <- RLP.decodeComplete[BigInt]( gasLimitBytes );
+        gasUsed         <- RLP.decodeComplete[BigInt]( gasUsedBytes );
+        timestamp       <- RLP.decodeComplete[BigInt]( timestampBytes );
+        extraData       <- RLP.decodeComplete[immutable.Seq[Byte]]( extraDataBytes );
+        mixHash         <- RLP.decodeComplete[EthHash]( mixHashBytes );
+        nonce           <- RLP.decodeComplete[immutable.Seq[Byte]]( nonceBytes )
+      } yield {
+        EthBlock.Header(
+          parentHash,
+          ommersHash,
+          coinbase,
+          stateRoot,
+          transactionRoot,
+          receiptsRoot,
+          logsBloom,
+          difficulty,
+          number,
+          gasLimit,
+          gasUsed,
+          timestamp,
+          extraData,
+          mixHash,
+          nonce
+        )
       }
     }
   }

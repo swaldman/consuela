@@ -1,7 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum;
 
 import encoding.{RLP, RLPSerializable}
-import specification.Set.{Unsigned, Unsigned2048, ByteSeq1024};
+import specification.Set.{Unsigned, Unsigned2048, ByteSeq8, ByteSeq1024};
 
 import scala.collection.immutable.Seq;
 
@@ -13,14 +13,15 @@ object EthBlock {
     stateRoot       : EthHash, 
     transactionRoot : EthHash, 
     receiptsRoot    : EthHash,
-    logsBloom       : BigInt,  /* XXX: Is EthHash really the right datatype for this? I'd better figure out what it is. */
+    logsBloom       : BigInt,  
     difficulty      : BigInt,
     number          : BigInt,
     gasLimit        : BigInt,
     gasUsed         : BigInt,
     timestamp       : BigInt,
     extraData       : Seq[Byte],
-    nonce           : EthHash
+    mixHash         : EthHash,
+    nonce           : Seq[Byte]
   ) {
     require(
       ( logsBloom  elem_!: Unsigned2048 ) &&
@@ -29,7 +30,8 @@ object EthBlock {
       ( gasLimit   elem_!: Unsigned     ) &&
       ( gasUsed    elem_!: Unsigned     ) &&
       ( timestamp  elem_!: Unsigned     ) &&
-      ( extraData  elem_!: ByteSeq1024  )
+      ( extraData  elem_!: ByteSeq1024  ) &&
+      ( nonce      elem_!: ByteSeq8     )
     )
   }
 }

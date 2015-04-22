@@ -39,7 +39,7 @@ object RLPSerializing {
 
   // really useful to keep RLPSerializing instances concise
   import scala.language.implicitConversions
-  implicit protected def asEncodable[ U : RLPSerializing ]( u : U ) = implicitly[RLPSerializing[U]].toRLPEncodable( u )
+  implicit def asEncodable[ U : RLPSerializing ]( u : U ) = implicitly[RLPSerializing[U]].toRLPEncodable( u )
 }
 abstract class RLPSerializing[T : ClassTag] {
 
