@@ -61,9 +61,17 @@ package object consuela {
     def exists( f : T => Boolean)                       = failable.right.exists( f );
     def flatMap[FF >: Fail, Y]( f: T => Either[FF, Y] ) = failable.right.flatMap( f );
     def map[Y]( f: T => Y )                             = failable.right.map( f );
-    def filter( p: T => Boolean ): Option[Failable[T]]  = failable.right.filter( p );
+    def filter( p: T => Boolean ) : Option[Failable[T]] = failable.right.filter( p );
     def toSeq                                           = failable.right.toSeq;
     def toOption                                        = failable.right.toOption;
+
+    //other methods
+    def flatten[U](implicit evidence: T <:< Failable[U]) : Failable[U] = {
+      failable match {
+        case oops @ Left( _ ) => refail( oops );
+        case Right( t )   => evidence( t );
+      }
+    }
   }
 
   def fail[S : FailSource]( source : S, includeStackTrace : Boolean = true ) : Failable[Nothing] = {
