@@ -1,7 +1,8 @@
 package com.mchange.sc.v1.consuela;
 
 import ethereum.encoding._;
-import RLPSerializing.asEncodable; // implicit conversion
+import RLPSerializing.asEncodable;  // implicit conversion
+import RLPSerializing.asEncodables; // not implicit 
 
 import com.mchange.sc.v1.consuela.hash.Hash;
 
@@ -186,6 +187,30 @@ package object ethereum {
           nonce
         )
       }
+    }
+  }
+
+  implicit object EthTransactionSeqRLPSerializing extends RLPSerializing.HomogeneousEncodableSeq[EthTransaction];
+  implicit object EthBlockHeaderSeqRLPSerializing extends RLPSerializing.HomogeneousEncodableSeq[EthBlock.Header];
+
+  implicit object EthBlockRLPSerializing extends RLPSerializing[EthBlock] {
+    def toRLPEncodable( block : EthBlock ) : RLP.Encodable = {
+      val txnsSeq = RLP.Encodable.Seq( asEncodables( block.transactions ) );
+      val ommersSeq = RLP.Encodable.Seq( asEncodables( block.ommers ) );
+      RLP.Encodable.Seq.of( block.header, txnsSeq, ommersSeq );
+    }
+    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[EthBlock] = {
+      Try {
+        import RLP.Encodable.{ByteSeq => BS, Seq => SEQ}
+        val RLP.Encodable.Seq.of( headerBS : BS, txnsSeq : SEQ, ommersSeq : SEQ) = encodable;
+        for {
+          header <- RLP.fromEncodable[EthBlock.Header]( headerBS );
+          txns   <- RLP.fromEncodable[immutable.Seq[EthTransaction]]( txnsSeq.simplify );
+          ommers <- RLP.fromEncodable[immutable.Seq[EthBlock.Header]]( ommersSeq.simplify )
+        } yield {
+          EthBlock( header, txns, ommers )
+        }
+      }.toFailable.flatten
     }
   }
 }
