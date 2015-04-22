@@ -10,15 +10,19 @@ import scala.util.{Try, Success, Failure};
 
 package object consuela {
   class ConsuelaException( message : String, t : Throwable = null ) extends Exception( message, t );
+  class UnhandledFailException( fail : Fail ) extends Exception( fail.toString, fail.source match { case th : Throwable => th; case _ => null } );
 
   implicit val MainProvider : crypto.jce.Provider = crypto.jce.Provider.ConfiguredProvider;
 
   val lineSeparator = scala.util.Properties.lineSeparator;
 
-  case class Fail( message : String, mbStackTrace : Option[Array[StackTraceElement]] ) {
+  // kind of yuk, but we've renamed this from "Failure" to "Fail" to avoid inconvenient
+  // need to qualify names when working with scala.util.Failure.
+  case class Fail( message : String, source : Any, mbStackTrace : Option[Array[StackTraceElement]] ) {
     override def toString() : String = mbStackTrace.fold( message ) { stackTrace =>
       (List( message ) ++ stackTrace).mkString( lineSeparator )
     }
+    def vomit : Nothing = throw new UnhandledFailException( this );
   }
 
   trait FailSource[T] {
@@ -27,7 +31,7 @@ package object consuela {
 
     def getFail( source : T, includeStackTrace : Boolean = true ) : Fail = {
       val mbStackTrace = if ( includeStackTrace ) Some( getStackTrace( source ) ) else None;
-      Fail( getMessage( source ), mbStackTrace )
+      Fail( getMessage( source ), source, mbStackTrace )
     }
   }
 
@@ -42,6 +46,13 @@ package object consuela {
   }
 
   type Failable[+T] = Either[Fail,T];
+
+  implicit class FailableOps[T]( val failable : Failable[T] ) extends AnyVal {
+    def get : T = failable match {
+      case eitherL  : Left[Fail,T] => eitherL.left.get.vomit;
+      case eitherR : Right[Fail,T] => eitherR.right.get;
+    }
+  }
 
   def fail[S : FailSource]( source : S, includeStackTrace : Boolean = true ) : Failable[Nothing] = {
     val ms = implicitly[FailSource[S]];
@@ -59,9 +70,11 @@ package object consuela {
   }
 
   implicit class FailableOption[T]( val maybe : Option[T] ) extends AnyVal {
-    def toFailable : Failable[T] = maybe match {
-      case Some( value )  => succeed( value );
-      case None           => fail( "No information available.", true );
+    def toFailable[ U : FailSource ]( source : U = "No information available." ) : Failable[T] = {
+      maybe match {
+        case Some( value )  => succeed( value );
+        case None           => fail( source, true );
+      }
     }
   }
 
