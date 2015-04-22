@@ -72,6 +72,11 @@ package object consuela {
     Left( failure ) : Failable[Nothing];
   }
 
+  /**
+   * A utility to re-establish the irrelevant right type as universally acceptable Nothing
+   */  
+  def refail( prefail : Left[Fail,Any] ) : Failable[Nothing] = prefail.asInstanceOf[Failable[Nothing]]
+
   def succeed[T]( value : T) : Failable[T] = Right( value );
 
   implicit class FailableTry[T]( val attempt : Try[T] ) extends AnyVal {
