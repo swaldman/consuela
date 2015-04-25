@@ -266,7 +266,7 @@ object RLP {
     def scalarBytes( bi : BigInt )  = bi.toByteArray.dropWhile( _ == 0 );
 
     // Note: We're relying on the fact that an uninitialized byte is guaranteed by the JVM to be zero. 
-    def intFromScalarBytes( truncatedIntBytes : scala.Seq[Byte] ) = IntegerUtils.intFromByteArray( Array.ofDim[Byte](8 - truncatedIntBytes.length) ++ truncatedIntBytes, 0 ); 
+    def intFromScalarBytes( truncatedIntBytes : scala.Seq[Byte] ) = IntegerUtils.intFromByteArray( Array.ofDim[Byte](4 - truncatedIntBytes.length) ++ truncatedIntBytes, 0 ); 
   }
   sealed trait Encodable {
     def isSimple : Boolean;
