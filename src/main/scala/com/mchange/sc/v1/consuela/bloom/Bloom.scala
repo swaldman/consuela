@@ -26,24 +26,36 @@ trait Bloom[T, I<:Bloom[T,I]] {
 
   protected val definition : Bloom.Definition[T];
 
-  def including( t : T )  : I;
+  def including( t : T )               : I;
   def includingAll( ts : Iterable[T] ) : I = ts.foldLeft( self )( ( bloom, t ) => bloom.including(t) );
-  final def including( ts : T*) : I = includingAll( ts );
+  final def including( ts : T*)        : I = includingAll( ts );
 
 
-  def mayContain( t :  T) : Boolean;
+  def mayContain( t :  T)               : Boolean;
   def mayContainAll( ts : Iterable[T] ) : Boolean = ts.toSet.foldLeft( true )( (ok, next) => ok && this.mayContain( next ) );
 
+  /**
+   *  bytes of a big-endian value, zero-indexed from the least-significant-bit.
+   */
+  def toByteArray : Array[Byte]
+ 
+  /**
+   *  bytes of a big-endian value, zero-indexed from the least-significant-bit.
+   *
+   *  consider overriding as lazy val 
+   */
+  def bytes : immutable.Seq[Byte]; // = util.ImmutableArraySeq.Byte( this.toUnsignedBigInt.unsignedBytes( definition.byteLength ) );
+
+  /**
+   *  consider overriding as lazy val 
+   */
   def toUnsignedBigInt : BigInt;
 
   def +( other : I ) : I;
 
+  def bitsSet : Int;
+
   def bitLength  : Int = definition.bitLength;
   def byteLength : Int = definition.byteLength;
-
-  /**
-   *  bytes of a big-endian value, zero-indexed from the least-significant-bit.
-   */ 
-  lazy val bytes : immutable.Seq[Byte] = util.ImmutableArraySeq.Byte( this.toUnsignedBigInt.unsignedBytes( definition.byteLength ) );
 }
 

@@ -1,5 +1,7 @@
 package com.mchange.sc.v1.consuela.bloom;
 
+import com.mchange.sc.v1.consuela._;
+
 import scala.collection._;
 
 import com.mchange.lang.LongUtils.byteArrayFromLong;
@@ -39,9 +41,19 @@ final class BitSetBloom[T : Bloom.Definition] private ( private val bitSet : imm
 
   override def mayContainAll( ts : Iterable[T] ) : Boolean = ts.toSet[T].flatMap( definition.indices ).forall( bitSet.contains );
 
-  lazy val toUnsignedBigInt : BigInt = BigInt( 1, bitSet.toBitMask.reverse.flatMap( byteArrayFromLong ) );
+  def bitsSet : Int = bitSet.size;
+
+  private lazy val _array : Array[Byte] = math.zeroPadLeft( bitSet.toBitMask.reverse.flatMap( byteArrayFromLong ), byteLength ); // mustn't ever be mutated
+
+  def toByteArray : Array[Byte] = _array.clone();
+
+  lazy val toUnsignedBigInt : BigInt = BigInt( 1, _array );
+
+  override lazy val bytes : immutable.Seq[Byte] = util.ImmutableArraySeq.Byte.createNoCopy( _array );
 
   def +( other : BitSetBloom[T] ) : BitSetBloom[T] = new BitSetBloom[T]( this.bitSet | other.bitSet );
+
+  override def toString : String = s"${this.getClass.getSimpleName}[${this.bytes.hex}]" 
 }
 
 
