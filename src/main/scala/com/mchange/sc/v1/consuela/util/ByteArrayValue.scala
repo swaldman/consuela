@@ -33,7 +33,7 @@ trait ByteArrayValue {
   protected def stringTag : String = classSimpleName;
   protected def sameClass( other : Any ) : Boolean = this.getClass == other.getClass;
 
-  lazy val bytes : IndexedSeq[Byte] = ImmutableArraySeq( _bytes );
+  lazy val bytes : IndexedSeq[Byte] = ImmutableArraySeq.Byte( _bytes );
 
   lazy val toByteArray : Array[Byte] = _bytes.clone();
   lazy val hexbytes    : String = _bytes.hex
