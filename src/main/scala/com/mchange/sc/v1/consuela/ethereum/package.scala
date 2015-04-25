@@ -10,7 +10,12 @@ import scala.collection._;
 
 import scala.util.Try;
 
+import com.mchange.sc.v1.log._;
+import MLevel._;
+
 package object ethereum {
+  implicit lazy val logger = MLogger( this );
+
   class EthereumException( message : String, t : Throwable = null ) extends ConsuelaException( message, t );
   class UnexpectedSignatureFormatException( message : String, t : Throwable = null ) extends EthereumException( message, t );
 
@@ -46,39 +51,46 @@ package object ethereum {
       }
     }
     override def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[EthTransaction] = {
-      import RLP.Encodable.{ByteSeq => BS};
-
-      def decodeMbToBytes( mbToBytes : Seq[Byte] ) : Failable[Option[EthAddress]] = {
-        Try( if (mbToBytes == Nil) None else Some( EthAddress( mbToBytes ) ) ).toFailable
-      }
-
-      val RLP.Encodable.Seq.of( BS( nonceBytes ), BS( gasPriceBytes ), BS( gasLimitBytes ), BS( mbToBytes ), BS( valueBytes ), BS( payloadBytes ), rest @ _* ) = encodable;
-
-      val base = for {
-        nonce    <- RLP.decodeComplete[BigInt]( nonceBytes );
-        gasPrice <- RLP.decodeComplete[BigInt]( gasPriceBytes );
-        gasLimit <- RLP.decodeComplete[BigInt]( gasLimitBytes );
-        mbTo     <- decodeMbToBytes( mbToBytes );
-        value    <- RLP.decodeComplete[BigInt]( valueBytes );
-        payload  <- RLP.decodeComplete[immutable.Seq[Byte]]( payloadBytes )
-      } yield {
-        mbTo.fold( new Unsigned.ContractCreation( nonce, gasPrice, gasLimit, value, payload.toIndexedSeq ) : Unsigned ){ addr =>
-          new Unsigned.Message( nonce, gasPrice, gasLimit, addr, value, payload.toIndexedSeq )
+      def fromMbToEncodable( mbToEncodable : RLP.Encodable.Basic ) : Failable[Option[EthAddress]] = {
+        mbToEncodable match {
+          case RLP.Encodable.ByteSeq( mbToBytes ) => Try( if (mbToBytes == Nil) None else Some( EthAddress( mbToBytes ) ) ).toFailable;
+          case whatever                           => failNotLeaf( whatever );
         }
       }
-      if ( rest.isEmpty ) {
-        base
-      } else {
-        val Seq( BS( vBytes ), BS( rBytes ), BS( sBytes ) ) = rest;
-        for {
-          b        <- base;
-          v        <- RLP.decodeComplete[Int]( vBytes );
-          r        <- RLP.decodeComplete[BigInt]( rBytes );
-          s        <- RLP.decodeComplete[BigInt]( sBytes );
-          sig      <- Try( EthSignature( v.toByte, r, s ) ).toFailable
-        } yield {
-          Signed( b, sig )
+      encodable match {
+        case RLP.Encodable.Seq.of( nonceE, gasPriceE, gasLimitE, mbToE, valueE, payloadE, rest @ _* ) => {
+          val base = for {
+            nonce    <- RLP.fromEncodable[BigInt]( nonceE.simplify );
+            gasPrice <- RLP.fromEncodable[BigInt]( gasPriceE.simplify );
+            gasLimit <- RLP.fromEncodable[BigInt]( gasLimitE.simplify );
+            mbTo     <- fromMbToEncodable( mbToE.simplify );
+            value    <- RLP.fromEncodable[BigInt]( valueE.simplify );
+            payload  <- RLP.fromEncodable[immutable.Seq[Byte]]( payloadE.simplify )
+          } yield {
+            mbTo.fold( new Unsigned.ContractCreation( nonce, gasPrice, gasLimit, value, payload.toIndexedSeq ) : Unsigned ){ addr =>
+              new Unsigned.Message( nonce, gasPrice, gasLimit, addr, value, payload.toIndexedSeq )
+            }
+          }
+          if ( rest.isEmpty ) {
+            base
+          } else {
+            rest match {
+              case Seq( vE, rE, sE ) => {
+                for {
+                  b        <- base;
+                  v        <- RLP.fromEncodable[Int]( vE.simplify );
+                  r        <- RLP.fromEncodable[BigInt]( rE.simplify );
+                  s        <- RLP.fromEncodable[BigInt]( sE.simplify );
+                  sig      <- Try( EthSignature( v.toByte, r, s ) ).toFailable
+                } yield {
+                  Signed( b, sig )
+                }
+              }
+              case uhhuh => fail( s"After base transaction elements, expected a three part signature, instead found '${uhhuh}'." );
+            }
+          }
         }
+        case whatever => fail( s"Expected a sequence of at least 6 ByteSeqs. Instead found '${whatever}'" );
       }
     }
   }
@@ -96,18 +108,21 @@ package object ethereum {
       RLP.Encodable.Seq.of( nonce, balance, storageRoot, codeHash );
     }
     def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[WorldState.Account] = {
-      import RLP.Encodable.{ByteSeq => BS}
-      val RLP.Encodable.Seq.of( BS( nonceBytes ), BS( balanceBytes ), BS( storageRootBytes ), BS( codeHashBytes ) ) = encodable;
-      for {
-        nonce       <- RLP.decodeComplete[BigInt]( nonceBytes );
-        balance     <- RLP.decodeComplete[BigInt]( balanceBytes );
-        storageRoot <- RLP.decodeComplete[EthHash]( storageRootBytes );
-        codeHash    <- RLP.decodeComplete[EthHash]( codeHashBytes )
-      } yield {
-        codeHash match {
-          case trie.EmptyTrieHash => WorldState.Account.Agent( nonce, balance, storageRoot );
-          case _                  => WorldState.Account.Contract( nonce, balance, storageRoot, codeHash );
+      encodable match {
+        case RLP.Encodable.Seq.of( nonceE , balanceE, storageRootE, codeHashE ) => {
+          for {
+            nonce       <- RLP.fromEncodable[BigInt]( nonceE.simplify );
+            balance     <- RLP.fromEncodable[BigInt]( balanceE.simplify );
+            storageRoot <- RLP.fromEncodable[EthHash]( storageRootE.simplify );
+            codeHash    <- RLP.fromEncodable[EthHash]( codeHashE.simplify )
+          } yield {
+            codeHash match {
+              case trie.EmptyTrieHash => WorldState.Account.Agent( nonce, balance, storageRoot );
+              case _                  => WorldState.Account.Contract( nonce, balance, storageRoot, codeHash );
+            }
+          }
         }
+        case other => fail( s"Expected ( nonceE , balanceE, storageRootE, codeHashE ), found ${other}" );
       }
     }
   }
@@ -115,77 +130,41 @@ package object ethereum {
   implicit object EthBlockHeaderRLPSerializing extends RLPSerializing[EthBlock.Header] {
     def toRLPEncodable( header : EthBlock.Header ) : RLP.Encodable = {
       import header._
-      RLP.Encodable.Seq.of(
-        parentHash,
-        ommersHash,
-        coinbase,
-        stateRoot,
-        transactionRoot,
-        receiptsRoot,
-        logsBloom,
-        difficulty,
-        number,
-        gasLimit,
-        gasUsed,
-        timestamp,
-        extraData,
-        mixHash,
-        nonce
+      RLP.Encodable.Seq.of( 
+        parentHash, ommersHash, coinbase, stateRoot, transactionRoot, receiptsRoot, logsBloom,
+        difficulty, number, gasLimit, gasUsed, timestamp, extraData, mixHash, nonce
       )
     }
     def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[EthBlock.Header] = {
-      import RLP.Encodable.{ByteSeq => BS}
-      val RLP.Encodable.Seq.of(
-        BS( parentHashBytes ),
-        BS( ommersHashBytes ),
-        BS( coinbaseBytes ),
-        BS( stateRootBytes ),
-        BS( transactionRootBytes ),
-        BS( receiptsRootBytes ),
-        BS( logsBloomBytes ),
-        BS( difficultyBytes ),
-        BS( numberBytes ),
-        BS( gasLimitBytes ),
-        BS( gasUsedBytes ),
-        BS( timestampBytes ),
-        BS( extraDataBytes ),
-        BS( mixHashBytes ),
-        BS( nonceBytes )
-      ) = encodable;
-      for {
-        parentHash      <- RLP.decodeComplete[EthHash]( parentHashBytes );
-        ommersHash      <- RLP.decodeComplete[EthHash]( ommersHashBytes );
-        coinbase        <- RLP.decodeComplete[EthAddress]( coinbaseBytes );
-        stateRoot       <- RLP.decodeComplete[EthHash]( stateRootBytes );
-        transactionRoot <- RLP.decodeComplete[EthHash]( transactionRootBytes )
-        receiptsRoot    <- RLP.decodeComplete[EthHash]( receiptsRootBytes );
-        logsBloom       <- RLP.decodeComplete[BigInt]( logsBloomBytes );
-        difficulty      <- RLP.decodeComplete[BigInt]( difficultyBytes );
-        number          <- RLP.decodeComplete[BigInt]( numberBytes );
-        gasLimit        <- RLP.decodeComplete[BigInt]( gasLimitBytes );
-        gasUsed         <- RLP.decodeComplete[BigInt]( gasUsedBytes );
-        timestamp       <- RLP.decodeComplete[BigInt]( timestampBytes );
-        extraData       <- RLP.decodeComplete[immutable.Seq[Byte]]( extraDataBytes );
-        mixHash         <- RLP.decodeComplete[EthHash]( mixHashBytes );
-        nonce           <- RLP.decodeComplete[immutable.Seq[Byte]]( nonceBytes )
-      } yield {
-        EthBlock.Header(
-          parentHash,
-          ommersHash,
-          coinbase,
-          stateRoot,
-          transactionRoot,
-          receiptsRoot,
-          logsBloom,
-          difficulty,
-          number,
-          gasLimit,
-          gasUsed,
-          timestamp,
-          extraData,
-          mixHash,
-          nonce
-        )
+      encodable match {
+        case RLP.Encodable.Seq.of(
+          parentHashE, ommersHashE, coinbaseE, stateRootE, transactionRootE, receiptsRootE, logsBloomE,
+          difficultyE, numberE, gasLimitE, gasUsedE, timestampE, extraDataE, mixHashE, nonceE
+        ) => {
+          for {
+            parentHash      <- RLP.fromEncodable[EthHash]( parentHashE.simplify );
+            ommersHash      <- RLP.fromEncodable[EthHash]( ommersHashE.simplify );
+            coinbase        <- RLP.fromEncodable[EthAddress]( coinbaseE.simplify );
+            stateRoot       <- RLP.fromEncodable[EthHash]( stateRootE.simplify );
+            transactionRoot <- RLP.fromEncodable[EthHash]( transactionRootE.simplify )
+            receiptsRoot    <- RLP.fromEncodable[EthHash]( receiptsRootE.simplify );
+            logsBloom       <- RLP.fromEncodable[BigInt]( logsBloomE.simplify );
+            difficulty      <- RLP.fromEncodable[BigInt]( difficultyE.simplify );
+            number          <- RLP.fromEncodable[BigInt]( numberE.simplify );
+            gasLimit        <- RLP.fromEncodable[BigInt]( gasLimitE.simplify );
+            gasUsed         <- RLP.fromEncodable[BigInt]( gasUsedE.simplify );
+            timestamp       <- RLP.fromEncodable[BigInt]( timestampE.simplify );
+            extraData       <- RLP.fromEncodable[immutable.Seq[Byte]]( extraDataE.simplify );
+            mixHash         <- RLP.fromEncodable[EthHash]( mixHashE.simplify );
+            nonce           <- RLP.fromEncodable[immutable.Seq[Byte]]( nonceE.simplify )
+          } yield {
+            EthBlock.Header( 
+              parentHash, ommersHash, coinbase, stateRoot, transactionRoot, receiptsRoot, logsBloom,
+              difficulty, number, gasLimit, gasUsed, timestamp, extraData, mixHash, nonce
+            )
+          }
+        }
+        case other => fail( s"${other} is not in the expected format of an EthBlock.Header" );
       }
     }
   }
@@ -200,17 +179,19 @@ package object ethereum {
       RLP.Encodable.Seq.of( block.header, txnsSeq, ommersSeq );
     }
     def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[EthBlock] = {
-      Try {
-        import RLP.Encodable.{ByteSeq => BS, Seq => SEQ}
-        val RLP.Encodable.Seq.of( headerBS : BS, txnsSeq : SEQ, ommersSeq : SEQ) = encodable;
-        for {
-          header <- RLP.fromEncodable[EthBlock.Header]( headerBS );
-          txns   <- RLP.fromEncodable[immutable.Seq[EthTransaction]]( txnsSeq.simplify );
-          ommers <- RLP.fromEncodable[immutable.Seq[EthBlock.Header]]( ommersSeq.simplify )
-        } yield {
-          EthBlock( header, txns, ommers )
+      import RLP.Encodable.{ByteSeq => BS, Seq => SEQ}
+      encodable match {
+        case RLP.Encodable.Seq.of( headerBS : BS, txnsSeq : SEQ, ommersSeq : SEQ) => {
+          for {
+            header <- RLP.fromEncodable[EthBlock.Header]( headerBS );
+            txns   <- RLP.fromEncodable[immutable.Seq[EthTransaction]]( txnsSeq.simplify );
+            ommers <- RLP.fromEncodable[immutable.Seq[EthBlock.Header]]( ommersSeq.simplify )
+          } yield {
+            EthBlock( header, txns, ommers )
+          }
         }
-      }.toFailable.flatten
+        case other => fail( s"Expected RLP.Encodable.Seq.of( headerBS : BS, txnsSeq : SEQ, ommersSeq : SEQ), found ${encodable}" )
+      }
     }
   }
 }
