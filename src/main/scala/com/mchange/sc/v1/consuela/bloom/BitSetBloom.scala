@@ -8,15 +8,12 @@ object BitSetBloom {
   def apply[T]( elements : T* )( implicit defn : Bloom.Definition[T] ) = new BitSetBloom( elements : _*)( defn );
 
   def empty[T : Bloom.Definition] = new BitSetBloom[T] {
-    override def including( t : T )               : BitSetBloom[T] = new BitSetBloom[T]( t );
-    override def includingAll( ts : Iterable[T] ) : BitSetBloom[T] = new BitSetBloom[T]( ts.toSeq : _* );
-
-    override def mayContain( t :  T )              : Boolean = false;
-    override def mayContainAll( ts : Iterable[T] ) : Boolean = ts.isEmpty;
-
-    override def toUnsignedBigInt : BigInt = BigInt( 0 );
-
-    override def +( other : BitSetBloom[T] ) : BitSetBloom[T] = other;
+    override def including( t : T )                : BitSetBloom[T] = new BitSetBloom[T]( t );
+    override def includingAll( ts : Iterable[T] )  : BitSetBloom[T] = new BitSetBloom[T]( ts.toSeq : _* );
+    override def mayContain( t :  T )              : Boolean        = false;
+    override def mayContainAll( ts : Iterable[T] ) : Boolean        = ts.isEmpty;
+    override lazy val toUnsignedBigInt             : BigInt         = BigInt( 0 );
+    override def +( other : BitSetBloom[T] )       : BitSetBloom[T] = other;
   }
 
   private def copyMutable( imm : immutable.BitSet ) : mutable.BitSet  = mutable.BitSet.fromBitMaskNoCopy( imm.toBitMask /* already a copy here */ );
@@ -33,23 +30,23 @@ object BitSetBloom {
 class BitSetBloom[T : Bloom.Definition] private ( private val bitSet : immutable.BitSet ) extends Bloom[T, BitSetBloom[T]] {
   import BitSetBloom.{copyMutable, initializeBitSet, updateMutableBitSet};
 
-  private val definition = implicitly[Bloom.Definition[T]];
+  protected val definition = implicitly[Bloom.Definition[T]];
 
   private def this( contents : T* ) = this( BitSetBloom.initializeBitSet( contents ) );
 
-  def including( t : T ) : BitSetBloom[T] = new BitSetBloom[T]( bitSet ++ definition.checkedIndices( t ) );
+  def including( t : T ) : BitSetBloom[T] = new BitSetBloom[T]( bitSet ++ definition.indices( t ) );
 
   override def includingAll( ts : Iterable[T] ) : BitSetBloom[T] = {
     val mutable = copyMutable( bitSet );
-    mutable ++= ts.flatMap( t => definition.checkedIndices( t ) );
+    mutable ++= ts.flatMap( t => definition.indices( t ) );
     new BitSetBloom[T]( mutable.toImmutable )
   }
 
-  def mayContain( t :  T ) : Boolean = definition.checkedIndices( t ).forall( bitSet.contains );
+  def mayContain( t :  T ) : Boolean = definition.indices( t ).forall( bitSet.contains );
 
-  override def mayContainAll( ts : Iterable[T] ) : Boolean = ts.toSet[T].flatMap( definition.checkedIndices ).forall( bitSet.contains );
+  override def mayContainAll( ts : Iterable[T] ) : Boolean = ts.toSet[T].flatMap( definition.indices ).forall( bitSet.contains );
 
-  def toUnsignedBigInt : BigInt = BigInt( 1, bitSet.toBitMask.reverse.flatMap( byteArrayFromLong ) );
+  lazy val toUnsignedBigInt : BigInt = BigInt( 1, bitSet.toBitMask.reverse.flatMap( byteArrayFromLong ) );
 
   def +( other : BitSetBloom[T] ) : BitSetBloom[T] = new BitSetBloom[T]( this.bitSet | other.bitSet );
 }
