@@ -15,8 +15,9 @@ object Set {
 
   object Unsigned2048 extends Integral.UnsignedWithBitLength( 2048 );
 
-  object ByteSeq8 extends ByteSeq.LimitedLength( 8 );
-  object ByteSeq1024 extends ByteSeq.LimitedLength( 1024 );
+  object ByteSeqExact4  extends ByteSeq.ExactLength( 4 );
+  object ByteSeqExact8  extends ByteSeq.ExactLength( 8 );
+  object ByteSeqMax1024 extends ByteSeq.LimitedLength( 1024 );
 
   object SignatureR extends Integral.ZeroUntil {
     val MaxValueExclusive : BigInt = BigInt("115792089237316195423570985008687907852837564279074904382605163141518161494337", 10);
@@ -57,6 +58,12 @@ object Set {
       def contains( seq : Seq[Byte] ) : Boolean = seq.length <= MaxLengthInclusive;
 
       override def mathRep : String = s"{ b | b \u2208 Seq[Byte] \u2227 b.length \u2264 ${MaxLengthInclusive} }"
+    }
+
+    abstract class ExactLength( val RequiredLength : Int ) extends Generic[Seq[Byte]] {
+      def contains( seq : Seq[Byte] ) : Boolean = seq.length == RequiredLength;
+
+      override def mathRep : String = s"{ b | b \u2208 Seq[Byte] \u2227 b.length = ${RequiredLength} }"
     }
   }
 

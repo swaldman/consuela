@@ -1,7 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum;
 
 import encoding.{RLP, RLPSerializable}
-import specification.Set.{Unsigned, Unsigned2048, ByteSeq8, ByteSeq1024};
+import specification.Set.{Unsigned, Unsigned2048, ByteSeqExact8, ByteSeqMax1024};
 
 import scala.collection.immutable.Seq;
 
@@ -24,14 +24,14 @@ object EthBlock {
     nonce           : Seq[Byte]
   ) {
     require(
-      ( logsBloom  elem_!: Unsigned2048 ) &&
-      ( difficulty elem_!: Unsigned     ) &&
-      ( number     elem_!: Unsigned     ) &&
-      ( gasLimit   elem_!: Unsigned     ) &&
-      ( gasUsed    elem_!: Unsigned     ) &&
-      ( timestamp  elem_!: Unsigned     ) &&
-      ( extraData  elem_!: ByteSeq1024  ) &&
-      ( nonce      elem_!: ByteSeq8     )
+      ( logsBloom  elem_!: Unsigned2048   ) &&
+      ( difficulty elem_!: Unsigned       ) &&
+      ( number     elem_!: Unsigned       ) &&
+      ( gasLimit   elem_!: Unsigned       ) &&
+      ( gasUsed    elem_!: Unsigned       ) &&
+      ( timestamp  elem_!: Unsigned       ) &&
+      ( extraData  elem_!: ByteSeqMax1024 ) &&
+      ( nonce      elem_!: ByteSeqExact8  )
     )
   }
 }
