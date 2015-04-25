@@ -7,6 +7,11 @@ import java.util.Arrays;
 object ImmutableArraySeq {
   def apply[A]( source : Array[A] )( implicit atag : scala.reflect.ClassTag[A] ) = new ImmutableArraySeq[A]( source.clone() )( atag );
 
+  /**
+   * Be sure you know WTF you are doing, that nothing else mutates this array.
+   */  
+  def createNoCopy[A]( source : Array[A] )( implicit atag : scala.reflect.ClassTag[A] ) = new ImmutableArraySeq( source )( atag );
+
   abstract class Abstract[A] protected ( private val inner : Array[A] )( implicit atag : scala.reflect.ClassTag[A] ) extends immutable.IndexedSeq[A] {
     override def apply( i : scala.Int ) : A = inner.apply(i);
 
@@ -35,6 +40,11 @@ object ImmutableArraySeq {
 
   object Byte {
     def apply( source : Array[scala.Byte] )( implicit atag : scala.reflect.ClassTag[scala.Byte] ) = new ImmutableArraySeq.Byte( source.clone() )( atag );
+
+    /**
+     * Be sure you know WTF you are doing, that nothing else mutates this array.
+     */  
+    def createNoCopy( source : Array[scala.Byte] )( implicit atag : scala.reflect.ClassTag[scala.Byte] ) = new ImmutableArraySeq.Byte( source )( atag );
   }
   final class Byte private ( private val byteInner : Array[scala.Byte] )( implicit atag : scala.reflect.ClassTag[scala.Byte] ) extends Abstract[scala.Byte]( byteInner ) {
     override def equals( o : Any ) : Boolean = {
@@ -45,9 +55,13 @@ object ImmutableArraySeq {
     }
   }
 
-
   object Int {
     def apply( source : Array[scala.Int] )( implicit atag : scala.reflect.ClassTag[scala.Int] ) = new ImmutableArraySeq.Int( source.clone() )( atag );
+
+    /**
+     * Be sure you know WTF you are doing, that nothing else mutates this array.
+     */  
+    def createNoCopy( source : Array[scala.Int] )( implicit atag : scala.reflect.ClassTag[scala.Int] ) = new ImmutableArraySeq.Int( source )( atag );
   }
   final class Int private ( private val intInner : Array[scala.Int] )( implicit atag : scala.reflect.ClassTag[scala.Int] ) extends Abstract[scala.Int]( intInner ) {
     override def equals( o : Any ) : Boolean = {
@@ -58,7 +72,9 @@ object ImmutableArraySeq {
     }
   }
 }
-final class ImmutableArraySeq[A] private ( inner : Array[A] )( implicit atag : scala.reflect.ClassTag[A] ) extends ImmutableArraySeq.Abstract[A]( inner );
+final class ImmutableArraySeq[A] private ( inner : Array[A] )( implicit atag : scala.reflect.ClassTag[A] ) extends ImmutableArraySeq.Abstract[A]( inner ) {
+  require( !atag.runtimeClass.isPrimitive, s"Please use an implementation of ImmutableArraySeq.Abstract specialized for ${atag.runtimeClass.getName}." );
+}
 
 
 

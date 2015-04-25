@@ -5,7 +5,7 @@ import com.mchange.sc.v1.log._;
 import MLevel._;
 
 package object math {
-  implicit val logger = MLogger( this )
+  implicit lazy val logger = MLogger( this )
 
   def asFixedLengthUnsignedByteArray( bi : BigInt, desiredLength : Int ) : Array[Byte] = {
     if ( bi.signum < 0 ) {
@@ -28,8 +28,14 @@ package object math {
     }
   }
 
+  def zeroPadLeft( bytes : Array[Byte], desiredLength : Int ) : Array[Byte] = {
+    val len = bytes.length;
+    require( len <= desiredLength );
+    zeroPad( bytes, len, desiredLength );
+  }
+
   private[this] def zeroPad( bytes : Array[Byte], bytesLength : Int, desiredLength : Int ) : Array[Byte] = {
-    val out = Array.fill[Byte]( desiredLength )(0)
+    val out = Array.ofDim[Byte]( desiredLength ); // we're relying on the fact that the default Byte value is zero
     Array.copy( bytes, 0, out, desiredLength - bytesLength, bytesLength )
     out
   }
