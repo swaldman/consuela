@@ -13,12 +13,12 @@ import com.mchange.sc.v1.consuela.util.ImmutableArraySeq;
 
 object RLP {
 
-  def toElement[T : RLPSerializing]( t : T )                             : RLP.Element = implicitly[RLPSerializing[T]].toRLPElement( t );
-  def fromElement[T : RLPSerializing]( element : RLP.Element.Basic ) : Failable[T]   = implicitly[RLPSerializing[T]].fromRLPElement( element );
+  def toElement[T : RLPSerializing]( t : T )                             : RLP.Element = implicitly[RLPSerializing[T]].toElement( t );
+  def fromElement[T : RLPSerializing]( element : RLP.Element.Basic ) : Failable[T]   = implicitly[RLPSerializing[T]].fromElement( element );
 
-  def decode[T : RLPSerializing]( bytes : Seq[Byte] )                    : ( Failable[T], Seq[Byte] ) = implicitly[RLPSerializing[T]].decodeRLP( bytes );
-  def decodeComplete[T : RLPSerializing]( bytes : Seq[Byte] )            : Failable[T]                = implicitly[RLPSerializing[T]].decodeCompleteRLP( bytes ); 
-  def encode[T : RLPSerializing]( t : T )                                : immutable.Seq[Byte]        = implicitly[RLPSerializing[T]].encodeRLP( t ); 
+  def decode[T : RLPSerializing]( bytes : Seq[Byte] )                    : ( Failable[T], Seq[Byte] ) = implicitly[RLPSerializing[T]].decode( bytes );
+  def decodeComplete[T : RLPSerializing]( bytes : Seq[Byte] )            : Failable[T]                = implicitly[RLPSerializing[T]].decodeComplete( bytes ); 
+  def encode[T : RLPSerializing]( t : T )                                : immutable.Seq[Byte]        = implicitly[RLPSerializing[T]].encode( t ); 
 
   // convenience methods
   def encodeString( str : String, charset : Charset ) : immutable.Seq[Byte] = Element.encode( Element.ByteSeq( str.getBytes( charset ).toSeq ) );

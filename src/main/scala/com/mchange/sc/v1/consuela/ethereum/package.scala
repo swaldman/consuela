@@ -32,7 +32,7 @@ package object ethereum {
   implicit object EthTransactionRLPSerializing extends RLPSerializing[EthTransaction] {
     import EthTransaction._;
 
-    override def toRLPElement( txn : EthTransaction ): RLP.Element = {
+    override def toElement( txn : EthTransaction ): RLP.Element = {
       import RLP.Element.{UnsignedBigInt => UBI, ByteSeq => BS, UnsignedInt => UI};
 
       def baseElements( unsigned : Unsigned ) : Vector[RLP.Element] = {
@@ -50,7 +50,7 @@ package object ethereum {
         case other               => throw new AssertionError( s"Huh? Saw an EthTransaction that is marked neither Signed nor Unsigned: ${other}" );
       }
     }
-    override def fromRLPElement( element : RLP.Element.Basic ) : Failable[EthTransaction] = {
+    override def fromElement( element : RLP.Element.Basic ) : Failable[EthTransaction] = {
       def fromMbToElement( mbToElement : RLP.Element.Basic ) : Failable[Option[EthAddress]] = {
         mbToElement match {
           case RLP.Element.ByteSeq( mbToBytes ) => Try( if (mbToBytes == Nil) None else Some( EthAddress( mbToBytes ) ) ).toFailable;
@@ -96,7 +96,7 @@ package object ethereum {
   }
 
   implicit object WorldStateAccountRLPSerializing extends RLPSerializing[WorldState.Account] {
-    def toRLPElement( account : WorldState.Account ) : RLP.Element = {
+    def toElement( account : WorldState.Account ) : RLP.Element = {
       val codeHash = {
         account match {
           case contract : WorldState.Account.Contract => contract.codeHash;
@@ -107,7 +107,7 @@ package object ethereum {
       import account._;
       RLP.Element.Seq.of( nonce, balance, storageRoot, codeHash );
     }
-    def fromRLPElement( element : RLP.Element.Basic ) : Failable[WorldState.Account] = {
+    def fromElement( element : RLP.Element.Basic ) : Failable[WorldState.Account] = {
       element match {
         case RLP.Element.Seq.of( nonceE , balanceE, storageRootE, codeHashE ) => {
           for {
@@ -128,14 +128,14 @@ package object ethereum {
   }
 
   implicit object EthBlockHeaderRLPSerializing extends RLPSerializing[EthBlock.Header] {
-    def toRLPElement( header : EthBlock.Header ) : RLP.Element = {
+    def toElement( header : EthBlock.Header ) : RLP.Element = {
       import header._
       RLP.Element.Seq.of( 
         parentHash, ommersHash, coinbase, stateRoot, transactionRoot, receiptsRoot, logsBloom,
         difficulty, number, gasLimit, gasUsed, timestamp, extraData, mixHash, nonce
       )
     }
-    def fromRLPElement( element : RLP.Element.Basic ) : Failable[EthBlock.Header] = {
+    def fromElement( element : RLP.Element.Basic ) : Failable[EthBlock.Header] = {
       element match {
         case RLP.Element.Seq.of(
           parentHashE, ommersHashE, coinbaseE, stateRootE, transactionRootE, receiptsRootE, logsBloomE,
@@ -173,12 +173,12 @@ package object ethereum {
   implicit object EthBlockHeaderSeqRLPSerializing extends RLPSerializing.HomogeneousElementSeq[EthBlock.Header];
 
   implicit object EthBlockRLPSerializing extends RLPSerializing[EthBlock] {
-    def toRLPElement( block : EthBlock ) : RLP.Element = {
+    def toElement( block : EthBlock ) : RLP.Element = {
       val txnsSeq = RLP.Element.Seq( asElements( block.transactions ) );
       val ommersSeq = RLP.Element.Seq( asElements( block.ommers ) );
       RLP.Element.Seq.of( block.header, txnsSeq, ommersSeq );
     }
-    def fromRLPElement( element : RLP.Element.Basic ) : Failable[EthBlock] = {
+    def fromElement( element : RLP.Element.Basic ) : Failable[EthBlock] = {
       import RLP.Element.{ByteSeq => BS, Seq => SEQ}
       element match {
         case RLP.Element.Seq.of( headerBS : BS, txnsSeq : SEQ, ommersSeq : SEQ) => {
