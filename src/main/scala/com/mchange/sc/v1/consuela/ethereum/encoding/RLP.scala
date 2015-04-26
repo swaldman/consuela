@@ -6,6 +6,7 @@ import scala.util.Try;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import com.mchange.lang.IntegerUtils;
+import com.mchange.lang.LongUtils;
 
 import scala.collection._;
 import scala.reflect.ClassTag;
@@ -56,6 +57,12 @@ object RLP {
       def simplify = this;
     }
     case class UnsignedInt( value : scala.Int ) extends Element {
+      require( value >= 0 );
+
+      def isSimple = false;
+      def simplify = Element.ByteSeq( scalarBytes( value ) )
+    }
+    case class UnsignedLong( value : scala.Long ) extends Element {
       require( value >= 0 );
 
       def isSimple = false;
@@ -214,6 +221,7 @@ object RLP {
       element match {
         case bse : Element.ByteSeq        => rb( bse.bytes );
         case ie  : Element.UnsignedInt    => rba( scalarBytes( ie.value ) );
+        case le  : Element.UnsignedLong   => rba( scalarBytes( le.value ) );
         case bie : Element.UnsignedBigInt => rba( scalarBytes( bie.value ) );
         case ese : Element.Seq            => rl( ese.seq );
       }
@@ -225,6 +233,7 @@ object RLP {
       def tryAsAtom : Option[Element] = {
         obj match {
           case i   : Int    if (i >= 0)  => Some( Element.UnsignedInt( i ) )
+          case l   : Long   if (l >= 0)  => Some( Element.UnsignedLong( l ) )
           case bi  : BigInt if (bi >= 0) => Some( Element.UnsignedBigInt( bi ) )
           case str : String              => Some( Element.ByteSeq( str.getBytes( charset ) ) )
           case _                         => None
@@ -262,8 +271,9 @@ object RLP {
 
       tryAsAtom orElse tryAsSeq
     }
-    def scalarBytes( i : Int )      = IntegerUtils.byteArrayFromInt( i ).dropWhile( _ == 0 );
-    def scalarBytes( bi : BigInt )  = bi.toByteArray.dropWhile( _ == 0 );
+    def scalarBytes( i  : Int )    : Array[Byte] = IntegerUtils.byteArrayFromInt( i ).dropWhile( _ == 0 );
+    def scalarBytes( l  : Long )   : Array[Byte] = LongUtils.byteArrayFromLong( l ).dropWhile( _ == 0 );
+    def scalarBytes( bi : BigInt ) : Array[Byte] = bi.toByteArray.dropWhile( _ == 0 );
 
     // Note: We're relying on the fact that an uninitialized byte is guaranteed by the JVM to be zero. 
     def intFromScalarBytes( truncatedIntBytes : scala.Seq[Byte] ) = IntegerUtils.intFromByteArray( Array.ofDim[Byte](4 - truncatedIntBytes.length) ++ truncatedIntBytes, 0 ); 
