@@ -64,37 +64,37 @@ trait EthTrieDb extends EmbeddableEthStylePMTrie.Database[Nibble,Seq[Byte],EthHa
     } 
   }
 
-  private def encodableToNodeSource( encodable : RLP.Encodable, mbKnownNode : Option[Node] = None ) : NodeSource = {
-    encodable match {
-      case RLP.Encodable.EmptyByteSeq                                           => NodeSource.Empty;
-      case RLP.Encodable.ByteSeq( hashBytes ) if hashBytes.length == EthHashLen => NodeSource.Hash( EthHash.withBytes( hashBytes ) )
-      case RLP.Encodable.Seq( Seq( keyEncodable, payloadEncodable ) ) => {
+  private def elementToNodeSource( element : RLP.Element, mbKnownNode : Option[Node] = None ) : NodeSource = {
+    element match {
+      case RLP.Element.EmptyByteSeq                                           => NodeSource.Empty;
+      case RLP.Element.ByteSeq( hashBytes ) if hashBytes.length == EthHashLen => NodeSource.Hash( EthHash.withBytes( hashBytes ) )
+      case RLP.Element.Seq( Seq( keyElement, payloadElement ) ) => {
         val node = mbKnownNode.getOrElse {
-          val RLP.Encodable.ByteSeq( hpKeyBytes ) = keyEncodable;
-          reviveLeafExtension( hpKeyBytes, payloadEncodable )
+          val RLP.Element.ByteSeq( hpKeyBytes ) = keyElement;
+          reviveLeafExtension( hpKeyBytes, payloadElement )
         }
         NodeSource.Embedded( node )
       }
-      case RLP.Encodable.Seq( seq ) if seq.length == AlphabetLen + 1 => {
+      case RLP.Element.Seq( seq ) if seq.length == AlphabetLen + 1 => {
         val node = mbKnownNode.getOrElse( intoBranch( seq )  )
         NodeSource.Embedded( node );
       }
-      case _ => aerr( s"Unexpected encodable -> ${encodable}" );
+      case _ => aerr( s"Unexpected element -> ${element}" );
     }
   }
 
-  private def reviveLeafExtension( hpKeyBytes : Seq[Byte], payloadEncodable : RLP.Encodable ) : Node = {
+  private def reviveLeafExtension( hpKeyBytes : Seq[Byte], payloadElement : RLP.Element ) : Node = {
     val ( keyNibbles, terminated ) = HP.decode( hpKeyBytes );
     if ( terminated ) {
-      val RLP.Encodable.ByteSeq( payloadBytes ) = payloadEncodable;
+      val RLP.Element.ByteSeq( payloadBytes ) = payloadElement;
       Leaf( keyNibbles.toIndexedSeq, payloadBytes )
     } else {
-      Extension( keyNibbles.toIndexedSeq, encodableToNodeSource( payloadEncodable ) );
+      Extension( keyNibbles.toIndexedSeq, elementToNodeSource( payloadElement ) );
     }
   }
-  private def intoBranch( decoded : Seq[RLP.Encodable] ) : Node = {
-    val ( protochildren, Seq( RLP.Encodable.ByteSeq( protoMbValueBytes ) ) ) = decoded.splitAt( AlphabetLen );
-    val children = protochildren.map( encodableToNodeSource( _ ) )
+  private def intoBranch( decoded : Seq[RLP.Element] ) : Node = {
+    val ( protochildren, Seq( RLP.Element.ByteSeq( protoMbValueBytes ) ) ) = decoded.splitAt( AlphabetLen );
+    val children = protochildren.map( elementToNodeSource( _ ) )
 
     //Note that the bytes of the value are an RLP-encoded... something
     //RLP encoding never yields an empty sequence, not even of an empty Byte string
@@ -104,64 +104,64 @@ trait EthTrieDb extends EmbeddableEthStylePMTrie.Database[Nibble,Seq[Byte],EthHa
     Branch( children.toIndexedSeq, mbValue );
   }
   def fromRLP( rlpBytes : Seq[Byte] ) : Node = {
-    def intoExtensionLeaf( decoded : Seq[RLP.Encodable] ) : Node = {
-      val Seq( RLP.Encodable.ByteSeq( hpKey ), payloadEncodable ) = decoded;
-      reviveLeafExtension( hpKey, payloadEncodable )
+    def intoExtensionLeaf( decoded : Seq[RLP.Element] ) : Node = {
+      val Seq( RLP.Element.ByteSeq( hpKey ), payloadElement ) = decoded;
+      reviveLeafExtension( hpKey, payloadElement )
     }
 
     /* at last, the method itself */
-    val RLP.Encodable.Seq( encodables ) = completeDecode( rlpBytes );
-    encodables.length match {
-      case ExtensionLeafLength => intoExtensionLeaf( encodables );
-      case BranchLength        => intoBranch( encodables );
+    val RLP.Element.Seq( elements ) = completeDecode( rlpBytes );
+    elements.length match {
+      case ExtensionLeafLength => intoExtensionLeaf( elements );
+      case BranchLength        => intoBranch( elements );
       case EmptyLength         => Empty;
-      case _                   => aerr( "The decoded representation of an RLPed node does not match any expected length. encodables.length -> ${encodables.length}, encodables -> ${encodables}" );
+      case _                   => aerr( "The decoded representation of an RLPed node does not match any expected length. elements.length -> ${elements.length}, elements -> ${elements}" );
     }
   }
 
-  def toEncodable( node : Node ) : RLP.Encodable = {
-    def branchToEncodable( branch : Branch ) : RLP.Encodable = {
+  def toElement( node : Node ) : RLP.Element = {
+    def branchToElement( branch : Branch ) : RLP.Element = {
       val mbValueBytes = branch.mbValue.getOrElse( EmptyByteSeq );
-      val encodableMbValueBytes = RLP.Encodable.ByteSeq( mbValueBytes );
-      val encodableChildren = branch.children.map( nodeSourceToEncodable _ );
-      val fullSeq : Seq[RLP.Encodable] = encodableChildren :+ encodableMbValueBytes
-      RLP.Encodable.Seq( fullSeq )
+      val elementMbValueBytes = RLP.Element.ByteSeq( mbValueBytes );
+      val elementChildren = branch.children.map( nodeSourceToElement _ );
+      val fullSeq : Seq[RLP.Element] = elementChildren :+ elementMbValueBytes
+      RLP.Element.Seq( fullSeq )
     }
-    def extensionToEncodable( extension : Extension ) : RLP.Encodable = {
-      val extSeq : Seq[RLP.Encodable] = Seq(
-        RLP.Encodable.ByteSeq( HP.encode( extension.subkey, false ) ),
-        nodeSourceToEncodable( extension.child )
+    def extensionToElement( extension : Extension ) : RLP.Element = {
+      val extSeq : Seq[RLP.Element] = Seq(
+        RLP.Element.ByteSeq( HP.encode( extension.subkey, false ) ),
+        nodeSourceToElement( extension.child )
       );
-      RLP.Encodable.Seq( extSeq )
+      RLP.Element.Seq( extSeq )
     }
-    def leafToEncodable( leaf : Leaf ) : RLP.Encodable = {
-      val leafSeq : Seq[RLP.Encodable] = Seq(
-        RLP.Encodable.ByteSeq( HP.encode( leaf.subkey, true ) ),
-        RLP.Encodable.ByteSeq( leaf.value )
+    def leafToElement( leaf : Leaf ) : RLP.Element = {
+      val leafSeq : Seq[RLP.Element] = Seq(
+        RLP.Element.ByteSeq( HP.encode( leaf.subkey, true ) ),
+        RLP.Element.ByteSeq( leaf.value )
       )
-      RLP.Encodable.Seq( leafSeq )
+      RLP.Element.Seq( leafSeq )
     }
-    def nodeSourceToEncodable( nodeSource : NodeSource ) : RLP.Encodable = {
+    def nodeSourceToElement( nodeSource : NodeSource ) : RLP.Element = {
       nodeSource match {
-        case EmbeddableEthStylePMTrie.NodeSource.Hash( hash )     => RLP.Encodable.ByteSeq( hash.bytes );
-        case EmbeddableEthStylePMTrie.NodeSource.Embedded( node ) => toEncodable( node );
-        case EmbeddableEthStylePMTrie.NodeSource.Empty            => RLP.Encodable.EmptyByteSeq
+        case EmbeddableEthStylePMTrie.NodeSource.Hash( hash )     => RLP.Element.ByteSeq( hash.bytes );
+        case EmbeddableEthStylePMTrie.NodeSource.Embedded( node ) => toElement( node );
+        case EmbeddableEthStylePMTrie.NodeSource.Empty            => RLP.Element.EmptyByteSeq
       }
     }
 
     // finally, the method implementation
     node match {
-      case branch    : Branch    => branchToEncodable( branch );
-      case extension : Extension => extensionToEncodable( extension );
-      case leaf      : Leaf      => leafToEncodable( leaf );
+      case branch    : Branch    => branchToElement( branch );
+      case extension : Extension => extensionToElement( extension );
+      case leaf      : Leaf      => leafToElement( leaf );
       case Empty => aerr( "Empty should hash to zero prior to and without any conversion into bytes.")
     }
   }
 
-  def toRLP( node : Node ) : Seq[Byte] = RLP.Encodable.encode( toEncodable( node ) );
+  def toRLP( node : Node ) : Seq[Byte] = RLP.Element.encode( toElement( node ) );
 
-  private[this] def completeDecode( rlpBytes : Seq[Byte] ) : RLP.Encodable = {
-    val ( decoded, rest ) = RLP.Encodable.decode( rlpBytes );
+  private[this] def completeDecode( rlpBytes : Seq[Byte] ) : RLP.Element = {
+    val ( decoded, rest ) = RLP.Element.decode( rlpBytes );
     assert( rest.length == 0, s"We expect to decode Byte sequences that are the result of RLP encoding. There should be no extra. rest.length -> ${rest.length}" );
     decoded
   }

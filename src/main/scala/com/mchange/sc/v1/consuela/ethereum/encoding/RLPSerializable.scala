@@ -9,7 +9,7 @@ object RLPSerializable {
   trait LazyVal[T <: LazyVal[T]] extends RLPSerializable[T] {
     protected val companion : RLPSerializable.Companion[T];
 
-    override lazy val rlpEncodable : RLP.Encodable       = super.rlpEncodable;
+    override lazy val rlpElement : RLP.Element       = super.rlpElement;
     override lazy val rlpBytes     : immutable.Seq[Byte] = super.rlpBytes;
   }
   //private lazy val SimpleName = this.getClass.getSimpleName.reverse.dropWhile( _ == '$' ).map( c => if ( c == '$' ) '.' else c ).reverse;
@@ -17,7 +17,7 @@ object RLPSerializable {
 trait RLPSerializable[T <: RLPSerializable[T]] {
   protected def companion : RLPSerializable.Companion[T];
 
-  def rlpEncodable : RLP.Encodable       = companion.toRLPEncodable( this.asInstanceOf[T] );
-  def rlpBytes     : immutable.Seq[Byte] = RLP.Encodable.encode( this.rlpEncodable );
+  def rlpElement : RLP.Element       = companion.toRLPElement( this.asInstanceOf[T] );
+  def rlpBytes     : immutable.Seq[Byte] = RLP.Element.encode( this.rlpElement );
 }
 

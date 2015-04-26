@@ -18,8 +18,8 @@ object RLPSerializing {
   trait Wrapper[T] {
     val serializer : RLPSerializing[T];
 
-    def toRLPEncodable( rlpSerializable : T )               : RLP.Encodable = serializer.toRLPEncodable( rlpSerializable );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[T]   = serializer.fromRLPEncodable( encodable );
+    def toRLPElement( rlpSerializable : T )               : RLP.Element = serializer.toRLPElement( rlpSerializable );
+    def fromRLPElement( element : RLP.Element.Basic ) : Failable[T]   = serializer.fromRLPElement( element );
 
     def decodeRLP( bytes : Seq[Byte] )         : ( Failable[T], Seq[Byte] ) = serializer.decodeRLP( bytes );
     def decodeCompleteRLP( bytes : Seq[Byte] ) : Failable[T]                = serializer.decodeCompleteRLP( bytes );
@@ -29,25 +29,25 @@ object RLPSerializing {
     val serializer : RLPSerializing[T] = implicitly[RLPSerializing[T]];
   }
   class ByteArrayValue[T <: util.ByteArrayValue]( factory : immutable.Seq[Byte] => T ) extends RLPSerializing[T] {
-    def toRLPEncodable( t : T )                             : RLP.Encodable = RLP.Encodable.ByteSeq( t.bytes );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[T] = {
-      encodable match {
-        case RLP.Encodable.ByteSeq( bytes ) => Try( factory( bytes ) ).toFailable;
-        case _                              => failNotLeaf( encodable );
+    def toRLPElement( t : T )                             : RLP.Element = RLP.Element.ByteSeq( t.bytes );
+    def fromRLPElement( element : RLP.Element.Basic ) : Failable[T] = {
+      element match {
+        case RLP.Element.ByteSeq( bytes ) => Try( factory( bytes ) ).toFailable;
+        case _                              => failNotLeaf( element );
       }
     }
   }
-  class HomogeneousEncodableSeq[U : RLPSerializing] extends RLPSerializing[immutable.Seq[U]] {
-    def toRLPEncodable( seq : immutable.Seq[U] ) : RLP.Encodable = RLP.Encodable.Seq( asEncodables( seq ) );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[immutable.Seq[U]] = {
-      encodable match {
-        case RLP.Encodable.Seq( encodables ) => {
+  class HomogeneousElementSeq[U : RLPSerializing] extends RLPSerializing[immutable.Seq[U]] {
+    def toRLPElement( seq : immutable.Seq[U] ) : RLP.Element = RLP.Element.Seq( asElements( seq ) );
+    def fromRLPElement( element : RLP.Element.Basic ) : Failable[immutable.Seq[U]] = {
+      element match {
+        case RLP.Element.Seq( elements ) => {
           val rlpSerializing = implicitly[RLPSerializing[U]];
-          encodables.foldLeft( succeed( immutable.Seq.empty[U] ) ){ ( failable : Failable[immutable.Seq[U]], encodable : RLP.Encodable ) =>
+          elements.foldLeft( succeed( immutable.Seq.empty[U] ) ){ ( failable : Failable[immutable.Seq[U]], element : RLP.Element ) =>
             failable match {
               case Left(_) => failable;
               case Right( nascentSeq ) => {
-                val mbDecoded : Failable[U] = rlpSerializing.fromRLPEncodable( encodable.simplify );
+                val mbDecoded : Failable[U] = rlpSerializing.fromRLPElement( element.simplify );
                 mbDecoded match {
                   case ouch : Left[Fail,U]  => refail( ouch );
                   case good : Right[Fail,U] => Right( nascentSeq :+ good.get );
@@ -56,30 +56,30 @@ object RLPSerializing {
             }
           }
         }
-        case _ => failNotSeq( encodable );
+        case _ => failNotSeq( element );
       }
     }
   }
 
   // really useful to keep RLPSerializing instances concise
   import scala.language.implicitConversions
-  implicit def asEncodable[ U : RLPSerializing ]( u : U ) : RLP.Encodable = implicitly[RLPSerializing[U]].toRLPEncodable( u )
+  implicit def asElement[ U : RLPSerializing ]( u : U ) : RLP.Element = implicitly[RLPSerializing[U]].toRLPElement( u )
 
   //not implicit, use this explicitly
-  def asEncodables[U : RLPSerializing]( seq : immutable.Seq[U] ) : immutable.Seq[RLP.Encodable] = seq.map( u => asEncodable( u ) )
+  def asElements[U : RLPSerializing]( seq : immutable.Seq[U] ) : immutable.Seq[RLP.Element] = seq.map( u => asElement( u ) )
 }
 abstract class RLPSerializing[T] {
   // extend and override these two methods. that's it!
-  def toRLPEncodable( rlpSerializable : T )               : RLP.Encodable;
+  def toRLPElement( rlpSerializable : T )               : RLP.Element;
 
   /**
-   *  The encodable must be simplified, ie only Encodable.Seq and Encodable.ByteSeq entities.
+   *  The element must be simplified, ie only Element.Seq and Element.ByteSeq entities.
    */
-  def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[T];
+  def fromRLPElement( element : RLP.Element.Basic ) : Failable[T];
 
   def decodeRLP( bytes : Seq[Byte] ) : ( Failable[T], Seq[Byte] ) = {
-    val (encodable, rest) = RLP.Encodable.decode( bytes );
-    ( fromRLPEncodable( encodable.simplify ), rest )
+    val (element, rest) = RLP.Element.decode( bytes );
+    ( fromRLPElement( element.simplify ), rest )
   }
   def decodeCompleteRLP( bytes : Seq[Byte] ) : Failable[T] = {
     val ( mbDecoded, rest ) = decodeRLP( bytes );
@@ -89,12 +89,12 @@ abstract class RLPSerializing[T] {
       mbDecoded
     }
   }
-  def encodeRLP( rlpSerializable : T ) : immutable.Seq[Byte] = RLP.Encodable.encode( toRLPEncodable( rlpSerializable ) );
+  def encodeRLP( rlpSerializable : T ) : immutable.Seq[Byte] = RLP.Element.encode( toRLPElement( rlpSerializable ) );
 
   protected def failNotLeaf( found : Any ) : Failable[Nothing] = {
-    fail(s"Expected a RLP.Encodable.ByteSeq( bytes ) when deserializing with ${this.getClass.getName}, found ${found}.")
+    fail(s"Expected a RLP.Element.ByteSeq( bytes ) when deserializing with ${this.getClass.getName}, found ${found}.")
   }
   protected def failNotSeq( found : Any ) : Failable[Nothing] = {
-    fail(s"Expected a RLP.Encodable.Seq( encodable ) when deserializing with ${this.getClass.getName}, found ${found}.")
+    fail(s"Expected a RLP.Element.Seq( element ) when deserializing with ${this.getClass.getName}, found ${found}.")
   }
 }

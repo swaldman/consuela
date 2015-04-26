@@ -26,19 +26,19 @@ object RLPSpec {
     lazy val items : Seq[Item] = EthereumRLPTest.asJsObject.fields.map( Item( _ ) )
 
     object Item {
-      private[this] def parseIn( in : JsValue )( implicit charset : Charset ) : RLP.Encodable = {
+      private[this] def parseIn( in : JsValue )( implicit charset : Charset ) : RLP.Element = {
         in match {
           case JsNull              => throw new AssertionError( s"Null input values not expected: ${JsNull}" );
           case und   : JsUndefined => throw new AssertionError( s"Undefined input values not expected: ${und}" );
-          case array : JsArray     => RLP.Encodable.Seq( List( array.value.map( parseIn ) : _*) );
+          case array : JsArray     => RLP.Element.Seq( List( array.value.map( parseIn ) : _*) );
           case bool  : JsBoolean   => throw new AssertionError( s"Boolean input values not expected: ${bool}" );
-          case num   : JsNumber    => RLP.Encodable.UnsignedInt( num.value.toIntExact );
+          case num   : JsNumber    => RLP.Element.UnsignedInt( num.value.toIntExact );
           case obj   : JsObject    => throw new AssertionError( s"Object input values not expected: ${obj}" );
           case str   : JsString    => {
             if ( str.value.length > 0 && str.value.charAt(0) == '#' )
-              RLP.Encodable.UnsignedBigInt( BigInt( str.value.substring(1) ) ) 
+              RLP.Element.UnsignedBigInt( BigInt( str.value.substring(1) ) ) 
             else
-              RLP.Encodable.ByteSeq( str.value.getBytes( charset ) );
+              RLP.Element.ByteSeq( str.value.getBytes( charset ) );
           }
         }
       }
@@ -50,18 +50,18 @@ object RLPSpec {
         Item( name, in, out )
       }
     }
-    case class Item( name : String, in : RLP.Encodable, out : Seq[Byte] ) {
-      lazy val ( encodable, rest ) = RLP.Encodable.decode(out);
+    case class Item( name : String, in : RLP.Element, out : Seq[Byte] ) {
+      lazy val ( element, rest ) = RLP.Element.decode(out);
 
-      def test : Boolean = RLP.Encodable.encode( in ) == out
+      def test : Boolean = RLP.Element.encode( in ) == out
 
-      def reverseTest : Boolean = (RLP.Encodable.sameBytes(in, encodable) && rest.length == 0);
+      def reverseTest : Boolean = (RLP.Element.sameBytes(in, element) && rest.length == 0);
 
       def verboseTest : Boolean = {
         val result = test;
         println( s"test '${name}': ${result}" );
         if (! result )
-          println(s"      expected: ${ByteUtils.toHexAscii(out.toArray)}    encoded: ${ByteUtils.toHexAscii( (RLP.Encodable.encode( in )).toArray )}");
+          println(s"      expected: ${ByteUtils.toHexAscii(out.toArray)}    encoded: ${ByteUtils.toHexAscii( (RLP.Element.encode( in )).toArray )}");
         result
       }
       def verboseReverseTest : Boolean = {
@@ -70,12 +70,12 @@ object RLPSpec {
           val result = reverseTest;
           println( s"reverse-test '${name}': ${result}" );
           if (! result )
-            println(s"      expected: ${in}    decoded: ${encodable}    rest: ${rest}    sameBytes: ${RLP.Encodable.sameBytes(in, encodable)}");
+            println(s"      expected: ${in}    decoded: ${element}    rest: ${rest}    sameBytes: ${RLP.Element.sameBytes(in, element)}");
           result
         } catch {
           case t : Throwable => {
             println( s"reverse-test '${name}': false" );
-            println( s"      expected: ${in}    decoded: ${encodable}    rest: ${rest}    sameBytes: ${RLP.Encodable.sameBytes(in, encodable)}" );
+            println( s"      expected: ${in}    decoded: ${element}    rest: ${rest}    sameBytes: ${RLP.Element.sameBytes(in, element)}" );
             println( s"      ${t}" );
             t.printStackTrace();
             false

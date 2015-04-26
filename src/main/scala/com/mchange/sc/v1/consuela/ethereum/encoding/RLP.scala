@@ -13,19 +13,19 @@ import com.mchange.sc.v1.consuela.util.ImmutableArraySeq;
 
 object RLP {
 
-  def toEncodable[T : RLPSerializing]( t : T )                             : RLP.Encodable = implicitly[RLPSerializing[T]].toRLPEncodable( t );
-  def fromEncodable[T : RLPSerializing]( encodable : RLP.Encodable.Basic ) : Failable[T]   = implicitly[RLPSerializing[T]].fromRLPEncodable( encodable );
+  def toElement[T : RLPSerializing]( t : T )                             : RLP.Element = implicitly[RLPSerializing[T]].toRLPElement( t );
+  def fromElement[T : RLPSerializing]( element : RLP.Element.Basic ) : Failable[T]   = implicitly[RLPSerializing[T]].fromRLPElement( element );
 
   def decode[T : RLPSerializing]( bytes : Seq[Byte] )                    : ( Failable[T], Seq[Byte] ) = implicitly[RLPSerializing[T]].decodeRLP( bytes );
   def decodeComplete[T : RLPSerializing]( bytes : Seq[Byte] )            : Failable[T]                = implicitly[RLPSerializing[T]].decodeCompleteRLP( bytes ); 
   def encode[T : RLPSerializing]( t : T )                                : immutable.Seq[Byte]        = implicitly[RLPSerializing[T]].encodeRLP( t ); 
 
   // convenience methods
-  def encodeString( str : String, charset : Charset ) : immutable.Seq[Byte] = Encodable.encode( Encodable.ByteSeq( str.getBytes( charset ).toSeq ) );
+  def encodeString( str : String, charset : Charset ) : immutable.Seq[Byte] = Element.encode( Element.ByteSeq( str.getBytes( charset ).toSeq ) );
 
   object Encoded {
-    val EmptyByteSeq = Encodable.encode( Encodable.EmptyByteSeq );
-    val EmptySeq     = Encodable.encode( Encodable.EmptySeq );
+    val EmptyByteSeq = Element.encode( Element.EmptyByteSeq );
+    val EmptySeq     = Element.encode( Element.EmptySeq );
   }
   object UTF_8 {
     val _Charset = StandardCharsets.UTF_8;
@@ -33,49 +33,49 @@ object RLP {
     /**
      * Strings interpreted as UTF-8 bytes. Strings can be empty, other empty sequences interpreted as structure
      */  
-    def fastEncode( obj : Any ) : Option[Seq[Byte]] = Encodable.fastEncodableWithStrings( obj, _Charset ).map( Encodable.encode _ )
+    def fastEncode( obj : Any ) : Option[Seq[Byte]] = Element.fastElementWithStrings( obj, _Charset ).map( Element.encode _ )
 
     def encodeString( str : String ) : Seq[Byte] = RLP.encodeString( str, _Charset )
   }
 
   /**
-   * Encodables are now formally immutable.
+   * Elements are now formally immutable.
    */ 
-  object Encodable {
+  object Element {
 
-    sealed trait Basic extends Encodable;
+    sealed trait Basic extends Element;
 
-    def sameBytes( a : Encodable, b : Encodable ) = a.simplify == b.simplify
+    def sameBytes( a : Element, b : Element ) = a.simplify == b.simplify
 
     object ByteSeq {
       def apply( array : Array[Byte] )   : ByteSeq = new ByteSeq( ImmutableArraySeq.Byte( array ) );
       def apply( seq : scala.Seq[Byte] ) : ByteSeq = new ByteSeq( toImmutableBytes( seq ) );
     }
-    case class ByteSeq( bytes : immutable.Seq[Byte] ) extends Encodable.Basic {
+    case class ByteSeq( bytes : immutable.Seq[Byte] ) extends Element.Basic {
       def isSimple = true;
       def simplify = this;
     }
-    case class UnsignedInt( value : scala.Int ) extends Encodable {
+    case class UnsignedInt( value : scala.Int ) extends Element {
       require( value >= 0 );
 
       def isSimple = false;
-      def simplify = Encodable.ByteSeq( scalarBytes( value ) )
+      def simplify = Element.ByteSeq( scalarBytes( value ) )
     }
-    case class UnsignedBigInt( value : scala.BigInt ) extends Encodable {
+    case class UnsignedBigInt( value : scala.BigInt ) extends Element {
       require( value >= 0 );
 
       def isSimple = false;
-      def simplify = Encodable.ByteSeq( scalarBytes( value ) )
+      def simplify = Element.ByteSeq( scalarBytes( value ) )
     }
     object Seq {
       object of {
-        def apply( encodables : Encodable* )  : Encodable.Seq = new Seq( ImmutableArraySeq( encodables.toArray ) );
-        def unapplySeq( seq : Encodable.Seq ) : Option[immutable.Seq[Encodable]] = Some(seq.seq);
+        def apply( elements : Element* )  : Element.Seq = new Seq( ImmutableArraySeq( elements.toArray ) );
+        def unapplySeq( seq : Element.Seq ) : Option[immutable.Seq[Element]] = Some(seq.seq);
       }
-      def apply( array : Array[Encodable] )   = new Seq( ImmutableArraySeq( array ) );
-      def apply( seq : scala.Seq[Encodable] ) = new Seq( toImmutable( seq ) );
+      def apply( array : Array[Element] )   = new Seq( ImmutableArraySeq( array ) );
+      def apply( seq : scala.Seq[Element] ) = new Seq( toImmutable( seq ) );
     }
-    case class Seq( seq : immutable.Seq[Encodable] ) extends Encodable.Basic {
+    case class Seq( seq : immutable.Seq[Element] ) extends Element.Basic {
       lazy val isSimple = seq.forall( _.isSimple )
       def simplify = if ( this.isSimple ) this else Seq( seq.map( _.simplify ) )
     }
@@ -108,19 +108,19 @@ object RLP {
     // long sequence could overflow the capacity of the first byte to encode the length of its
     // length.
 
-    def decodeComplete( bytes : scala.Seq[Byte] ) : Encodable.Basic = decode( bytes ).ensuring( _._2.isEmpty )._1
+    def decodeComplete( bytes : scala.Seq[Byte] ) : Element.Basic = decode( bytes ).ensuring( _._2.isEmpty )._1
 
     /**
-     *  @return a pair, decoded Encodable and unconsumed bytes
+     *  @return a pair, decoded Element and unconsumed bytes
      */  
-    def decode( bytes : scala.Seq[Byte] ) : (Encodable.Basic, scala.Seq[Byte]) = {
+    def decode( bytes : scala.Seq[Byte] ) : (Element.Basic, scala.Seq[Byte]) = {
       def splitOut( splitMe : scala.Seq[Byte], len : Int ) = {
         val ( decoded, rest ) = splitMe.splitAt( len );
-        ( Encodable.ByteSeq( decoded ), rest )
+        ( Element.ByteSeq( decoded ), rest )
       }
       def splitOutSeq( splitMe : scala.Seq[Byte], len : Int ) = {
-        val (encodables, rest) = encodableSeq( len, Nil, splitMe );
-        ( Encodable.Seq( encodables ), rest )
+        val (elements, rest) = elementSeq( len, Nil, splitMe );
+        ( Element.Seq( elements ), rest )
       }
       def decodeLengthBytes( lengthBytes : scala.Seq[Byte] ) : Int = {
         if ( lengthBytes.length == 0 ) {
@@ -132,7 +132,7 @@ object RLP {
           bi.intValue;
         }
       }
-      def encodableSeq( count : Int, reverseAccum : List[Encodable.Basic], in : scala.Seq[Byte] ) : ( scala.Seq[Encodable.Basic], scala.Seq[Byte] ) = {
+      def elementSeq( count : Int, reverseAccum : List[Element.Basic], in : scala.Seq[Byte] ) : ( scala.Seq[Element.Basic], scala.Seq[Byte] ) = {
         assert(
           count >= 0,
           s"Count should begin with precisely the byte length of the concatenated elements, and so we should end with precisely zero bytes. count -> ${count}, reverseAccum -> ${reverseAccum}"
@@ -141,9 +141,9 @@ object RLP {
         if ( count == 0 )
           ( reverseAccum.reverse, in );
         else {
-          val ( encodable, rest ) = decode( in );
+          val ( element, rest ) = decode( in );
           val eaten = in.length - rest.length
-          encodableSeq( count - eaten, encodable :: reverseAccum, rest );
+          elementSeq( count - eaten, element :: reverseAccum, rest );
         }
       }
 
@@ -168,7 +168,7 @@ object RLP {
         splitOut(bytes, 1)
       }
     }
-    def encode( encodable : Encodable ) : scala.collection.immutable.Seq[Byte] = {
+    def encode( element : Element ) : scala.collection.immutable.Seq[Byte] = {
 
       def rba( arr : Array[Byte] ) : immutable.Seq[Byte] = rb( ImmutableArraySeq.Byte( arr ) )
 
@@ -193,55 +193,55 @@ object RLP {
 
         _rb( _promote( bs ) );
       }
-      def rl( encodables : immutable.Seq[Encodable] ) : immutable.Seq[Byte] = {
+      def rl( elements : immutable.Seq[Element] ) : immutable.Seq[Byte] = {
 
         // note: this was a surpise to me. the length of s(x), described in the ethereum yellow paper as ||s(x)|| is
         // the *byte length of the serialized representation of all concatenated members of the sequence*,
         // not the length of the top-level sequence, i.e. not the number of members the will be concatenated into
         // the sequence.
 
-        val sencodables = s( encodables );
-        val len = sencodables.length;
+        val selements = s( elements );
+        val len = selements.length;
         if ( len < 56 )
-          (192 + len).toByte +: sencodables
+          (192 + len).toByte +: selements
         else {
           val lenBytes = scalarBytes( len );
-          (247 + lenBytes.length).toByte +: ( lenBytes ++: sencodables )
+          (247 + lenBytes.length).toByte +: ( lenBytes ++: selements )
         }
       }
-      def s( encodables : immutable.Seq[Encodable] ) : immutable.Seq[Byte] = encodables.flatMap( encode _ );
+      def s( elements : immutable.Seq[Element] ) : immutable.Seq[Byte] = elements.flatMap( encode _ );
 
-      encodable match {
-        case bse : Encodable.ByteSeq        => rb( bse.bytes );
-        case ie  : Encodable.UnsignedInt    => rba( scalarBytes( ie.value ) );
-        case bie : Encodable.UnsignedBigInt => rba( scalarBytes( bie.value ) );
-        case ese : Encodable.Seq            => rl( ese.seq );
+      element match {
+        case bse : Element.ByteSeq        => rb( bse.bytes );
+        case ie  : Element.UnsignedInt    => rba( scalarBytes( ie.value ) );
+        case bie : Element.UnsignedBigInt => rba( scalarBytes( bie.value ) );
+        case ese : Element.Seq            => rl( ese.seq );
       }
     }
     /**
      * Strings can be empty, other empty sequences interpreted as structure
      */  
-    def fastEncodableWithStrings( obj : Any, charset : Charset ) : Option[Encodable] = {
-      def tryAsAtom : Option[Encodable] = {
+    def fastElementWithStrings( obj : Any, charset : Charset ) : Option[Element] = {
+      def tryAsAtom : Option[Element] = {
         obj match {
-          case i   : Int    if (i >= 0)  => Some( Encodable.UnsignedInt( i ) )
-          case bi  : BigInt if (bi >= 0) => Some( Encodable.UnsignedBigInt( bi ) )
-          case str : String              => Some( Encodable.ByteSeq( str.getBytes( charset ) ) )
+          case i   : Int    if (i >= 0)  => Some( Element.UnsignedInt( i ) )
+          case bi  : BigInt if (bi >= 0) => Some( Element.UnsignedBigInt( bi ) )
+          case str : String              => Some( Element.ByteSeq( str.getBytes( charset ) ) )
           case _                         => None
         }
       }
-      def tryAsSeq : Option[Encodable] = {
+      def tryAsSeq : Option[Element] = {
         if ( obj.isInstanceOf[scala.Seq[_]] ) {
           val seq : scala.Seq[_] = obj.asInstanceOf[scala.Seq[_]];
 
-          def tryAsHomogenousByteSeq : Option[Encodable] = {
+          def tryAsHomogenousByteSeq : Option[Element] = {
             seq match {
-              case scala.Seq() => Some( Encodable.Seq( scala.Seq.empty[Encodable] ) );
+              case scala.Seq() => Some( Element.Seq( scala.Seq.empty[Element] ) );
               case scala.Seq( head, tail @ _* ) => {
                 head match {
                   case byte : Byte => {
                     if ( tail.forall( _.isInstanceOf[Byte] ) ) { // yay! scala.Seq[Byte]
-                      Some( Encodable.ByteSeq( byte +: tail.map( _.asInstanceOf[Byte] ) ) )
+                      Some( Element.ByteSeq( byte +: tail.map( _.asInstanceOf[Byte] ) ) )
                     } else {
                       None
                     }
@@ -252,7 +252,7 @@ object RLP {
               case _ => None
             }
           }
-          def tryAsOtherSeq : Option[Encodable] = Try( Encodable.Seq( seq.map( fastEncodableWithStrings( _, charset ).get ) ) ).toOption
+          def tryAsOtherSeq : Option[Element] = Try( Element.Seq( seq.map( fastElementWithStrings( _, charset ).get ) ) ).toOption
 
           tryAsHomogenousByteSeq orElse tryAsOtherSeq
         } else {
@@ -268,9 +268,9 @@ object RLP {
     // Note: We're relying on the fact that an uninitialized byte is guaranteed by the JVM to be zero. 
     def intFromScalarBytes( truncatedIntBytes : scala.Seq[Byte] ) = IntegerUtils.intFromByteArray( Array.ofDim[Byte](4 - truncatedIntBytes.length) ++ truncatedIntBytes, 0 ); 
   }
-  sealed trait Encodable {
+  sealed trait Element {
     def isSimple : Boolean;
-    def simplify : Encodable.Basic;
+    def simplify : Element.Basic;
   }
 }
 

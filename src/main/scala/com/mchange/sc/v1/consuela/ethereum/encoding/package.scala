@@ -54,31 +54,31 @@ package object encoding {
    */ 
   // serializers
   implicit object ByteSeqSerializer extends RLPSerializing[Seq[Byte]] {
-    def toRLPEncodable( bytes : Seq[Byte] )                 : RLP.Encodable = RLP.Encodable.ByteSeq( bytes );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[Seq[Byte]] = encodable match {
-      case RLP.Encodable.ByteSeq( bytes ) => succeed( bytes );
-      case _                              => failNotLeaf( encodable );
+    def toRLPElement( bytes : Seq[Byte] )                 : RLP.Element = RLP.Element.ByteSeq( bytes );
+    def fromRLPElement( element : RLP.Element.Basic ) : Failable[Seq[Byte]] = element match {
+      case RLP.Element.ByteSeq( bytes ) => succeed( bytes );
+      case _                              => failNotLeaf( element );
     }
   }
   implicit object ImmutableByteSeqSerializer extends RLPSerializing[immutable.Seq[Byte]] {
-    def toRLPEncodable( bytes : immutable.Seq[Byte] )       : RLP.Encodable = RLP.Encodable.ByteSeq( bytes );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[immutable.Seq[Byte]] = encodable match {
-      case RLP.Encodable.ByteSeq( bytes ) => succeed( bytes );
-      case _                              => failNotLeaf( encodable );
+    def toRLPElement( bytes : immutable.Seq[Byte] )       : RLP.Element = RLP.Element.ByteSeq( bytes );
+    def fromRLPElement( element : RLP.Element.Basic ) : Failable[immutable.Seq[Byte]] = element match {
+      case RLP.Element.ByteSeq( bytes ) => succeed( bytes );
+      case _                              => failNotLeaf( element );
     }
   }
   implicit object ByteArraySerializer extends RLPSerializing[Array[Byte]] {
-    def toRLPEncodable( bytes : Array[Byte] )               : RLP.Encodable = RLP.Encodable.ByteSeq( bytes );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[Array[Byte]] = encodable match {
-      case RLP.Encodable.ByteSeq( bytes ) => succeed( bytes.toArray );
-      case _                              => failNotLeaf( encodable );
+    def toRLPElement( bytes : Array[Byte] )               : RLP.Element = RLP.Element.ByteSeq( bytes );
+    def fromRLPElement( element : RLP.Element.Basic ) : Failable[Array[Byte]] = element match {
+      case RLP.Element.ByteSeq( bytes ) => succeed( bytes.toArray );
+      case _                              => failNotLeaf( element );
     }
   }
   implicit object UnsignedIntSerializer extends RLPSerializing[Int] {
-    def toRLPEncodable( i : Int )                           : RLP.Encodable = RLP.Encodable.UnsignedInt( i );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[Int] = encodable match {
-      case RLP.Encodable.ByteSeq( bytes ) if (bytes.length <= 4) => {
-        val result = RLP.Encodable.intFromScalarBytes(bytes);
+    def toRLPElement( i : Int )                           : RLP.Element = RLP.Element.UnsignedInt( i );
+    def fromRLPElement( element : RLP.Element.Basic ) : Failable[Int] = element match {
+      case RLP.Element.ByteSeq( bytes ) if (bytes.length <= 4) => {
+        val result = RLP.Element.intFromScalarBytes(bytes);
         if ( result >= 0 ) {
           succeed( result ) 
         } else {
@@ -88,15 +88,15 @@ package object encoding {
              "If negative values are expected, applications may read an interpret the byte sequence directly.")
         }
       }
-      case RLP.Encodable.ByteSeq( bytes ) if (bytes.length > 4)  => fail( "The Int value requested cannot be represented in an 4 byte Int." );
-      case _                                                     => failNotLeaf( encodable );
+      case RLP.Element.ByteSeq( bytes ) if (bytes.length > 4)  => fail( "The Int value requested cannot be represented in an 4 byte Int." );
+      case _                                                     => failNotLeaf( element );
     }
   }
   implicit object UnsignedBigIntSerializer extends RLPSerializing[BigInt] {
-    def toRLPEncodable( bi : BigInt )                       : RLP.Encodable = RLP.Encodable.UnsignedBigInt( bi );
-    def fromRLPEncodable( encodable : RLP.Encodable.Basic ) : Failable[BigInt] = encodable match {
-      case RLP.Encodable.ByteSeq( bytes ) => succeed( BigInt( 1, bytes.toArray ) );
-      case _                              => failNotLeaf( encodable );
+    def toRLPElement( bi : BigInt )                       : RLP.Element = RLP.Element.UnsignedBigInt( bi );
+    def fromRLPElement( element : RLP.Element.Basic ) : Failable[BigInt] = element match {
+      case RLP.Element.ByteSeq( bytes ) => succeed( BigInt( 1, bytes.toArray ) );
+      case _                              => failNotLeaf( element );
     }
   }
 
@@ -107,12 +107,12 @@ package object encoding {
 
       val rlpOpsView : T => RLPOps[T];
 
-      lazy val rlpEncodable : RLP.Encodable       = rlpOpsView( this ).rlpEncodable;
-      lazy val rlpBytes     : immutable.Seq[Byte] = RLP.Encodable.encode( this.rlpEncodable );
+      lazy val rlpElement : RLP.Element       = rlpOpsView( this ).rlpElement;
+      lazy val rlpBytes     : immutable.Seq[Byte] = RLP.Element.encode( this.rlpElement );
     }
   }
   implicit class RLPOps[ T : RLPSerializing ]( rlpSerializable : T ) {
-    def rlpEncodable : RLP.Encodable       = implicitly[RLPSerializing[T]].toRLPEncodable( rlpSerializable.asInstanceOf[T] );
+    def rlpElement : RLP.Element       = implicitly[RLPSerializing[T]].toRLPElement( rlpSerializable.asInstanceOf[T] );
     def rlpBytes     : immutable.Seq[Byte] = implicitly[RLPSerializing[T]].encodeRLP( this.rlpSerializable );
   }
 }
