@@ -7,7 +7,7 @@ import com.mchange.sc.v1.consuela.ethereum.encoding.{RLP, RLPSerializing};
 
 import scala.collection.Traversable;
 
-import specification.Set.Unsigned256;
+import specification.Types.Unsigned256;
 
 object WorldState {
   object Account {

@@ -10,7 +10,7 @@ import java.util.Arrays;
 import scala.util.hashing.MurmurHash3;
 
 import encoding.{RLP, RLPSerializing};
-import specification.Set.Unsigned256;
+import specification.Types.Unsigned256;
 
 object EthTransaction {
   object Unsigned {

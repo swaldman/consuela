@@ -12,7 +12,7 @@ import scala.collection._;
  * value class are susceptible to promotions and boxing if you work with them
  * conveniently, and we are trying to avoid that here.
  */ 
-object Set {
+object Types {
   val BI_0 = BigInt(0);
 
   object Unsigned extends Integral {

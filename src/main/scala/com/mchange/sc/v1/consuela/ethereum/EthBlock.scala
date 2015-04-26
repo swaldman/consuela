@@ -1,7 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum;
 
 import encoding.{RLP, RLPSerializable}
-import specification.Set._;
+import specification.Types.{Unsigned,Unsigned2048,ByteSeqMax1024,ByteSeqExact8};
 
 import scala.collection.immutable.Seq;
 

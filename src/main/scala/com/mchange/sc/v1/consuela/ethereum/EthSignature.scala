@@ -4,9 +4,7 @@ import com.mchange.sc.v1.consuela._;
 
 import scala.collection._;
 
-import specification.Set.SignatureV;
-import specification.Set.SignatureR;
-import specification.Set.SignatureS;
+import specification.Types.{SignatureR, SignatureS, SignatureV};
 
 case class EthSignature( val v : Byte, val r : BigInt, val s : BigInt ) {
   require( (v elem_!: SignatureV) && (r elem_!: SignatureR) && (s elem_!: SignatureS) );

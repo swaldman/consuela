@@ -2,7 +2,7 @@ package com.mchange.sc.v1.consuela.ethereum;
 
 import scala.collection._;
 
-import specification.Set._;
+import specification.Types.ByteSeqExact4;
 
 object EthLogEntry {
   case class Topic( bytes : immutable.Seq[Byte] ) {
