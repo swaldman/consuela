@@ -37,13 +37,15 @@ object Types {
   }
   class Unsigned8 private ( val value : Int ) extends AnyVal { override def toString : String = s"Unsigned8(${value})" }
 
-  object Unsigned31 extends Integral.Int.UnsignedWithBitLength( 31 ) {
-    def apply( value : Int ) : Unsigned31 = {
-      require( value elem_!: Unsigned31 );
-      new Unsigned31( value )
+  object UnsignedInt extends Integral.Int.UnsignedWithBitLength( 31 ) {
+    def apply( value : Int ) : UnsignedInt = {
+      require( value elem_!: UnsignedInt );
+      new UnsignedInt( value )
     }
   }
-  class Unsigned31 private ( val value : Int ) extends AnyVal { override def toString : String = s"Unsigned31(${value})" }
+  class UnsignedInt private ( val value : Int ) extends AnyVal { override def toString : String = s"UnsignedInt(${value})" }
+
+  type Unsigned31 = UnsignedInt;
 
   object Unsigned32 extends Integral.Long.UnsignedWithBitLength( 32 ) {
     def apply( value : Long ) : Unsigned32 = {
@@ -52,6 +54,16 @@ object Types {
     }
   }
   class Unsigned32 private ( val value : Long ) extends AnyVal { override def toString : String = s"Unsigned32(${value})" }
+
+  object UnsignedLong extends Integral.Long.UnsignedWithBitLength( 63 ) {
+    def apply( value : Long ) : UnsignedLong = {
+      require( value elem_!: UnsignedLong );
+      new UnsignedLong( value )
+    }
+  }
+  class UnsignedLong private ( val value : Long ) extends AnyVal { override def toString : String = s"UnsignedLong(${value})" }
+
+  type Unsigned63 = UnsignedLong;
 
   object Unsigned256 extends Integral.BigInt.UnsignedWithBitLength( 256 ) {
     def apply( value : BigInt ) : Unsigned256 = {
