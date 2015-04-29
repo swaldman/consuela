@@ -31,6 +31,7 @@ publishTo <<= version {
 
 libraryDependencies ++= Seq(
   "com.mchange" %% "mlog-scala" % "0.3.7-SNAPSHOT",
+  "com.mchange" %% "restricted-type" % "0.0.1-SNAPSHOT",
   "com.mchange" %% "mchange-commons-scala" % "0.4.0-SNAPSHOT" changing(),
   "com.typesafe" % "config" % "1.2.1",
   "org.bouncycastle" % "bcprov-jdk15on" % "1.51",

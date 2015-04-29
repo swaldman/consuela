@@ -28,7 +28,7 @@ final class EthPublicKey private ( protected val _bytes : Array[Byte] ) extends 
   def matches( priv : EthPrivateKey ) : Boolean = Arrays.equals( _bytes, EthPublicKey.computeBytes( priv ) );
 
   private def verifyRawBytes( rawBytes : Array[Byte], signature : EthSignature ) : Boolean = {
-    val _signature = crypto.secp256k1.Signature( signature.r.bigInteger, signature.s.bigInteger )
+    val _signature = crypto.secp256k1.Signature( signature.r.value.bigInteger, signature.s.value.bigInteger )
     crypto.secp256k1.verifySignature( rawBytes, _signature, this.x.bigInteger, this.y.bigInteger )
   }
   private def verifyEthHash( hash : EthHash, signature : EthSignature ) : Boolean = this.verifyRawBytes( hash.toByteArray, signature );

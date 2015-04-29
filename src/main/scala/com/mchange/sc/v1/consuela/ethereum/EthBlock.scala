@@ -13,26 +13,15 @@ object EthBlock {
     stateRoot       : EthHash, 
     transactionRoot : EthHash, 
     receiptsRoot    : EthHash,
-    logsBloom       : BigInt,  
-    difficulty      : BigInt,
-    number          : BigInt,
-    gasLimit        : BigInt,
-    gasUsed         : BigInt,
-    timestamp       : BigInt,
-    extraData       : Seq[Byte],
+    logsBloom       : Unsigned2048,  
+    difficulty      : Unsigned,
+    number          : Unsigned,
+    gasLimit        : Unsigned,
+    gasUsed         : Unsigned,
+    timestamp       : Unsigned,
+    extraData       : ByteSeqMax1024,
     mixHash         : EthHash,
-    nonce           : Seq[Byte]
-  ) {
-    require(
-      ( logsBloom  elem_!: Unsigned2048   ) &&
-      ( difficulty elem_!: Unsigned       ) &&
-      ( number     elem_!: Unsigned       ) &&
-      ( gasLimit   elem_!: Unsigned       ) &&
-      ( gasUsed    elem_!: Unsigned       ) &&
-      ( timestamp  elem_!: Unsigned       ) &&
-      ( extraData  elem_!: ByteSeqMax1024 ) &&
-      ( nonce      elem_!: ByteSeqExact8  )
-    )
-  }
+    nonce           : ByteSeqExact8
+  )
 }
 case class EthBlock( header : EthBlock.Header, transactions : Seq[EthTransaction], ommers : Seq[EthBlock.Header] );

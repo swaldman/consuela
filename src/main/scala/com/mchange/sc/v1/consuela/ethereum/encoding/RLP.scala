@@ -3,10 +3,8 @@ package com.mchange.sc.v1.consuela.ethereum.encoding;
 import com.mchange.sc.v1.consuela._
 
 import scala.util.Try;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
-import com.mchange.lang.IntegerUtils;
-import com.mchange.lang.LongUtils;
+import java.nio.charset.{Charset, StandardCharsets};
+import com.mchange.lang.{ShortUtils, IntegerUtils, LongUtils};
 
 import scala.collection._;
 import scala.reflect.ClassTag;
@@ -14,8 +12,8 @@ import com.mchange.sc.v1.consuela.util.ImmutableArraySeq;
 
 object RLP {
 
-  def toElement[T : RLPSerializing]( t : T )                             : RLP.Element = implicitly[RLPSerializing[T]].toElement( t );
-  def fromElement[T : RLPSerializing]( element : RLP.Element.Basic ) : Failable[T]   = implicitly[RLPSerializing[T]].fromElement( element );
+  def toElement[T : RLPSerializing]( t : T )                         : RLP.Element = implicitly[RLPSerializing[T]].toElement( t );
+  def fromElement[T : RLPSerializing]( element : RLP.Element.Basic ) : Failable[T] = implicitly[RLPSerializing[T]].fromElement( element );
 
   def decode[T : RLPSerializing]( bytes : Seq[Byte] )                    : ( Failable[T], Seq[Byte] ) = implicitly[RLPSerializing[T]].decode( bytes );
   def decodeComplete[T : RLPSerializing]( bytes : Seq[Byte] )            : Failable[T]                = implicitly[RLPSerializing[T]].decodeComplete( bytes ); 
@@ -55,6 +53,18 @@ object RLP {
     case class ByteSeq( bytes : immutable.Seq[Byte] ) extends Element.Basic {
       def isSimple = true;
       def simplify = this;
+    }
+    case class UnsignedByte( value : scala.Byte ) extends Element {
+      require( value >= 0 );
+
+      def isSimple = false;
+      def simplify = Element.ByteSeq( scalarBytes( value ) )
+    }
+    case class UnsignedShort( value : scala.Short ) extends Element {
+      require( value >= 0 );
+
+      def isSimple = false;
+      def simplify = Element.ByteSeq( scalarBytes( value ) )
     }
     case class UnsignedInt( value : scala.Int ) extends Element {
       require( value >= 0 );
@@ -220,6 +230,8 @@ object RLP {
 
       element match {
         case bse : Element.ByteSeq        => rb( bse.bytes );
+        case be  : Element.UnsignedByte   => rba( scalarBytes( be.value ) );
+        case se  : Element.UnsignedShort  => rba( scalarBytes( se.value ) );
         case ie  : Element.UnsignedInt    => rba( scalarBytes( ie.value ) );
         case le  : Element.UnsignedLong   => rba( scalarBytes( le.value ) );
         case bie : Element.UnsignedBigInt => rba( scalarBytes( bie.value ) );
@@ -232,6 +244,8 @@ object RLP {
     def fastElementWithStrings( obj : Any, charset : Charset ) : Option[Element] = {
       def tryAsAtom : Option[Element] = {
         obj match {
+          case b   : Byte   if (b >= 0)  => Some( Element.UnsignedByte( b ) )
+          case s   : Short  if (s >= 0)  => Some( Element.UnsignedShort( s ) )
           case i   : Int    if (i >= 0)  => Some( Element.UnsignedInt( i ) )
           case l   : Long   if (l >= 0)  => Some( Element.UnsignedLong( l ) )
           case bi  : BigInt if (bi >= 0) => Some( Element.UnsignedBigInt( bi ) )
@@ -271,11 +285,25 @@ object RLP {
 
       tryAsAtom orElse tryAsSeq
     }
+    def scalarBytes( b  : Byte )   : Array[Byte] = Array[Byte](b).dropWhile( _ == 0 );
+    def scalarBytes( s  : Short )  : Array[Byte] = ShortUtils.byteArrayFromShort( s ).dropWhile( _ == 0 );
     def scalarBytes( i  : Int )    : Array[Byte] = IntegerUtils.byteArrayFromInt( i ).dropWhile( _ == 0 );
     def scalarBytes( l  : Long )   : Array[Byte] = LongUtils.byteArrayFromLong( l ).dropWhile( _ == 0 );
     def scalarBytes( bi : BigInt ) : Array[Byte] = bi.toByteArray.dropWhile( _ == 0 );
 
+    val Byte0 = 0.toByte;
+
     // Note: We're relying on the fact that an uninitialized byte is guaranteed by the JVM to be zero. 
+    def byteFromScalarBytes( truncatedByte : scala.Seq[Byte] ) : Byte = {
+      truncatedByte.length match {
+        case 0 => Byte0;
+        case 1 => truncatedByte(0);
+        case _ => throw new IllegalArgumentException( s"Expected a Seq containing a single Byte, found ${truncatedByte}" );
+      }
+    }
+    def shortFromScalarBytes( truncatedShortBytes : scala.Seq[Byte] ) : Short = {
+      ShortUtils.shortFromByteArray( Array.ofDim[Byte](2 - truncatedShortBytes.length) ++ truncatedShortBytes, 0 )
+    }
     def intFromScalarBytes( truncatedIntBytes : scala.Seq[Byte] ) : Int = {
       IntegerUtils.intFromByteArray( Array.ofDim[Byte](4 - truncatedIntBytes.length) ++ truncatedIntBytes, 0 )
     }

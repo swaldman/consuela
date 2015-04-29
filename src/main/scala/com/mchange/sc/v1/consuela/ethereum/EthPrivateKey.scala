@@ -3,6 +3,8 @@ package com.mchange.sc.v1.consuela.ethereum;
 import com.mchange.sc.v1.consuela._;
 import com.mchange.sc.v1.consuela.crypto;
 
+import specification.Types.{SignatureV, SignatureR, SignatureS}
+
 import com.mchange.sc.v1.consuela.util.ByteArrayValue;
 
 import java.security.SecureRandom;
@@ -29,11 +31,11 @@ final class EthPrivateKey private( protected val _bytes : Array[Byte] ) extends 
     import crypto.secp256k1._;
     signature( this.toBigInteger, rawBytes ) match {
       case Left( bytes ) => throw new UnexpectedSignatureFormatException( bytes.hex );
-      case Right( Signature( r, s, Some( v ) ) ) => EthSignature( v, r, s );
+      case Right( Signature( r, s, Some( v ) ) ) => EthSignature( SignatureV( v ), SignatureR( BigInt(r) ), SignatureS( BigInt(s) ) );
       case Right( Signature( r, s, None ) )      => {
         val mbRecovered = recoverPublicKeyAndV( r, s, rawBytes );
         mbRecovered.fold( throw new EthereumException( s"Could find only partial signature [ v -> ???, r -> ${r}, s -> ${s} ]" ) ) { recovered =>
-          EthSignature( recovered.v.toByte, r, s )
+          EthSignature( SignatureV( recovered.v ), SignatureR( BigInt( r ) ), SignatureS( BigInt( s ) ) )
         }
       }
     }

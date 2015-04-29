@@ -4,6 +4,8 @@ import ethereum.encoding._;
 import RLPSerializing.asElement;  // implicit conversion
 import RLPSerializing.asElements; // not implicit 
 
+import ethereum.specification.Types.{SignatureV, SignatureR, SignatureS, ByteSeqMax1024,ByteSeqExact8,Unsigned256,Unsigned2048,Unsigned => UnsignedBigInt}
+
 import com.mchange.sc.v1.consuela.hash.Hash;
 
 import scala.collection._;
@@ -33,16 +35,16 @@ package object ethereum {
     import EthTransaction._;
 
     override def toElement( txn : EthTransaction ): RLP.Element = {
-      import RLP.Element.{UnsignedBigInt => UBI, ByteSeq => BS, UnsignedInt => UI};
+      import RLP.{toElement => elem}
 
       def baseElements( unsigned : Unsigned ) : Vector[RLP.Element] = {
         val (rlpMbTo, payload) = unsigned match {
           case msg : Unsigned.Message          => (msg.to.bytes, msg.data);
           case cc  : Unsigned.ContractCreation => (Nil, cc.init);
         }
-        Vector( UBI( unsigned.nonce ), UBI( unsigned.gasPrice ), UBI( unsigned.gasLimit ), BS( rlpMbTo ), UBI( unsigned.value ), BS( payload ) );
+        Vector( elem( unsigned.nonce ), elem( unsigned.gasPrice ), elem( unsigned.gasLimit ), elem( rlpMbTo ), elem( unsigned.value ), elem( payload ) );
       }
-      def sigElements( signed : Signed ) : Vector[RLP.Element] = Vector( UI( signed.v ), UBI( signed.r ), UBI( signed.s ) ) 
+      def sigElements( signed : Signed ) : Vector[RLP.Element] = Vector( elem( signed.v ), elem( signed.r ), elem( signed.s ) ) 
 
       txn match {
         case unsigned : Unsigned => RLP.Element.Seq( baseElements( unsigned ) );
@@ -60,11 +62,11 @@ package object ethereum {
       element match {
         case RLP.Element.Seq.of( nonceE, gasPriceE, gasLimitE, mbToE, valueE, payloadE, rest @ _* ) => {
           val base = for {
-            nonce    <- RLP.fromElement[BigInt]( nonceE.simplify );
-            gasPrice <- RLP.fromElement[BigInt]( gasPriceE.simplify );
-            gasLimit <- RLP.fromElement[BigInt]( gasLimitE.simplify );
+            nonce    <- RLP.fromElement[UnsignedBigInt]( nonceE.simplify );
+            gasPrice <- RLP.fromElement[UnsignedBigInt]( gasPriceE.simplify );
+            gasLimit <- RLP.fromElement[UnsignedBigInt]( gasLimitE.simplify );
             mbTo     <- fromMbToElement( mbToE.simplify );
-            value    <- RLP.fromElement[BigInt]( valueE.simplify );
+            value    <- RLP.fromElement[UnsignedBigInt]( valueE.simplify );
             payload  <- RLP.fromElement[immutable.Seq[Byte]]( payloadE.simplify )
           } yield {
             mbTo.fold( new Unsigned.ContractCreation( nonce, gasPrice, gasLimit, value, payload.toIndexedSeq ) : Unsigned ){ addr =>
@@ -78,10 +80,10 @@ package object ethereum {
               case Seq( vE, rE, sE ) => {
                 for {
                   b        <- base;
-                  v        <- RLP.fromElement[Int]( vE.simplify );
-                  r        <- RLP.fromElement[BigInt]( rE.simplify );
-                  s        <- RLP.fromElement[BigInt]( sE.simplify );
-                  sig      <- Try( EthSignature( v.toByte, r, s ) ).toFailable
+                  v        <- RLP.fromElement[SignatureV]( vE.simplify );
+                  r        <- RLP.fromElement[SignatureR]( rE.simplify );
+                  s        <- RLP.fromElement[SignatureS]( sE.simplify );
+                  sig      <- Try( EthSignature( v, r, s ) ).toFailable
                 } yield {
                   Signed( b, sig )
                 }
@@ -111,8 +113,8 @@ package object ethereum {
       element match {
         case RLP.Element.Seq.of( nonceE , balanceE, storageRootE, codeHashE ) => {
           for {
-            nonce       <- RLP.fromElement[BigInt]( nonceE.simplify );
-            balance     <- RLP.fromElement[BigInt]( balanceE.simplify );
+            nonce       <- RLP.fromElement[Unsigned256]( nonceE.simplify );
+            balance     <- RLP.fromElement[Unsigned256]( balanceE.simplify );
             storageRoot <- RLP.fromElement[EthHash]( storageRootE.simplify );
             codeHash    <- RLP.fromElement[EthHash]( codeHashE.simplify )
           } yield {
@@ -148,15 +150,15 @@ package object ethereum {
             stateRoot       <- RLP.fromElement[EthHash]( stateRootE.simplify );
             transactionRoot <- RLP.fromElement[EthHash]( transactionRootE.simplify )
             receiptsRoot    <- RLP.fromElement[EthHash]( receiptsRootE.simplify );
-            logsBloom       <- RLP.fromElement[BigInt]( logsBloomE.simplify );
-            difficulty      <- RLP.fromElement[BigInt]( difficultyE.simplify );
-            number          <- RLP.fromElement[BigInt]( numberE.simplify );
-            gasLimit        <- RLP.fromElement[BigInt]( gasLimitE.simplify );
-            gasUsed         <- RLP.fromElement[BigInt]( gasUsedE.simplify );
-            timestamp       <- RLP.fromElement[BigInt]( timestampE.simplify );
-            extraData       <- RLP.fromElement[immutable.Seq[Byte]]( extraDataE.simplify );
+            logsBloom       <- RLP.fromElement[Unsigned2048]( logsBloomE.simplify );
+            difficulty      <- RLP.fromElement[UnsignedBigInt]( difficultyE.simplify );
+            number          <- RLP.fromElement[UnsignedBigInt]( numberE.simplify );
+            gasLimit        <- RLP.fromElement[UnsignedBigInt]( gasLimitE.simplify );
+            gasUsed         <- RLP.fromElement[UnsignedBigInt]( gasUsedE.simplify );
+            timestamp       <- RLP.fromElement[UnsignedBigInt]( timestampE.simplify );
+            extraData       <- RLP.fromElement[ByteSeqMax1024]( extraDataE.simplify );
             mixHash         <- RLP.fromElement[EthHash]( mixHashE.simplify );
-            nonce           <- RLP.fromElement[immutable.Seq[Byte]]( nonceE.simplify )
+            nonce           <- RLP.fromElement[ByteSeqExact8]( nonceE.simplify )
           } yield {
             EthBlock.Header( 
               parentHash, ommersHash, coinbase, stateRoot, transactionRoot, receiptsRoot, logsBloom,

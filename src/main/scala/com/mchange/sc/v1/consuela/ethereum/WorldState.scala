@@ -11,19 +11,17 @@ import specification.Types.Unsigned256;
 
 object WorldState {
   object Account {
-    case class Contract( nonce : BigInt, balance : BigInt, storageRoot : EthHash, codeHash : EthHash ) extends Account {
-      require( (nonce elem_: Unsigned256) && (balance elem_: Unsigned256) && codeHash != EmptyTrieHash );
+    case class Contract( nonce : Unsigned256, balance : Unsigned256, storageRoot : EthHash, codeHash : EthHash ) extends Account {
+      require( codeHash != EmptyTrieHash );
     }
-    case class Agent( nonce : BigInt, balance : BigInt, storageRoot : EthHash ) extends Account {
-      require( (nonce elem_: Unsigned256) && (balance elem_: Unsigned256) );
-
+    case class Agent( nonce : Unsigned256, balance : Unsigned256, storageRoot : EthHash ) extends Account {
       def codeHash = EmptyTrieHash;
     }
 
   }
   sealed trait Account {
-    def nonce       : BigInt;
-    def balance     : BigInt;
+    def nonce       : Unsigned256;
+    def balance     : Unsigned256;
     def storageRoot : EthHash;
     def codeHash    : EthHash;
 

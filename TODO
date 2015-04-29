@@ -1,0 +1,6 @@
+Unsigned => UnsignedBigInt
+java.math.BigInteger converters for integral types
+Eliminate ImmutableArrayWrapper here in favor of mchange-commons-scala version
+Reduce use of unqualified Unsigned and Seqs.
+Maybe standardize on IndexedSeq everywhere?
+
