@@ -10,15 +10,15 @@ import java.util.Arrays;
 import scala.util.hashing.MurmurHash3;
 
 import encoding.{RLP, RLPSerializing};
-import specification.Types.{SignatureV, SignatureR, SignatureS, Unsigned => UnsignedBigInt};
+import specification.Types.{SignatureV, SignatureR, SignatureS, Unsigned256};
 
 object EthTransaction {
   object Unsigned {
-    case class Message( nonce : UnsignedBigInt, gasPrice : UnsignedBigInt, gasLimit : UnsignedBigInt, to : EthAddress, value : UnsignedBigInt, data : immutable.Seq[Byte] ) 
+    case class Message( nonce : Unsigned256, gasPrice : Unsigned256, gasLimit : Unsigned256, to : EthAddress, value : Unsigned256, data : immutable.Seq[Byte] ) 
         extends Unsigned with EthTransaction.Message {
       def sign( privateKey : EthPrivateKey ) : Signed.Message = Signed.Message( this, privateKey.sign( RLP.encode[EthTransaction]( this ).toArray ) );
     }
-    case class ContractCreation( nonce : UnsignedBigInt, gasPrice : UnsignedBigInt, gasLimit : UnsignedBigInt, value : UnsignedBigInt, init : immutable.Seq[Byte] ) 
+    case class ContractCreation( nonce : Unsigned256, gasPrice : Unsigned256, gasLimit : Unsigned256, value : Unsigned256, init : immutable.Seq[Byte] ) 
         extends Unsigned with EthTransaction.ContractCreation {
       def sign( privateKey : EthPrivateKey ) : Signed.ContractCreation = Signed.ContractCreation( this, privateKey.sign( RLP.encode[EthTransaction]( this ).toArray ) );
     }
@@ -36,18 +36,18 @@ object EthTransaction {
       }
     }
     case class Message( base : Unsigned.Message, val signature : EthSignature ) extends Signed with EthTransaction.Message {
-      def nonce    : UnsignedBigInt      = base.nonce;
-      def gasPrice : UnsignedBigInt      = base.gasPrice;
-      def gasLimit : UnsignedBigInt      = base.gasLimit;
+      def nonce    : Unsigned256         = base.nonce;
+      def gasPrice : Unsigned256         = base.gasPrice;
+      def gasLimit : Unsigned256         = base.gasLimit;
       def to       : EthAddress          = base.to; 
-      def value    : UnsignedBigInt      = base.value;
+      def value    : Unsigned256         = base.value;
       def data     : immutable.Seq[Byte] = base.data;
     }
     case class ContractCreation( base : Unsigned.ContractCreation, val signature : EthSignature ) extends Signed  with EthTransaction.ContractCreation {
-      def nonce    : UnsignedBigInt      = base.nonce;
-      def gasPrice : UnsignedBigInt      = base.gasPrice;
-      def gasLimit : UnsignedBigInt      = base.gasLimit;
-      def value    : UnsignedBigInt      = base.value;
+      def nonce    : Unsigned256         = base.nonce;
+      def gasPrice : Unsigned256         = base.gasPrice;
+      def gasLimit : Unsigned256         = base.gasLimit;
+      def value    : Unsigned256         = base.value;
       def init     : immutable.Seq[Byte] = base.init;
     }
   }
@@ -82,10 +82,10 @@ object EthTransaction {
   }
 }
 sealed trait EthTransaction {
-  def nonce    : UnsignedBigInt;
-  def gasPrice : UnsignedBigInt;
-  def gasLimit : UnsignedBigInt;
-  def value    : UnsignedBigInt;
+  def nonce    : Unsigned256;
+  def gasPrice : Unsigned256;
+  def gasLimit : Unsigned256;
+  def value    : Unsigned256;
 
   def signed   : Boolean;
 

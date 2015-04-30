@@ -1,7 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum;
 
 import encoding.{RLP, RLPSerializable}
-import specification.Types.{Unsigned,Unsigned2048,ByteSeqMax1024,ByteSeqExact8};
+import specification.Types.{Unsigned256,Unsigned2048,ByteSeqMax1024,ByteSeqExact8};
 
 import scala.collection.immutable.Seq;
 
@@ -14,11 +14,11 @@ object EthBlock {
     transactionRoot : EthHash, 
     receiptsRoot    : EthHash,
     logsBloom       : Unsigned2048,  
-    difficulty      : Unsigned,
-    number          : Unsigned,
-    gasLimit        : Unsigned,
-    gasUsed         : Unsigned,
-    timestamp       : Unsigned,
+    difficulty      : Unsigned256,
+    number          : Unsigned256,
+    gasLimit        : Unsigned256,
+    gasUsed         : Unsigned256,
+    timestamp       : Unsigned256,
     extraData       : ByteSeqMax1024,
     mixHash         : EthHash,
     nonce           : ByteSeqExact8

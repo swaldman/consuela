@@ -22,10 +22,10 @@ object Types {
    * Companion objects representing restricted types
    * 
    */ 
-  object Unsigned      extends RestrictedBigInt.Unsigned[Unsigned]                          { override protected def create( value : BigInt ) = new Unsigned( value ); }
-  object Unsigned8     extends RestrictedShort.UnsignedWithBitLength[Unsigned8]( 8 )        { override protected def create( value : Short )  = new Unsigned8( value ); }
-  object Unsigned256   extends RestrictedBigInt.UnsignedWithBitLength[Unsigned256]( 256 )   { override protected def create( value : BigInt ) = new Unsigned256( value ); }
-  object Unsigned2048  extends RestrictedBigInt.UnsignedWithBitLength[Unsigned2048]( 2048 ) { override protected def create( value : BigInt ) = new Unsigned2048( value ); }
+  object UnsignedBigInt extends RestrictedBigInt.Unsigned[UnsignedBigInt]                    { override protected def create( value : BigInt ) = new UnsignedBigInt( value ); }
+  object Unsigned8      extends RestrictedShort.UnsignedWithBitLength[Unsigned8]( 8 )        { override protected def create( value : Short )  = new Unsigned8( value ); }
+  object Unsigned256    extends RestrictedBigInt.UnsignedWithBitLength[Unsigned256]( 256 )   { override protected def create( value : BigInt ) = new Unsigned256( value ); }
+  object Unsigned2048   extends RestrictedBigInt.UnsignedWithBitLength[Unsigned2048]( 2048 ) { override protected def create( value : BigInt ) = new Unsigned2048( value ); }
 
   object SignatureR    extends RestrictedBigInt.ZeroUntil[SignatureR]( Limit.SignatureR )              { override protected def create( value : BigInt ) = new SignatureR( value ); }
   object SignatureS    extends RestrictedBigInt.ZeroUntil[SignatureS]( Limit.SignatureS )              { override protected def create( value : BigInt ) = new SignatureS( value ); }
@@ -40,10 +40,10 @@ object Types {
    * Value classes implementing types
    * 
    */ 
-  class Unsigned     private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];
-  class Unsigned8    private ( val widen : Short  ) extends AnyVal with RestrictedType.Element[Short];
-  class Unsigned256  private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];
-  class Unsigned2048 private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];
+  class UnsignedBigInt private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];
+  class Unsigned8      private ( val widen : Short  ) extends AnyVal with RestrictedType.Element[Short];
+  class Unsigned256    private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];
+  class Unsigned2048   private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];
 
   class SignatureR   private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];
   class SignatureS   private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];

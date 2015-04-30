@@ -61,10 +61,10 @@ package object specification {
     protected def throwNotByteSeq( found : RLP.Element ) = throw new IllegalArgumentException( s"Expected RLP.Element.ByteSeq, found ${found}" );
   }
 
-  implicit object Unsigned_RLPSerializing     extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.Unsigned]    ( Types.Unsigned     );
-  implicit object Unsigned8_RLPSerializing    extends RestrictedTypeRLPSerializing.UnsignedShort[Types.Unsigned8]    ( Types.Unsigned8    );
-  implicit object Unsigned256_RLPSerializing  extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.Unsigned256] ( Types.Unsigned256  );
-  implicit object Unsigned2048_RLPSerializing extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.Unsigned2048]( Types.Unsigned2048 );
+  implicit object UnsignedBigInt_RLPSerializing extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.UnsignedBigInt]( Types.UnsignedBigInt );
+  implicit object Unsigned8_RLPSerializing      extends RestrictedTypeRLPSerializing.UnsignedShort[Types.Unsigned8]      ( Types.Unsigned8      );
+  implicit object Unsigned256_RLPSerializing    extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.Unsigned256]   ( Types.Unsigned256    );
+  implicit object Unsigned2048_RLPSerializing   extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.Unsigned2048]  ( Types.Unsigned2048   );
 
   implicit object SignatureR_RLPSerializing extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.SignatureR]( Types.SignatureR );
   implicit object SignatureS_RLPSerializing extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.SignatureS]( Types.SignatureS );

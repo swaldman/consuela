@@ -1,5 +1,4 @@
-Unsigned => UnsignedBigInt
-Reduce use of unqualified Unsigned and Seqs.
+Reduce use of unrestricted Seqs.
 Maybe standardize on IndexedSeq everywhere?
 
 
