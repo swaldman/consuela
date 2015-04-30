@@ -8,7 +8,7 @@ import com.mchange.lang.{ShortUtils, IntegerUtils, LongUtils};
 
 import scala.collection._;
 import scala.reflect.ClassTag;
-import com.mchange.sc.v1.consuela.util.ImmutableArraySeq;
+import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq;
 
 object RLP {
 

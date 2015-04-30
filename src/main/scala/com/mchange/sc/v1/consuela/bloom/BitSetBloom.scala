@@ -5,6 +5,7 @@ import com.mchange.sc.v1.consuela._;
 import scala.collection._;
 
 import com.mchange.lang.LongUtils.byteArrayFromLong;
+import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq;
 
 object BitSetBloom {
   def apply[T]( elements : T* )( implicit defn : Bloom.Definition[T] ) = new BitSetBloom( elements : _*)( defn );
@@ -49,7 +50,7 @@ final class BitSetBloom[T : Bloom.Definition] private ( private val bitSet : imm
 
   lazy val toUnsignedBigInt : BigInt = BigInt( 1, _array );
 
-  override lazy val bytes : immutable.Seq[Byte] = util.ImmutableArraySeq.Byte.createNoCopy( _array );
+  override lazy val bytes : immutable.Seq[Byte] = ImmutableArraySeq.Byte.createNoCopy( _array );
 
   def +( other : BitSetBloom[T] ) : BitSetBloom[T] = new BitSetBloom[T]( this.bitSet | other.bitSet );
 
