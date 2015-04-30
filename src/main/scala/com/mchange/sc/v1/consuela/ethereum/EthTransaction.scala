@@ -63,7 +63,7 @@ object EthTransaction {
 
     lazy val senderPublicKey : EthPublicKey = {
       def fail : EthPublicKey = throw new EthereumException(s"Could not recover public key for signature ${signature} with signed hash '${signedHash}'");
-      crypto.secp256k1.recoverPublicKeyBytesV( v.value, r.value.bigInteger, s.value.bigInteger, signedHash.toByteArray ).fold( fail )( pubKeyBytes => EthPublicKey( pubKeyBytes ) );
+      crypto.secp256k1.recoverPublicKeyBytesV( v.widen, r.widen.bigInteger, s.widen.bigInteger, signedHash.toByteArray ).fold( fail )( pubKeyBytes => EthPublicKey( pubKeyBytes ) );
     }
     lazy val sender : EthAddress = senderPublicKey.toAddress;
 
