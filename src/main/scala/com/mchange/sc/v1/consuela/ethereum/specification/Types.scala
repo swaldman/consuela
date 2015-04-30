@@ -31,11 +31,12 @@ object Types {
   object SignatureS    extends RestrictedBigInt.ZeroUntil[SignatureS]( Limit.SignatureS )              { override protected def create( value : BigInt ) = new SignatureS( value ); }
   object SignatureV    extends RestrictedByte.MinUntil[SignatureV]( Min.SignatureV, Limit.SignatureV ) { override protected def create( value : Byte   ) = new SignatureV( value ); }
 
-  object ByteSeqExact4  extends RestrictedByteSeq.ExactLength[ByteSeqExact4]( 4 )       { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact4( value ); }
-  object ByteSeqExact8  extends RestrictedByteSeq.ExactLength[ByteSeqExact8]( 8 )       { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact8( value ); }
-  object ByteSeqExact20 extends RestrictedByteSeq.ExactLength[ByteSeqExact20]( 20 )     { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact20( value ); }
-  object ByteSeqExact32 extends RestrictedByteSeq.ExactLength[ByteSeqExact32]( 32 )     { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact32( value ); }
-  object ByteSeqMax1024 extends RestrictedByteSeq.LimitedLength[ByteSeqMax1024]( 1024 ) { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqMax1024( value ); }
+  object ByteSeqExact4   extends RestrictedByteSeq.ExactLength[ByteSeqExact4]( 4 )       { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact4( value ); }
+  object ByteSeqExact8   extends RestrictedByteSeq.ExactLength[ByteSeqExact8]( 8 )       { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact8( value ); }
+  object ByteSeqExact20  extends RestrictedByteSeq.ExactLength[ByteSeqExact20]( 20 )     { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact20( value ); }
+  object ByteSeqExact32  extends RestrictedByteSeq.ExactLength[ByteSeqExact32]( 32 )     { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact32( value ); }
+  object ByteSeqExact256 extends RestrictedByteSeq.ExactLength[ByteSeqExact256]( 256 )   { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact256( value ); }
+  object ByteSeqMax1024  extends RestrictedByteSeq.LimitedLength[ByteSeqMax1024]( 1024 ) { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqMax1024( value ); }
 
   /*
    * 
@@ -51,10 +52,11 @@ object Types {
   class SignatureS   private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];
   class SignatureV   private ( val widen : Byte   ) extends AnyVal with RestrictedType.Element[Byte];
 
-  class ByteSeqExact4  private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
-  class ByteSeqExact8  private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
-  class ByteSeqExact20 private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
-  class ByteSeqExact32 private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
-  class ByteSeqMax1024 private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
+  class ByteSeqExact4   private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
+  class ByteSeqExact8   private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
+  class ByteSeqExact20  private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
+  class ByteSeqExact32  private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
+  class ByteSeqExact256 private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
+  class ByteSeqMax1024  private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
 }
 

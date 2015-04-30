@@ -4,9 +4,10 @@ import ethereum.encoding._;
 import RLPSerializing.asElement;  // implicit conversion
 import RLPSerializing.asElements; // not implicit 
 
-import ethereum.specification.Types.{SignatureV, SignatureR, SignatureS, ByteSeqMax1024,ByteSeqExact8, ByteSeqExact20, ByteSeqExact32,Unsigned256,Unsigned2048}
+import ethereum.specification.Types.{SignatureV, SignatureR, SignatureS, ByteSeqMax1024,ByteSeqExact8, ByteSeqExact20, ByteSeqExact32, ByteSeqExact256, Unsigned256, Unsigned2048}
 
 import com.mchange.sc.v1.consuela.hash.Hash;
+import com.mchange.sc.v1.consuela.bloom.BitSetBloom;
 
 import scala.collection._;
 
@@ -28,6 +29,22 @@ package object ethereum {
   val EmptyByteSeqHash = EthHash.hash( encoding.RLP.Encoded.EmptyByteSeq );
 
   implicit object EthHash_RLPSerializing extends RLPSerializing.ByteArrayValue[EthHash]( EthHash.withBytes );
+
+  // I'm not sure why the compiler fails to find, requires me to supply, the RLPSerializing implicit parameter explicitly here
+  implicit object EthLogBloomDefinition extends EthBloom.Definition[EthLogEntry]( (entry : EthLogEntry) => EthHash.hash( RLP.encode( entry )( EthLogEntry_RLPSerializing ) ) );
+
+  type EthLogBloom = BitSetBloom[EthLogEntry];
+
+  implicit class EthLogBloomOps( val elb : EthLogBloom ) extends AnyVal {
+    def toByteSeqExact256 : ByteSeqExact256 = ByteSeqExact256( elb.bytes );
+  }
+
+  implicit object EthLogBloom_RLPSerializing extends RLPSerializing[EthLogBloom] {
+    def toElement( elb : EthLogBloom ) : RLP.Element = RLP.toElement[ByteSeqExact256]( elb.toByteSeqExact256 );
+    def fromElement( element : RLP.Element.Basic ) : Failable[EthLogBloom] = {
+      RLP.fromElement[ByteSeqExact256]( element ).map( bse256 => BitSetBloom.fromBytes[EthLogEntry]( bse256.widen ) );
+    }
+  }
 
   // XXX: should I switch to the more strongly typed version below?
   implicit object EthAddress_RLPSerializing extends RLPSerializing.ByteArrayValue[EthAddress]( EthAddress.apply );
@@ -222,6 +239,30 @@ package object ethereum {
           }
         }
         case other => fail( s"${other} is not in the expected format of an EthLogEntry" );
+      }
+    }
+  }
+
+  implicit object EthLogEntrySeq_RLPSerializing extends RLPSerializing.HomogeneousElementSeq[EthLogEntry];
+
+  implicit object EthTransactionReceipt_RLPSerializing extends RLPSerializing[EthTransactionReceipt] {
+    def toElement( receipt : EthTransactionReceipt ) : RLP.Element = {
+      import receipt._
+      RLP.Element.Seq.of( postTransactionState, gasUsed, logsBloom, logEntries );
+    }
+    def fromElement( element : RLP.Element.Basic ) : Failable[EthTransactionReceipt] = {
+      element match {
+        case RLP.Element.Seq.of( postTransactionStateE, gasUsedE, logsBloomE, logEntriesE ) => {
+          for {
+            postTransactionState <- RLP.fromElement[EthHash]( postTransactionStateE.simplify );
+            gasUsed              <- RLP.fromElement[Unsigned256]( gasUsedE.simplify );
+            logsBloom            <- RLP.fromElement[EthLogBloom]( logsBloomE.simplify )
+            logEntries           <- RLP.fromElement[immutable.Seq[EthLogEntry]]( logEntriesE.simplify )
+          } yield {
+            EthTransactionReceipt( postTransactionState, gasUsed, logsBloom, logEntries )
+          }
+        }
+        case other => fail( s"${other} is not in the expected format of an EthTransactionReceipt" );
       }
     }
   }
