@@ -4,7 +4,7 @@ import ethereum.encoding._;
 import RLPSerializing.asElement;  // implicit conversion
 import RLPSerializing.asElements; // not implicit 
 
-import ethereum.specification.Types.{SignatureV, SignatureR, SignatureS, ByteSeqMax1024,ByteSeqExact8,Unsigned256,Unsigned2048}
+import ethereum.specification.Types.{SignatureV, SignatureR, SignatureS, ByteSeqMax1024,ByteSeqExact8, ByteSeqExact20, ByteSeqExact32,Unsigned256,Unsigned2048}
 
 import com.mchange.sc.v1.consuela.hash.Hash;
 
@@ -27,11 +27,17 @@ package object ethereum {
 
   val EmptyByteSeqHash = EthHash.hash( encoding.RLP.Encoded.EmptyByteSeq );
 
-  implicit object EthHashRLPSerializing extends RLPSerializing.ByteArrayValue[EthHash]( EthHash.withBytes );
+  implicit object EthHash_RLPSerializing extends RLPSerializing.ByteArrayValue[EthHash]( EthHash.withBytes );
 
-  implicit object EthAddressRLPSerializing extends RLPSerializing.ByteArrayValue[EthAddress]( EthAddress.apply );
+  // XXX: should I switch to the more strongly typed version below?
+  implicit object EthAddress_RLPSerializing extends RLPSerializing.ByteArrayValue[EthAddress]( EthAddress.apply );
 
-  implicit object EthTransactionRLPSerializing extends RLPSerializing[EthTransaction] {
+  //implicit object EthAddress_RLPSerializing extends RLPSerializing[EthAddress] {
+  //  def toElement( address : EthAddress ) : RLP.Element = RLP.toElement[ByteSeqExact20]( address.toByteSeqExact20 );
+  //  def fromElement( element : RLP.Element.Basic ) : Failable[EthAddress] = RLP.fromElement[ByteSeqExact20]( element ).map( EthAddress( _ ) );
+  //}
+
+  implicit object EthTransaction_RLPSerializing extends RLPSerializing[EthTransaction] {
     import EthTransaction._;
 
     override def toElement( txn : EthTransaction ): RLP.Element = {
@@ -97,7 +103,7 @@ package object ethereum {
     }
   }
 
-  implicit object EthWorldStateAccountRLPSerializing extends RLPSerializing[EthWorldState.Account] {
+  implicit object EthWorldStateAccount_RLPSerializing extends RLPSerializing[EthWorldState.Account] {
     def toElement( account : EthWorldState.Account ) : RLP.Element = {
       val codeHash = {
         account match {
@@ -129,7 +135,7 @@ package object ethereum {
     }
   }
 
-  implicit object EthBlockHeaderRLPSerializing extends RLPSerializing[EthBlock.Header] {
+  implicit object EthBlockHeader_RLPSerializing extends RLPSerializing[EthBlock.Header] {
     def toElement( header : EthBlock.Header ) : RLP.Element = {
       import header._
       RLP.Element.Seq.of( 
@@ -171,10 +177,10 @@ package object ethereum {
     }
   }
 
-  implicit object EthTransactionSeqRLPSerializing extends RLPSerializing.HomogeneousElementSeq[EthTransaction];
-  implicit object EthBlockHeaderSeqRLPSerializing extends RLPSerializing.HomogeneousElementSeq[EthBlock.Header];
+  implicit object EthTransactionSeq_RLPSerializing extends RLPSerializing.HomogeneousElementSeq[EthTransaction];
+  implicit object EthBlockHeaderSeq_RLPSerializing extends RLPSerializing.HomogeneousElementSeq[EthBlock.Header];
 
-  implicit object EthBlockRLPSerializing extends RLPSerializing[EthBlock] {
+  implicit object EthBlock_RLPSerializing extends RLPSerializing[EthBlock] {
     def toElement( block : EthBlock ) : RLP.Element = {
       val txnsSeq = RLP.Element.Seq( asElements( block.transactions ) );
       val ommersSeq = RLP.Element.Seq( asElements( block.ommers ) );
@@ -193,6 +199,29 @@ package object ethereum {
           }
         }
         case other => fail( s"Expected RLP.Element.Seq.of( headerBS : BS, txnsSeq : SEQ, ommersSeq : SEQ), found ${element}" )
+      }
+    }
+  }
+
+  implicit object ByteSeqExact32Seq_RLPSerializing extends RLPSerializing.HomogeneousElementSeq[ByteSeqExact32];
+
+  implicit object EthLogEntry_RLPSerializing extends RLPSerializing[EthLogEntry] {
+    def toElement( entry : EthLogEntry ) : RLP.Element = {
+      import entry._
+      RLP.Element.Seq.of( address, topics, data );
+    }
+    def fromElement( element : RLP.Element.Basic ) : Failable[EthLogEntry] = {
+      element match {
+        case RLP.Element.Seq.of( addressE, topicsE, dataE ) => {
+          for {
+            address <- RLP.fromElement[EthAddress]( addressE.simplify );
+            topics  <- RLP.fromElement[immutable.Seq[ByteSeqExact32]]( topicsE.simplify );
+            data    <- RLP.fromElement[immutable.Seq[Byte]]( dataE.simplify )
+          } yield {
+            EthLogEntry( address, topics, data )
+          }
+        }
+        case other => fail( s"${other} is not in the expected format of an EthLogEntry" );
       }
     }
   }

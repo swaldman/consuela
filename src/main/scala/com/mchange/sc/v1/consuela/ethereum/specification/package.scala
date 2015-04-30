@@ -70,8 +70,9 @@ package object specification {
   implicit object SignatureS_RLPSerializing extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.SignatureS]( Types.SignatureS );
   implicit object SignatureV_RLPSerializing extends RestrictedTypeRLPSerializing.UnsignedByte[Types.SignatureV]  ( Types.SignatureV );
 
-  implicit object ByteSeqExact4_RLPSerializing  extends RestrictedTypeRLPSerializing.ByteSeq[Types.ByteSeqExact4]  ( Types.ByteSeqExact4  );
-  implicit object ByteSeqExact8_RLPSerializing  extends RestrictedTypeRLPSerializing.ByteSeq[Types.ByteSeqExact8]  ( Types.ByteSeqExact8  );
-  implicit object ByteSeqExact20_RLPSerializing extends RestrictedTypeRLPSerializing.ByteSeq[Types.ByteSeqExact20] ( Types.ByteSeqExact20 );
+  implicit object ByteSeqExact4_RLPSerializing  extends RestrictedTypeRLPSerializing.ByteSeq[Types.ByteSeqExact4] ( Types.ByteSeqExact4  );
+  implicit object ByteSeqExact8_RLPSerializing  extends RestrictedTypeRLPSerializing.ByteSeq[Types.ByteSeqExact8] ( Types.ByteSeqExact8  );
+  implicit object ByteSeqExact20_RLPSerializing extends RestrictedTypeRLPSerializing.ByteSeq[Types.ByteSeqExact20]( Types.ByteSeqExact20 );
+  implicit object ByteSeqExact32_RLPSerializing extends RestrictedTypeRLPSerializing.ByteSeq[Types.ByteSeqExact32]( Types.ByteSeqExact32 );
   implicit object ByteSeqMax1024_RLPSerializing extends RestrictedTypeRLPSerializing.ByteSeq[Types.ByteSeqMax1024]( Types.ByteSeqMax1024 );
 }
