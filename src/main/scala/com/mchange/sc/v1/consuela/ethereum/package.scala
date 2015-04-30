@@ -97,19 +97,19 @@ package object ethereum {
     }
   }
 
-  implicit object WorldStateAccountRLPSerializing extends RLPSerializing[WorldState.Account] {
-    def toElement( account : WorldState.Account ) : RLP.Element = {
+  implicit object EthWorldStateAccountRLPSerializing extends RLPSerializing[EthWorldState.Account] {
+    def toElement( account : EthWorldState.Account ) : RLP.Element = {
       val codeHash = {
         account match {
-          case contract : WorldState.Account.Contract => contract.codeHash;
-          case agent    : WorldState.Account.Agent    => trie.EmptyTrieHash;
+          case contract : EthWorldState.Account.Contract => contract.codeHash;
+          case agent    : EthWorldState.Account.Agent    => trie.EmptyTrieHash;
         }
       }
 
       import account._;
       RLP.Element.Seq.of( nonce, balance, storageRoot, codeHash );
     }
-    def fromElement( element : RLP.Element.Basic ) : Failable[WorldState.Account] = {
+    def fromElement( element : RLP.Element.Basic ) : Failable[EthWorldState.Account] = {
       element match {
         case RLP.Element.Seq.of( nonceE , balanceE, storageRootE, codeHashE ) => {
           for {
@@ -119,8 +119,8 @@ package object ethereum {
             codeHash    <- RLP.fromElement[EthHash]( codeHashE.simplify )
           } yield {
             codeHash match {
-              case trie.EmptyTrieHash => WorldState.Account.Agent( nonce, balance, storageRoot );
-              case _                  => WorldState.Account.Contract( nonce, balance, storageRoot, codeHash );
+              case trie.EmptyTrieHash => EthWorldState.Account.Agent( nonce, balance, storageRoot );
+              case _                  => EthWorldState.Account.Contract( nonce, balance, storageRoot, codeHash );
             }
           }
         }
