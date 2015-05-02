@@ -1,4 +1,5 @@
 Reduce use of unrestricted Seqs.
 Maybe standardize on IndexedSeq everywhere?
+BitSetBloom: Switch from grouped(8) to a simple 8-incremented offset in forming bitmask from bytes
 
 

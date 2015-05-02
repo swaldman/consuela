@@ -36,6 +36,7 @@ libraryDependencies ++= Seq(
   "com.typesafe" % "config" % "1.2.1",
   "org.bouncycastle" % "bcprov-jdk15on" % "1.51",
   "com.madgag.spongycastle" % "prov" % "1.51.0.0" % "compile,optional", //only necessary on android
+  "com.mchange" %% "restricted-type-scalacheck-util" % "0.0.1-SNAPSHOT" % "test",
   "org.specs2"  %% "specs2" % "2.4.6" % "test",
   "com.typesafe.play" %% "play-json" % "2.3.7" % "test",        // for loading ethereum-test suites defined as json
   "ch.qos.logback" % "logback-classic" % "1.1.2" % "test"
