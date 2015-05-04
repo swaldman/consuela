@@ -11,13 +11,18 @@ import specification.Types.Unsigned256;
 
 object EthWorldState {
   object Account {
+    def apply( nonce : Unsigned256, balance : Unsigned256, storageRoot : EthHash, codeHash : EthHash ) : EthWorldState.Account = {
+      codeHash match {
+        case EmptyTrieHash => Agent( nonce, balance, storageRoot );
+        case nonempty      => Contract( nonce, balance, storageRoot, nonempty );
+      }
+    }
     case class Contract( nonce : Unsigned256, balance : Unsigned256, storageRoot : EthHash, codeHash : EthHash ) extends Account {
       require( codeHash != EmptyTrieHash );
     }
     case class Agent( nonce : Unsigned256, balance : Unsigned256, storageRoot : EthHash ) extends Account {
       def codeHash = EmptyTrieHash;
     }
-
   }
   sealed trait Account {
     def nonce       : Unsigned256;

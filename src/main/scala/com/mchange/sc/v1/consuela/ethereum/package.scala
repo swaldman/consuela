@@ -141,10 +141,7 @@ package object ethereum {
             storageRoot <- RLP.fromElement[EthHash]( storageRootE.simplify );
             codeHash    <- RLP.fromElement[EthHash]( codeHashE.simplify )
           } yield {
-            codeHash match {
-              case trie.EmptyTrieHash => EthWorldState.Account.Agent( nonce, balance, storageRoot );
-              case _                  => EthWorldState.Account.Contract( nonce, balance, storageRoot, codeHash );
-            }
+            EthWorldState.Account( nonce, balance, storageRoot, codeHash );
           }
         }
         case other => fail( s"Expected ( nonceE , balanceE, storageRootE, codeHashE ), found ${other}" );

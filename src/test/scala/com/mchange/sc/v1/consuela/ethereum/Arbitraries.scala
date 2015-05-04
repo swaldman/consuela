@@ -13,7 +13,7 @@ object Arbitraries {
     Gen.containerOfN[Array,Byte]( EthHashLen, Gen.choose( Byte.MinValue, Byte.MaxValue ).map( _.toByte ) ).map( EthHash.withBytes( _ ) )
   }
 
-  implicit val ArbitraryContractAccount : Arbitrary[EthWorldState.Account.Contract] = Arbitrary {
+  val GenContractAccount = {
     for {
       nonce       <- arbitrary[Unsigned256];
       balance     <- arbitrary[Unsigned256];
@@ -23,8 +23,7 @@ object Arbitraries {
       EthWorldState.Account.Contract( nonce, balance, storageRoot, codeHash )
     }
   }
-
-  implicit val ArbitraryAgentAccount : Arbitrary[EthWorldState.Account.Agent] = Arbitrary {
+  val GenAgentAccount = {
     for {
       nonce       <- arbitrary[Unsigned256];
       balance     <- arbitrary[Unsigned256];
@@ -33,4 +32,11 @@ object Arbitraries {
       EthWorldState.Account.Agent( nonce, balance, storageRoot )
     }
   }
+
+  implicit val ArbitraryContractAccount : Arbitrary[EthWorldState.Account.Contract] = Arbitrary( GenContractAccount );
+
+  implicit val ArbitraryAgentAccount : Arbitrary[EthWorldState.Account.Agent] = Arbitrary( GenAgentAccount );
+
+  implicit val ArbitraryAccount : Arbitrary[EthWorldState.Account] = Arbitrary( Gen.oneOf( GenContractAccount, GenAgentAccount ) );
+
 }

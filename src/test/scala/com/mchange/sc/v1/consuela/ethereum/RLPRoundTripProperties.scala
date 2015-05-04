@@ -24,5 +24,8 @@ object RLPRoundTripProperties extends Properties("RLP Roundtrips") {
   property("EthWorldState.Account.Agent" ) = Prop.forAll { ( acctAgent : EthWorldState.Account.Agent ) =>
     RLP.decodeComplete[EthWorldState.Account]( RLP.encode[EthWorldState.Account]( acctAgent ) ).get == acctAgent
   }
+  property("EthWorldState.Account" ) = Prop.forAll { ( acct : EthWorldState.Account ) =>
+    RLP.decodeComplete[EthWorldState.Account]( RLP.encode[EthWorldState.Account]( acct ) ).get == acct
+  }
 
 }
