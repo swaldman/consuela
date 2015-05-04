@@ -81,6 +81,15 @@ final class BitSetBloom[T : Bloom.Definition] private ( private val bitSet : imm
   def +( other : BitSetBloom[T] ) : BitSetBloom[T] = new BitSetBloom[T]( this.bitSet | other.bitSet );
 
   override def toString : String = s"${this.getClass.getSimpleName}[${this.bytes.hex}]" 
+
+  override def equals( other : Any ) : Boolean = {
+    other match {
+      case bsb : BitSetBloom[_] => this.bitSet == bsb.bitSet && this.definition == bsb.definition; //definition equality ensures same element type T
+      case _                    => false;
+    }
+  }
+
+  override def hashCode : Int = bitSet.hashCode ^ definition.hashCode;
 }
 
 
