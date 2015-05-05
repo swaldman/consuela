@@ -26,11 +26,32 @@ object EthBlock {
       Unsigned256( newDifficulty( childTimestamp.widen, parent.difficulty.widen, parent.timestamp.widen ) );
     }
 
-    def isChildOfParent( putativeChild : Header, putativeParent : Header ) : Boolean = {
-      def numberMatches = putativeChild.number.widen == putativeParent.number.widen + 1;
-      def hashMatches   = EthHash.hash( RLP.encode( putativeParent ) ) == putativeChild.parentHash;
+    def childGasLimitRange( parent : Header ) : ( Unsigned256, Unsigned256 ) = {
+      val ( low, high ) = _childGasLimitRange( parent.gasLimit.widen );
+      ( Unsigned256( low ), Unsigned256( high ) )
+    }
 
-      numberMatches && hashMatches
+    private def _childGasLimitRange( parentGasLimit : BigInt ) : ( BigInt, BigInt ) = {
+      val radius = parentGasLimit / 1024;
+      ( parentGasLimit - radius, parentGasLimit + radius )
+    }
+
+    private def _inGasLimitRange( childGasLimit : BigInt, parentGasLimit : BigInt ) : Boolean = {
+      val ( low, high ) = _childGasLimitRange( parentGasLimit );
+      childGasLimit > low && childGasLimit < high
+    }
+
+    private def _legalGasLimit( childGasLimit : BigInt, parentGasLimit : BigInt ) : Boolean = {
+      _inGasLimitRange( childGasLimit, parentGasLimit ) && childGasLimit >= 125000
+    }
+
+    def isValidChildOfParent( putativeChild : Header, putativeParent : Header ) : Boolean = {
+      def numberMatches     = putativeChild.number.widen == putativeParent.number.widen + 1;
+      def hashMatches       = EthHash.hash( RLP.encode( putativeParent ) ) == putativeChild.parentHash;
+      def difficultyMatches = childDifficulty( putativeChild.timestamp, putativeParent ) == putativeParent.difficulty;
+      def legalGasLimit     = _legalGasLimit( putativeChild.gasLimit.widen, putativeParent.gasLimit.widen );
+
+      numberMatches && hashMatches && difficultyMatches && legalGasLimit
     }
 
     private val _GenesisDifficulty = GenesisDifficulty.widen;
@@ -52,7 +73,7 @@ object EthBlock {
     mixHash         : EthHash,
     nonce           : ByteSeqExact8
   ) {
-    def isParent( putativeParent : Header ) : Boolean = Header.isChildOfParent( this, putativeParent );
+    def isValidChild( putativeParent : Header ) : Boolean = Header.isValidChildOfParent( this, putativeParent );
   }
 }
 case class EthBlock( header : EthBlock.Header, transactions : Seq[EthTransaction], ommers : Seq[EthBlock.Header] );
