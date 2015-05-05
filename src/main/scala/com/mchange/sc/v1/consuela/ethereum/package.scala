@@ -27,13 +27,17 @@ package object ethereum {
   val  EthHashLen = Hash.SHA3_256.HashLength;
 
   val EmptyByteSeqHash = EthHash.hash( encoding.RLP.Encoded.EmptyByteSeq );
-  val AllZerosHash = EthHash.withBytes( Array.ofDim[Byte]( EthHashLen ) );
+  val AllZerosEthHash = EthHash.withBytes( Array.ofDim[Byte]( EthHashLen ) );
 
   implicit object EthHash_RLPSerializing extends RLPSerializing.ByteArrayValue[EthHash]( EthHash.withBytes );
 
   // I'm not sure why the compiler fails to find, requires me to supply, the RLPSerializing implicit parameter explicitly here
   implicit object EthLogBloomDefinition extends EthBloom.Definition[EthLogEntry]( (entry : EthLogEntry) => EthHash.hash( RLP.encode( entry )( EthLogEntry_RLPSerializing ) ) );
 
+  object EthLogBloom {
+    def fromBytes( bytes : Array[Byte] ) : EthLogBloom = BitSetBloom.fromBytes[EthLogEntry]( bytes );
+    val empty                            : EthLogBloom = BitSetBloom.empty[EthLogEntry];
+  }
   type EthLogBloom = BitSetBloom[EthLogEntry];
 
   implicit class EthLogBloomOps( val elb : EthLogBloom ) extends AnyVal {

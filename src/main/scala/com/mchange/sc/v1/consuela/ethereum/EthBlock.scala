@@ -7,6 +7,30 @@ import scala.collection.immutable.Seq;
 
 object EthBlock {
 
+  val Genesis = {
+    import com.mchange.sc.v1.consuela._;
+
+    // header state taken from ethereum/tests/BlockTests/bcTotalDifficultyTest.json 2015-05-05
+    val header = Header(
+      parentHash      = AllZerosEthHash,
+      ommersHash      = EthHash.withBytes("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347".decodeHex),
+      coinbase        = EthAddress( "0x8888f1f195afa192cfee860698584c030f4c9db1".decodeHex ),
+      stateRoot       = EthHash.withBytes( "0x7dba07d6b448a186e9612e5f737d1c909dce473e53199901a302c00646d523c1".decodeHex ),
+      transactionRoot = EthHash.withBytes( "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421".decodeHex ),
+      receiptsRoot    = EthHash.withBytes( "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421".decodeHex ),
+      logsBloom       = EthLogBloom.empty,
+      difficulty      = Unsigned256( 0x020000 ),
+      number          = Unsigned256( 0 ),
+      gasLimit        = Unsigned256( 0x2fefd8 ),
+      gasUsed         = Unsigned256( 0 ),
+      timestamp       = Unsigned256( 0x54c98c81 ),
+      extraData       = ByteSeqMax1024( Array( 0x42.toByte ) ),
+      mixHash         = EthHash.withBytes( "f6e588ee9247e2938e666ad73ca9830a32884468fae713819f60be52fa5f804d".decodeHex ),
+      nonce           = Unsigned64( BigInt(1, "0xa2e63eb1bc75c82e".decodeHex ) )
+    )
+    EthBlock( header, Seq.empty, Seq.empty )
+  }
+
   object Header {
     // from yellowpaper 4.3.4
     val GenesisDifficulty  = Unsigned256( 131072 ); 
@@ -86,8 +110,8 @@ object EthBlock {
     gasUsed         : Unsigned256,
     timestamp       : Unsigned256,
     extraData       : ByteSeqMax1024,
-    mixHash         : EthHash = AllZerosHash,
-    nonce           : Unsigned64 = Unsigned64(0)
+    mixHash         : EthHash         = AllZerosEthHash,
+    nonce           : Unsigned64      = Unsigned64(0)
   ) {
     def isValidChild( putativeParent : Header ) : Boolean = Header.isValidChildOfParent( this, putativeParent );
   }

@@ -15,6 +15,6 @@ object EthKeyAddressProperties extends Properties("Ethereum Keys and Addresses")
   property("EthPublicKey length is 64 bytes (512 bits)")  = Prop( pub.bytes.length == 64 );
   property("EthAddress length is 20 bytes")               = Prop( addr.bytes.length == 20 );
 
-  property("The Public Key verifies what the private key signs") = Prop.forAll { (message : Array[Byte]) => pub.verify( message, priv.sign( message ) ) };
+  property("Public Key verifies what the private key signs") = Prop.forAll { (message : Array[Byte]) => pub.verify( message, priv.sign( message ) ) };
 }
 

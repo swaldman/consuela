@@ -1,6 +1,8 @@
 package com.mchange.sc.v1;
 
 import com.mchange.lang.ByteUtils;
+
+import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq;
 import scala.language.implicitConversions;
 
 import java.math.BigInteger;
@@ -110,6 +112,7 @@ package object consuela {
       val hexstring = if ( string.startsWith( "0x" ) ) string.substring(2) else string;
       ByteUtils.fromHexAscii( hexstring ); // should we switch to the DatatypeConverter implementation of hex encoding/decoding?
     }
+    def decodeHexAsSeq = ImmutableArraySeq.Byte.createNoCopy( this.decodeHex );
     def decodeBase64 : Array[Byte] = DatatypeConverter.parseBase64Binary( string );
   }
   trait RichBytes { // if we accept code duplication, we can inline this stuff and let the subclasses extend AnyVal. Hmmm....

@@ -110,7 +110,7 @@ object Arbitraries {
       timestamp       <- arbitrary[Unsigned256];
       extraData       <- arbitrary[ByteSeqMax1024];
       mixHash         <- arbitrary[EthHash];
-      nonce           <- arbitrary[ByteSeqExact8]
+      nonce           <- arbitrary[Unsigned64]
     } yield {
       EthBlock.Header( parentHash, ommersHash, coinbase, stateRoot, transactionRoot, receiptsRoot, logsBloom, difficulty, number, gasLimit, gasUsed, timestamp, extraData, mixHash, nonce )
     }
