@@ -170,7 +170,7 @@ package object ethereum {
             stateRoot       <- RLP.fromElement[EthHash]( stateRootE.simplify );
             transactionRoot <- RLP.fromElement[EthHash]( transactionRootE.simplify )
             receiptsRoot    <- RLP.fromElement[EthHash]( receiptsRootE.simplify );
-            logsBloom       <- RLP.fromElement[Unsigned2048]( logsBloomE.simplify );
+            logsBloom       <- RLP.fromElement[EthLogBloom]( logsBloomE.simplify );
             difficulty      <- RLP.fromElement[Unsigned256]( difficultyE.simplify );
             number          <- RLP.fromElement[Unsigned256]( numberE.simplify );
             gasLimit        <- RLP.fromElement[Unsigned256]( gasLimitE.simplify );
@@ -201,18 +201,17 @@ package object ethereum {
       RLP.Element.Seq.of( block.header, txnsSeq, ommersSeq );
     }
     def fromElement( element : RLP.Element.Basic ) : Failable[EthBlock] = {
-      import RLP.Element.{ByteSeq => BS, Seq => SEQ}
       element match {
-        case RLP.Element.Seq.of( headerBS : BS, txnsSeq : SEQ, ommersSeq : SEQ) => {
+        case RLP.Element.Seq.of( headerE, txnsSeqE, ommersSeqE ) => {
           for {
-            header <- RLP.fromElement[EthBlock.Header]( headerBS );
-            txns   <- RLP.fromElement[immutable.Seq[EthTransaction]]( txnsSeq.simplify );
-            ommers <- RLP.fromElement[immutable.Seq[EthBlock.Header]]( ommersSeq.simplify )
+            header <- RLP.fromElement[EthBlock.Header]( headerE.simplify );
+            txns   <- RLP.fromElement[immutable.Seq[EthTransaction]]( txnsSeqE.simplify );
+            ommers <- RLP.fromElement[immutable.Seq[EthBlock.Header]]( ommersSeqE.simplify )
           } yield {
             EthBlock( header, txns, ommers )
           }
         }
-        case other => fail( s"Expected RLP.Element.Seq.of( headerBS : BS, txnsSeq : SEQ, ommersSeq : SEQ), found ${element}" )
+        case other => fail( s"Expected RLP.Element.Seq.of( headerE, txnsSeqE, ommersSeqE), found ${element}" )
       }
     }
   }

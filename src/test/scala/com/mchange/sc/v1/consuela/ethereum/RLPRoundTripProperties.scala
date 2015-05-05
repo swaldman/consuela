@@ -7,16 +7,16 @@ import specification.Arbitraries._;
 
 import org.scalacheck.{Arbitrary,Prop,Properties};
 
-import com.mchange.sc.v1.log.MLogger;
-import com.mchange.sc.v1.log.MLevel._;
-
 object RLPRoundTripProperties extends Properties("RLP Roundtrips") {
-
-  implicit lazy val logger = MLogger( this );
 
   def roundTrips[T]( implicit ser : RLPSerializing[T], arb : Arbitrary[T] ) : Prop = Prop.forAll { ( entity : T ) =>
     RLP.decodeComplete[T]( RLP.encode[T]( entity ) ).get == entity
   }
+
+  property("EthAddress")      = roundTrips[EthAddress];
+  property("EthTranscation")  = roundTrips[EthTransaction];
+  property("EthBlock.Header") = roundTrips[EthBlock.Header];
+  property("EthBlock")        = roundTrips[EthBlock];
 
   property("EthWorldState.Account.Contract" ) = Prop.forAll { ( acctContract : EthWorldState.Account.Contract ) =>
     RLP.decodeComplete[EthWorldState.Account]( RLP.encode[EthWorldState.Account]( acctContract ) ).get == acctContract

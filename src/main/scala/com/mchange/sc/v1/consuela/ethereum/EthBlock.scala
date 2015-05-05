@@ -13,7 +13,7 @@ object EthBlock {
     stateRoot       : EthHash, 
     transactionRoot : EthHash, 
     receiptsRoot    : EthHash,
-    logsBloom       : Unsigned2048,  
+    logsBloom       : EthLogBloom,  
     difficulty      : Unsigned256,
     number          : Unsigned256,
     gasLimit        : Unsigned256,
