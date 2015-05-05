@@ -1,11 +1,12 @@
 package com.mchange.sc.v1.consuela.ethereum;
 
 import encoding.{RLP, RLPSerializable}
-import specification.Types.{Unsigned256,Unsigned2048,ByteSeqMax1024,ByteSeqExact8};
+import specification.Types.{Unsigned64,Unsigned256,Unsigned2048,ByteSeqMax1024};
 
 import scala.collection.immutable.Seq;
 
 object EthBlock {
+
   object Header {
     // from yellowpaper 4.3.4
     val GenesisDifficulty  = Unsigned256( 131072 ); 
@@ -60,7 +61,7 @@ object EthBlock {
     private val _GenesisDifficulty = GenesisDifficulty.widen;
 
     object ProofOfWork {
-      private val ThresholdNumerator : BigInt = BigInt(1) << 256;
+      private[Header] val ThresholdNumerator : BigInt = BigInt(1) << 256;
     }
     case class ProofOfWork( m : EthHash, n : Unsigned256 );
 
@@ -68,7 +69,7 @@ object EthBlock {
 
     def validateProofOfWork( finalized : Header ) : Boolean = {
       val pow = proofOfWork( finalized.nonce, finalized );
-      pow.m == finalized.mixHash && pow.n <= (ProofOfWork.ThresholdNumerator / pow.n)
+      pow.m == finalized.mixHash && pow.n.widen <= (ProofOfWork.ThresholdNumerator / pow.n.widen)
     }
   }
   case class Header( 

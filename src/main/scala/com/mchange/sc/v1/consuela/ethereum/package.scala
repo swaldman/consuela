@@ -4,7 +4,7 @@ import ethereum.encoding._;
 import RLPSerializing.asElement;  // implicit conversion
 import RLPSerializing.asElements; // not implicit 
 
-import ethereum.specification.Types.{SignatureV, SignatureR, SignatureS, ByteSeqMax1024,ByteSeqExact8, ByteSeqExact20, ByteSeqExact32, ByteSeqExact256, Unsigned256, Unsigned2048}
+import ethereum.specification.Types.{SignatureV, SignatureR, SignatureS, ByteSeqMax1024, ByteSeqExact20, ByteSeqExact32, ByteSeqExact256, Unsigned64, Unsigned256, Unsigned2048}
 
 import com.mchange.sc.v1.consuela.hash.Hash;
 import com.mchange.sc.v1.consuela.bloom.BitSetBloom;
