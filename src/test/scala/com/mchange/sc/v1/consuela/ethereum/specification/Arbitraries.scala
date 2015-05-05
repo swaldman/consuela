@@ -39,7 +39,8 @@ object Arbitraries {
 
   implicit val ArbitraryUnsignedBigInt  = Types.UnsignedBigInt.arbitrary;
   implicit val ArbitraryUnsigned8       = Types.Unsigned8.arbitrary;
-  implicit val ArbitraryUnsigned256     = Types.Unsigned256.arbitraryFromGen( genAlignedUnsignedBigInt( 256 ) ); // to reduce the failure rate when producing values
+  implicit val ArbitraryUnsigned64      = Types.Unsigned64.arbitraryFromGen( genAlignedUnsignedBigInt( 64 ) ); // to reduce the failure rate when producing values
+  implicit val ArbitraryUnsigned256     = Types.Unsigned256.arbitraryFromGen( genAlignedUnsignedBigInt( 256 ) );
   implicit val ArbitraryUnsigned2048    = Types.Unsigned2048.arbitrary;
 
   implicit val ArbitrarySignatureR      = Types.SignatureR.arbitraryFromGen( genArbitraryUnsignedBigInt( (Types.Limit.SignatureR - 1).bitLength ) );

@@ -63,6 +63,7 @@ package object specification {
 
   implicit object UnsignedBigInt_RLPSerializing extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.UnsignedBigInt]( Types.UnsignedBigInt );
   implicit object Unsigned8_RLPSerializing      extends RestrictedTypeRLPSerializing.UnsignedShort[Types.Unsigned8]      ( Types.Unsigned8      );
+  implicit object Unsigned64_RLPSerializing     extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.Unsigned64]    ( Types.Unsigned64     );
   implicit object Unsigned256_RLPSerializing    extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.Unsigned256]   ( Types.Unsigned256    );
   implicit object Unsigned2048_RLPSerializing   extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.Unsigned2048]  ( Types.Unsigned2048   );
 

@@ -27,6 +27,7 @@ package object ethereum {
   val  EthHashLen = Hash.SHA3_256.HashLength;
 
   val EmptyByteSeqHash = EthHash.hash( encoding.RLP.Encoded.EmptyByteSeq );
+  val AllZerosHash = EthHash.withBytes( Array.ofDim[Byte]( EthHashLen ) );
 
   implicit object EthHash_RLPSerializing extends RLPSerializing.ByteArrayValue[EthHash]( EthHash.withBytes );
 
@@ -178,7 +179,7 @@ package object ethereum {
             timestamp       <- RLP.fromElement[Unsigned256]( timestampE.simplify );
             extraData       <- RLP.fromElement[ByteSeqMax1024]( extraDataE.simplify );
             mixHash         <- RLP.fromElement[EthHash]( mixHashE.simplify );
-            nonce           <- RLP.fromElement[ByteSeqExact8]( nonceE.simplify )
+            nonce           <- RLP.fromElement[Unsigned64]( nonceE.simplify )
           } yield {
             EthBlock.Header( 
               parentHash, ommersHash, coinbase, stateRoot, transactionRoot, receiptsRoot, logsBloom,

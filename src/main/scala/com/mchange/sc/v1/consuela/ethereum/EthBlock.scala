@@ -11,6 +11,18 @@ object EthBlock {
     val GenesisDifficulty  = Unsigned256( 131072 ); 
     val LateChildThreshold = 8; // seconds
 
+    def isValidChildOfParent( putativeChild : Header, putativeParent : Header ) : Boolean = {
+      def numberMatches      = putativeChild.number.widen == putativeParent.number.widen + 1;
+      def validTimestamp     = putativeChild.timestamp.widen > putativeParent.timestamp.widen;
+      def legalGasLimit      = _legalGasLimit( putativeChild.gasLimit.widen, putativeParent.gasLimit.widen );
+      def difficultyMatches  = childDifficulty( putativeChild.timestamp, putativeParent ) == putativeParent.difficulty;
+      def hashMatches        = EthHash.hash( RLP.encode( putativeParent ) ) == putativeChild.parentHash;
+      def proofOfWorkMatches = validateProofOfWork( putativeChild );
+
+      // we check easiest first, to avoid hitting the hard stuff if we can
+      numberMatches && validTimestamp && legalGasLimit && difficultyMatches && hashMatches && proofOfWorkMatches
+    }
+
     def childDifficulty( childTimestamp : Unsigned256, parent : Header ) : Unsigned256 = {
       /*
        *  we will adjust the difficulty by increment
@@ -45,16 +57,19 @@ object EthBlock {
       _inGasLimitRange( childGasLimit, parentGasLimit ) && childGasLimit >= 125000
     }
 
-    def isValidChildOfParent( putativeChild : Header, putativeParent : Header ) : Boolean = {
-      def numberMatches     = putativeChild.number.widen == putativeParent.number.widen + 1;
-      def hashMatches       = EthHash.hash( RLP.encode( putativeParent ) ) == putativeChild.parentHash;
-      def difficultyMatches = childDifficulty( putativeChild.timestamp, putativeParent ) == putativeParent.difficulty;
-      def legalGasLimit     = _legalGasLimit( putativeChild.gasLimit.widen, putativeParent.gasLimit.widen );
-
-      numberMatches && hashMatches && difficultyMatches && legalGasLimit
-    }
-
     private val _GenesisDifficulty = GenesisDifficulty.widen;
+
+    object ProofOfWork {
+      private val ThresholdNumerator : BigInt = BigInt(1) << 256;
+    }
+    case class ProofOfWork( m : EthHash, n : Unsigned256 );
+
+    def proofOfWork( putativeNonce : Unsigned64, ignoreMixNonceHeader : Header ) : ProofOfWork = ???
+
+    def validateProofOfWork( finalized : Header ) : Boolean = {
+      val pow = proofOfWork( finalized.nonce, finalized );
+      pow.m == finalized.mixHash && pow.n <= (ProofOfWork.ThresholdNumerator / pow.n)
+    }
   }
   case class Header( 
     parentHash      : EthHash, 
@@ -70,8 +85,8 @@ object EthBlock {
     gasUsed         : Unsigned256,
     timestamp       : Unsigned256,
     extraData       : ByteSeqMax1024,
-    mixHash         : EthHash,
-    nonce           : ByteSeqExact8
+    mixHash         : EthHash = AllZerosHash,
+    nonce           : Unsigned64 = Unsigned64(0)
   ) {
     def isValidChild( putativeParent : Header ) : Boolean = Header.isValidChildOfParent( this, putativeParent );
   }
