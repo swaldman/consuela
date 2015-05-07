@@ -7,7 +7,7 @@ import scala.collection.immutable.Seq;
 
 private object EthBlockDetails {
   // from yellowpaper 4.3.4
-  val GenesisDifficulty  = Unsigned256( 0x020000 ); // 0x020000 == 131072
+  val GenesisDifficulty  = Unsigned256( 1 << 17 ); // 1 << 17 == BigInt(2).pow(17) == 0x020000 == 131072
   val GenesisBlock = {
     import com.mchange.sc.v1.consuela._;
 
@@ -20,7 +20,7 @@ private object EthBlockDetails {
       transactionRoot = EthHash.withBytes( "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421".decodeHex ),
       receiptsRoot    = EthHash.withBytes( "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421".decodeHex ),
       logsBloom       = EthLogBloom.empty,
-      difficulty      = Unsigned256( 0x020000 ),
+      difficulty      = GenesisDifficulty,
       number          = Unsigned256( 0 ),
       gasLimit        = Unsigned256( 0x2fefd8 ),
       gasUsed         = Unsigned256( 0 ),
