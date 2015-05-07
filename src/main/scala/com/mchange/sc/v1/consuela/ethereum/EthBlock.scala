@@ -3,13 +3,15 @@ package com.mchange.sc.v1.consuela.ethereum;
 import encoding.{RLP, RLPSerializable}
 import specification.Types.{Unsigned64,Unsigned256,Unsigned2048,ByteSeqMax1024};
 
+import com.mchange.sc.v1.consuela.ethereum.{EthBlockDetails => Details}
+
 import scala.collection.immutable.Seq;
 
 object EthBlock {
-  val Genesis : EthBlock = EthBlockDetails.GenesisBlock;
+  val Genesis : EthBlock = Details.GenesisBlock;
 
   object Header {
-    def isValidChildOfParent( putativeChild : Header, putativeParent : Header ) : Boolean = EthBlockDetails.Header.isValidChildOfParent( putativeChild, putativeParent );
+    def isValidChildOfParent( putativeChild : Header, putativeParent : Header ) : Boolean = Details.Header.isValidChildOfParent( putativeChild, putativeParent );
   }
   case class Header( 
     parentHash      : EthHash, 
