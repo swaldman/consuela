@@ -6,7 +6,7 @@ import RLPSerializing.asElements; // not implicit
 
 import ethereum.specification.Types.{SignatureV, SignatureR, SignatureS, ByteSeqMax1024, ByteSeqExact20, ByteSeqExact32, ByteSeqExact256, Unsigned64, Unsigned256, Unsigned2048}
 
-import com.mchange.sc.v1.consuela.hash.Hash;
+import com.mchange.sc.v1.consuela.hash.SHA3_256;
 import com.mchange.sc.v1.consuela.bloom.BitSetBloom;
 
 import scala.collection._;
@@ -22,9 +22,9 @@ package object ethereum {
   class EthereumException( message : String, t : Throwable = null ) extends ConsuelaException( message, t );
   class UnexpectedSignatureFormatException( message : String, t : Throwable = null ) extends EthereumException( message, t );
 
-  type EthHash    = Hash.SHA3_256;
-  val  EthHash    = Hash.SHA3_256;
-  val  EthHashLen = Hash.SHA3_256.HashLength;
+  type EthHash    = SHA3_256;
+  val  EthHash    = SHA3_256;
+  val  EthHashLen = SHA3_256.HashLength;
 
   val EmptyByteSeqHash = EthHash.hash( encoding.RLP.Encoded.EmptyByteSeq );
   val AllZerosEthHash = EthHash.withBytes( Array.ofDim[Byte]( EthHashLen ) );

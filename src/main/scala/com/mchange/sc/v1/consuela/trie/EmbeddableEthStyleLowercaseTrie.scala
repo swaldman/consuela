@@ -1,6 +1,6 @@
 package com.mchange.sc.v1.consuela.trie;
 
-import com.mchange.sc.v1.consuela.hash.Hash.SHA3_256;
+import com.mchange.sc.v1.consuela.hash.SHA3_256;
 
 import EmbeddableEthStylePMTrie.EarlyInit;
 
