@@ -11,15 +11,17 @@ object ByteSeqValue {
   trait BigIntegral {
     self : ByteSeqValue =>
 
-    protected def buildBigInteger = new BigInteger( self.toByteArray );
-
-    lazy val toBigInteger : BigInteger  = buildBigInteger;
-    lazy val toBigInt     : BigInt      = BigInt( toBigInteger );
+    // they are already lazy vals on ImmutableArraySeq.Byte
+    // no reason to cache in two separate references.
+    // so defs.
+    def toBigInteger : BigInteger  = bytes.asSignedBigInteger;
+    def toBigInt     : BigInt      = bytes.asSignedBigInt;
   }
   trait UnsignedBigIntegral extends BigIntegral {
     self : ByteSeqValue =>
 
-    protected override def buildBigInteger = new BigInteger( 1, self.toByteArray );
+    override def toBigInteger : BigInteger  = bytes.asUnsignedBigInteger;
+    override def toBigInt     : BigInt      = bytes.asUnsignedBigInt;
   }
 }
 
