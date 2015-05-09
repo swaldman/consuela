@@ -31,6 +31,8 @@ object Hasher {
     def withBytes( bytes : Seq[Byte] ) : T   = instantiate( bytes.toArray );
     def hash( bytes : Array[Byte] ) : T      = instantiate( doHash(AlgoName, bytes) );
     def hash( bytes : Seq[Byte] ) : T        = instantiate( doHash(AlgoName, bytes) );
+
+    def rawHash( bytes : Array[Byte] ) : Array[Byte] = doHash(AlgoName, bytes)
   }
 }
 
@@ -41,4 +43,6 @@ trait Hasher[T <: Hash[T]] {
 
   def hash( bytes : Seq[Byte] )   : T;
   def hash( bytes : Array[Byte] ) : T;
+
+  def rawHash( bytes : Array[Byte] ) : Array[Byte];
 }

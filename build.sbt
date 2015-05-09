@@ -34,6 +34,7 @@ libraryDependencies ++= Seq(
   "com.mchange" %% "restricted-type" % "0.0.1-SNAPSHOT",
   "com.mchange" %% "mchange-commons-scala" % "0.4.0-SNAPSHOT" changing(),
   "com.typesafe" % "config" % "1.2.1",
+  "org.spire-math" %% "spire" % "0.9.1",
   "org.bouncycastle" % "bcprov-jdk15on" % "1.51",
   "com.madgag.spongycastle" % "prov" % "1.51.0.0" % "compile,optional", //only necessary on android
   "com.mchange" %% "restricted-type-scalacheck-util" % "0.0.1-SNAPSHOT" % "test",
