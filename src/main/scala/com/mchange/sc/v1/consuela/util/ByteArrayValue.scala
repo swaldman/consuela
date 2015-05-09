@@ -41,6 +41,8 @@ trait ByteArrayValue {
 
   def hex : String = hexbytes;
 
+  def length : Int = _bytes.length;
+
   override def equals( other : Any ) : Boolean = {
     if (! sameClass( other ))
       false

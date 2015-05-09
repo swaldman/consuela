@@ -17,7 +17,7 @@ object EthPrivateKey {
   def apply( bytes  : Seq[Byte] )    : EthPrivateKey = {
     bytes match {
       case iasb : ImmutableArraySeq.Byte => new EthPrivateKey( iasb );
-      case other                         => new EthPrivateKey( ImmutableArraySeq.Byte( other.toArray ) );
+      case other                         => new EthPrivateKey( ImmutableArraySeq.Byte( other.toArray ) ); //if from a mutable seq, we can't be sure the array is unshared, so we copy
     }
   }
   def apply( bytes  : Array[Byte] )  : EthPrivateKey = new EthPrivateKey( ImmutableArraySeq.Byte( bytes ) );

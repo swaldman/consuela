@@ -8,19 +8,22 @@ import java.security._;
 import java.security.interfaces._;
 import java.security.spec._;
 
-package object hash {
-  private[this] def tested[T]( value : T)( failureMessage : (T) => String = null )( test : (T) => Boolean ) = if ( test(value) ) value else throw new AssertionError( failureMessage( value ) );
+import com.mchange.sc.v2.lang.borrow;
 
-  def hash_SHA3_256( is : InputStream )( implicit provider : crypto.jce.Provider ) : Array[Byte] = {
-    val md = MessageDigest.getInstance("SHA3-256", provider.name );
+package object hash {
+
+  def doHash( algoName : String, is : InputStream )( implicit provider : crypto.jce.Provider ) : Array[Byte] = {
+    val md = MessageDigest.getInstance(algoName, provider.name );
     val buffer = new Array[Byte](1024);
     var count = is.read( buffer );
     while ( count >= 0 ) {
       md.update( buffer, 0, count );
       count = is.read( buffer );
     }
-    tested( md.digest() )( array => s"SHA3_256 should yield a 256-bit / 32-byte value! but length is ${array.length}" )( array => array.length == 32 );
+    md.digest()
   }
-  def hash_SHA3_256( bytes : Array[Byte] )( implicit provider : crypto.jce.Provider ) : Array[Byte] = hash_SHA3_256( new ByteArrayInputStream( bytes ) )( provider )
-  def hash_SHA3_256( bytes : Seq[Byte] )( implicit provider : crypto.jce.Provider ) : Array[Byte] = hash_SHA3_256( bytes.toArray )( provider );
+  def doHash( algoName : String, bytes : Array[Byte] )( implicit provider : crypto.jce.Provider ) : Array[Byte] = {
+    borrow ( new ByteArrayInputStream( bytes ) ) { bais => doHash( algoName, bais )( provider ) }
+  }
+  def doHash( algoName : String, bytes : Seq[Byte] )( implicit provider : crypto.jce.Provider ) : Array[Byte] = doHash( algoName, bytes.toArray )( provider )
 }
