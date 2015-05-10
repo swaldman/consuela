@@ -8,7 +8,7 @@ import com.mchange.sc.v1.consuela.hash.{SHA3_256,SHA3_512};
 
 import scala.annotation.tailrec;
 
-import spire.math.SafeLong;
+//import spire.math.SafeLong;
 import spire.implicits._
 
 // is Long math good enough? (looking at the magnitudes, i think it is, but i'm not certain)
@@ -49,7 +49,7 @@ object Ethash23 {
     descendToPrime( start )
   }
 
-  private def getFullSize( blockNumber : Long ) : SafeLong = {
+  private def getFullSize( blockNumber : Long ) : Long = {
     @tailrec 
     def descendToPrime( sz : Long ) : Long = if ( isPrime( sz / MixBytes ) ) sz else descendToPrime( sz - DoubleMixBytes );
 
@@ -165,14 +165,14 @@ object Ethash23 {
   private def fnv( v1 : Long, v2 : Long ) : Long = ((v1 * FnvPrime) ^ v2) % (1 << 32)
 
   // we probably want to optimize this someday
-  private def isPrime( num : SafeLong ) : Boolean = {
+  private def isPrime( num : Long ) : Boolean = {
     def naiveIsPrime : Boolean = {
       val limit = num.sqrt;
       var check = 2;
       while (check <= limit) if( num % check == 0 ) return false else check += 1;
       return true;
     }
-    def probablePrime = num.isProbablePrime( ProbablePrimeCertainty )
+    def probablePrime = BigInt(num).isProbablePrime( ProbablePrimeCertainty )
 
     probablePrime && naiveIsPrime
   }
