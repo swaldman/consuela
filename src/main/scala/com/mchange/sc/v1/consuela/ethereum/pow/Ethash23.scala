@@ -17,23 +17,27 @@ import spire.implicits._
 object Ethash23 {
   // implementing REVISION 23 of Ethash spec, defined https://github.com/ethereum/wiki/wiki/Ethash
 
-  private final val WordBytes          = 1L << 2;  // 4
-  private final val DatasetBytesInit   = 1L << 30; // 2 ** 30
-  private final val DatasetBytesGrowth = 1L << 23; // 2 ** 23
-  private final val CacheBytesInit     = 1L << 24; // 2 ** 24
-  private final val CacheBytesGrowth   = 1L << 17; // 2 ** 17
-  private final val CacheMultiplier    = 1L << 10; // 1024
-  private final val EpochLength        = 30000L;   // 30000
-  private final val MixBytes           = 1L << 7;  // 128
-  private final val HashBytes          = 1L << 6;  // 64
-  private final val DatasetParents     = 1L << 8;  // 256
-  private final val CacheRounds        = 3L;       // 3
-  private final val Accesses           = 1L << 6;  // 64
+  private final val WordBytes          = 1 << 2;  // 4
+  private final val DatasetBytesInit   = 1 << 30; // 2 ** 30
+  private final val DatasetBytesGrowth = 1 << 23; // 2 ** 23
+  private final val CacheBytesInit     = 1 << 24; // 2 ** 24
+  private final val CacheBytesGrowth   = 1 << 17; // 2 ** 17
+  private final val CacheMultiplier    = 1 << 10; // 1024
+  private final val EpochLength        = 30000;   // 30000
+  private final val MixBytes           = 1 << 7;  // 128
+  private final val HashBytes          = 1 << 6;  // 64
+  private final val DatasetParents     = 1 << 8;  // 256
+  private final val CacheRounds        = 3;       // 3
+  private final val Accesses           = 1 << 6;  // 64
 
   private final val DoubleHashBytes = 2 * HashBytes; //128
   private final val DoubleMixBytes  = 2 * HashBytes; //256
 
-  private final val FnvPrime = 0x01000193L;
+  private final val HashBytesOverWordBytes = HashBytes / WordBytes; //16
+  private final val MixBytesOverWordBytes  = MixBytes / WordBytes;  //32
+  private final val MixBytesOverHashBytes  = MixBytes / HashBytes;  //2
+
+  private final val FnvPrime = 0x01000193;
 
   private final val ProbablePrimeCertainty : Int = 8; //arbitrary, tune for performance...
 
@@ -72,8 +76,7 @@ object Ethash23 {
   // i think it's all right, but let's see.
   private def calcDatasetItem( cache : Array[Array[Byte]], i : Int ) : Array[Byte] = {
     val n = cache.length;
-    val r = HashBytes / WordBytes;
-    assert( r.isValidInt )
+    val r = HashBytesOverWordBytes;
 
     val mix = {
       val tmp = cache(i % n).clone;
@@ -86,7 +89,7 @@ object Ethash23 {
       count match {
         case DatasetParents => lastMix;
         case j              => {
-          val cacheIndex = fnv( i ^ j, lastMix( (j % r).toInt ) );
+          val cacheIndex = fnv( i ^ j, lastMix( j % r ) );
           val nextMix = ( lastMix, cache( (cacheIndex % n).toInt ) ).zipped.map( (a, b) => fnv( a, b ).toByte )
           remix( nextMix, count + 1 )
         }
@@ -97,7 +100,7 @@ object Ethash23 {
   }
 
   private def calcDataset( cache : Array[Array[Byte]], fullSize : Int ) : Array[Array[Byte]] = {
-    val len = ( fullSize / HashBytes ).toInt;
+    val len = fullSize / HashBytes ;
     val out = Array.ofDim[Array[Byte]]( len );
     (0 until len).foreach( i => out(i) = calcDatasetItem( cache, i ) );
     out
@@ -111,18 +114,16 @@ object Ethash23 {
 
   private def replicateArray( src : Array[Byte], srcLen : Int, times : Int ) : Array[Byte] = combineIndexedArrays( _ => src, srcLen, times );
 
-  class Hashimoto( mixDigest : Array[Byte], result : Array[Byte] );
+  final class Hashimoto( mixDigest : Array[Byte], result : Array[Byte] );
 
-  // headerRLP : Seq[Byte], nonceRLP : Seq[Byte]
-
-  private def hashimoto(headerRLP : Seq[Byte], nonce : Unsigned64 , fullSize : Int, datasetAccessor : Int => Array[Byte] ) : Hashimoto = {
-    hashimoto( ( headerRLP ++ nonce.widen.unsignedBytes(8) ).toArray, fullSize, datasetAccessor )
+  private def hashimoto(truncatedHeaderRLP : Seq[Byte], nonce : Unsigned64 , fullSize : Int, datasetAccessor : Int => Array[Byte] ) : Hashimoto = {
+    hashimoto( ( truncatedHeaderRLP ++ nonce.widen.unsignedBytes(8) ).toArray, fullSize, datasetAccessor )
   }
 
   private def hashimoto( seedBytes : Array[Byte], fullSize : Int, datasetAccessor : Int => Array[Byte] ) : Hashimoto = {
-    val n = (fullSize / HashBytes).toInt;
-    val w = (MixBytes / WordBytes).toInt;
-    val mixHashes = (MixBytes / HashBytes).toInt;
+    val n = fullSize / HashBytes;
+    val w = MixBytesOverWordBytes;
+    val mixHashes = MixBytesOverHashBytes;
 
     val s = SHA3_512.rawHash( seedBytes );
     val len = s.length;
