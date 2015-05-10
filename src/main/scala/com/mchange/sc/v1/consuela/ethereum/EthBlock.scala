@@ -11,6 +11,9 @@ object EthBlock {
   val Genesis : EthBlock = Details.GenesisBlock;
 
   object Header {
+    val  Truncated = Details.Header.Truncated;
+    type Truncated = Details.Header.Truncated; 
+
     def isValidChildOfParent( putativeChild : Header, putativeParent : Header ) : Boolean = Details.Header.isValidChildOfParent( putativeChild, putativeParent );
   }
   case class Header( 
@@ -27,8 +30,8 @@ object EthBlock {
     gasUsed         : Unsigned256,
     timestamp       : Unsigned256,
     extraData       : ByteSeqMax1024,
-    mixHash         : EthHash         = AllZerosEthHash,
-    nonce           : Unsigned64      = Unsigned64(0)
+    mixHash         : EthHash,
+    nonce           : Unsigned64
   ) {
     def isValidChild( putativeParent : Header ) : Boolean = Header.isValidChildOfParent( this, putativeParent );
   }

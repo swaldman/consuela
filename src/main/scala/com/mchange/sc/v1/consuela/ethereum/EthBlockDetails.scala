@@ -5,7 +5,7 @@ import specification.Types.{Unsigned64,Unsigned256,Unsigned2048,ByteSeqMax1024};
 
 import scala.collection.immutable.Seq;
 
-private object EthBlockDetails {
+object EthBlockDetails {
   // from yellowpaper 4.3.4
   val GenesisDifficulty  = Unsigned256( 1 << 17 ); // 1 << 17 == BigInt(2).pow(17) == 0x020000 == 131072
   val GenesisBlock = {
@@ -13,7 +13,7 @@ private object EthBlockDetails {
 
     // header state taken from ethereum/tests/BlockTests/bcTotalDifficultyTest.json 2015-05-05
     val header = EthBlock.Header(
-      parentHash      = AllZerosEthHash,
+      parentHash      = AllZeroesEthHash,
       ommersHash      = EthHash.withBytes("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347".decodeHex),
       coinbase        = EthAddress( "0x8888f1f195afa192cfee860698584c030f4c9db1".decodeHex ),
       stateRoot       = EthHash.withBytes( "0x7dba07d6b448a186e9612e5f737d1c909dce473e53199901a302c00646d523c1".decodeHex ),
@@ -94,5 +94,30 @@ private object EthBlockDetails {
       val pow = proofOfWork( finalized.nonce, finalized );
       pow.m == finalized.mixHash && pow.n.widen <= (ProofOfWork.ThresholdNumerator / pow.n.widen)
     }
+
+    /*
+     * We need the notion of a "truncated header", which does not serialize mixHash or nonce at all
+     * for proof of work, which wants such a truncated RLP serialization in generating mixHash and nonce.
+     * 
+     * The repetitive code is ugly here, but ultimately more straightforward than infecting all of our
+     * serialization logic with condition code, so we're sucking it up.
+     * 
+     * See yellow paper section 4.3.4
+     */ 
+    case class Truncated(
+      parentHash      : EthHash,
+      ommersHash      : EthHash,
+      coinbase        : EthAddress,
+      stateRoot       : EthHash,
+      transactionRoot : EthHash,
+      receiptsRoot    : EthHash,
+      logsBloom       : EthLogBloom,
+      difficulty      : Unsigned256,
+      number          : Unsigned256,
+      gasLimit        : Unsigned256,
+      gasUsed         : Unsigned256,
+      timestamp       : Unsigned256,
+      extraData       : ByteSeqMax1024
+    )
   }
 }
