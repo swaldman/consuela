@@ -1,13 +1,17 @@
 package com.mchange.sc.v1.consuela.ethereum.pow;
 
-import com.mchange.sc.v1.consuela.hash.SHA3_512;
+import com.mchange.sc.v1.consuela._;
+
+import ethereum.specification.Types.Unsigned64;
+
+import com.mchange.sc.v1.consuela.hash.{SHA3_256,SHA3_512};
 
 import scala.annotation.tailrec;
 
 import spire.math.SafeLong;
 import spire.implicits._
 
-// is Long math good enough (looking at the magnitudes, i think it is, but i'm not certain)
+// is Long math good enough? (looking at the magnitudes, i think it is, but i'm not certain)
 // we can put the whole class in terms of spire SafeLong easily enough if not...
 
 object Ethash23 {
@@ -26,8 +30,8 @@ object Ethash23 {
   private final val CacheRounds        = 3L;       // 3
   private final val Accesses           = 1L << 6;  // 64
 
-  private final val DoubleHashBytes = 2 * HashBytes;
-  private final val DoubleMixBytes  = 2 * HashBytes;
+  private final val DoubleHashBytes = 2 * HashBytes; //128
+  private final val DoubleMixBytes  = 2 * HashBytes; //256
 
   private final val FnvPrime = 0x01000193L;
 
@@ -64,7 +68,100 @@ object Ethash23 {
     o
   }
 
-  private def fnv( v1 : Long, v2 : Long ) : SafeLong = ((v1 * FnvPrime) ^ v2) % (1 << 32)
+  // note the lots of narrowing of integral types here. 
+  // i think it's all right, but let's see.
+  private def calcDatasetItem( cache : Array[Array[Byte]], i : Int ) : Array[Byte] = {
+    val n = cache.length;
+    val r = HashBytes / WordBytes;
+    assert( r.isValidInt )
+
+    val mix = {
+      val tmp = cache(i % n).clone;
+      tmp(0) = (tmp(0) ^ i).toByte;
+      SHA3_512.rawHash( tmp )
+    }
+
+    @tailrec
+    def remix( lastMix : Array[Byte], count : Int = 0) : Array[Byte] = {
+      count match {
+        case DatasetParents => lastMix;
+        case j              => {
+          val cacheIndex = fnv( i ^ j, lastMix( (j % r).toInt ) );
+          val nextMix = ( lastMix, cache( (cacheIndex % n).toInt ) ).zipped.map( (a, b) => fnv( a, b ).toByte )
+          remix( nextMix, count + 1 )
+        }
+      }
+    }
+
+    SHA3_512.rawHash( remix( mix ) )
+  }
+
+  private def calcDataset( cache : Array[Array[Byte]], fullSize : Int ) : Array[Array[Byte]] = {
+    val len = ( fullSize / HashBytes ).toInt;
+    val out = Array.ofDim[Array[Byte]]( len );
+    (0 until len).foreach( i => out(i) = calcDatasetItem( cache, i ) );
+    out
+  }
+
+  private def combineIndexedArrays( srcAccessor : Int => Array[Byte], srcLen : Int, times : Int ) : Array[Byte] = {
+    val tmp = Array.ofDim[Byte](srcLen * times);
+    (0 until times).foreach( i => System.arraycopy( srcAccessor(i), 0, tmp, i * srcLen, srcLen ) )
+    tmp
+  }
+
+  private def replicateArray( src : Array[Byte], srcLen : Int, times : Int ) : Array[Byte] = combineIndexedArrays( _ => src, srcLen, times );
+
+  class Hashimoto( mixDigest : Array[Byte], result : Array[Byte] );
+
+  // headerRLP : Seq[Byte], nonceRLP : Seq[Byte]
+
+  private def hashimoto(headerRLP : Seq[Byte], nonce : Unsigned64 , fullSize : Int, datasetAccessor : Int => Array[Byte] ) : Hashimoto = {
+    hashimoto( ( headerRLP ++ nonce.widen.unsignedBytes(8) ).toArray, fullSize, datasetAccessor )
+  }
+
+  private def hashimoto( seedBytes : Array[Byte], fullSize : Int, datasetAccessor : Int => Array[Byte] ) : Hashimoto = {
+    val n = (fullSize / HashBytes).toInt;
+    val w = (MixBytes / WordBytes).toInt;
+    val mixHashes = (MixBytes / HashBytes).toInt;
+
+    val s = SHA3_512.rawHash( seedBytes );
+    val len = s.length;
+
+    val startMix : Array[Byte] = replicateArray(s, len, mixHashes);
+
+    @tailrec
+    def remix( lastMix : Array[Byte], i : Int = 0 ) : Array[Byte] = {
+      i match {
+        case Accesses => lastMix;
+        case _        => {
+          val p = (( fnv( i ^ s(0), lastMix( i % w ) ) % (n / mixHashes) ) * mixHashes).toInt;
+          val offsetAccessor : Int => Array[Byte] = j => datasetAccessor( p + j );
+
+          // note that we are looking up fixed-length hashes 
+          // all the same length as our seed hash, so len is fine
+          val newData = combineIndexedArrays( offsetAccessor, len, mixHashes );
+          val nextMix = ( lastMix, newData ).zipped.map( (a, b) => fnv( a, b ).toByte )
+          remix( nextMix, i + 1 )
+        }
+      }
+    }
+
+    val uncompressedMix = remix( startMix );
+
+    def compressNextFour( src : Array[Byte], offset : Int ) : Byte = {
+      def srcval( i : Int ) = src( offset + i );
+      fnv( fnv( fnv( srcval(0), srcval(1) ), srcval(2) ), srcval(3) ).toByte
+    }
+
+    val compressedMix = Array.range(0, uncompressedMix.length, 4).map( i => compressNextFour( uncompressedMix, i ) );
+
+    val mixDigest = compressedMix;
+    val result = SHA3_256.rawHash( s ++ compressedMix )
+
+    new Hashimoto( mixDigest, result )
+  }
+
+  private def fnv( v1 : Long, v2 : Long ) : Long = ((v1 * FnvPrime) ^ v2) % (1 << 32)
 
   // we probably want to optimize this someday
   private def isPrime( num : SafeLong ) : Boolean = {
