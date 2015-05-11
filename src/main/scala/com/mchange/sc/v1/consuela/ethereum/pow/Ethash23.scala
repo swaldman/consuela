@@ -198,6 +198,14 @@ object Ethash23 {
     new Hashimoto( mixDigest, result )
   }
 
+  def hashimotoLight( fullSize : Int, cache : Array[Array[Byte]], truncatedHeaderRLP : Seq[Byte], nonce : Unsigned64 ) = {
+    hashimoto( truncatedHeaderRLP, nonce, fullSize, (i : Int) => calcDatasetItem( cache, i ) )
+  }
+ 
+  def hashimotoFull( fullSize : Int, dataset : Array[Array[Byte]], truncatedHeaderRLP : Seq[Byte], nonce : Unsigned64 ) = {
+    hashimoto( truncatedHeaderRLP, nonce, fullSize, (i : Int) => dataset( i ) )
+  }
+
   private def fnv( v1 : Long, v2 : Long ) : Long = ((v1 * FnvPrime) ^ v2) % (1 << 32)
 
   // we probably want to optimize this someday
