@@ -6,6 +6,9 @@ import ethereum.specification.Types.Unsigned64;
 
 import com.mchange.sc.v1.consuela.hash.{SHA3_256,SHA3_512};
 
+import com.mchange.sc.v1.log.MLogger;
+import com.mchange.sc.v1.log.MLevel._;
+
 import scala.annotation.tailrec;
 
 //import spire.math.SafeLong;
@@ -41,19 +44,21 @@ object Ethash23 {
 
   private final val ProbablePrimeCertainty : Int = 8; //arbitrary, tune for performance...
 
-  private def getCacheSize( blockNumber : Long ) : Long = {
+  def epochNumber( blockNumber : Long ) : Long = ( blockNumber / EpochLength )
+
+  def getCacheSize( blockNumber : Long ) : Long = {
     @tailrec 
     def descendToPrime( sz : Long ) : Long = if ( isPrime( sz / HashBytes ) ) sz else descendToPrime( sz - DoubleHashBytes );
 
-    val start = CacheBytesInit + ( CacheBytesGrowth * ( blockNumber / EpochLength ) ) - HashBytes;
+    val start = CacheBytesInit + ( CacheBytesGrowth * epochNumber( blockNumber ) ) - HashBytes;
     descendToPrime( start )
   }
 
-  private def getFullSize( blockNumber : Long ) : Long = {
+  def getFullSize( blockNumber : Long ) : Long = {
     @tailrec 
     def descendToPrime( sz : Long ) : Long = if ( isPrime( sz / MixBytes ) ) sz else descendToPrime( sz - DoubleMixBytes );
 
-    val start = DatasetBytesInit + ( DatasetBytesGrowth * ( blockNumber / EpochLength ) ) - MixBytes;
+    val start = DatasetBytesInit + ( DatasetBytesGrowth * epochNumber( blockNumber ) ) - MixBytes;
     descendToPrime( start )
   }
 
@@ -175,5 +180,46 @@ object Ethash23 {
     def probablePrime = BigInt(num).isProbablePrime( ProbablePrimeCertainty )
 
     probablePrime && naiveIsPrime
+  }
+
+  object Seed {
+    private implicit lazy val logger = MLogger( this );
+
+    case class Primer( epochNumber : Long, value : SHA3_256 );
+
+    private val seedCache = new java.util.concurrent.ConcurrentSkipListMap[Long,SHA3_256];
+
+    // we are doing some nonatomic stuff, but the worst a race will do is cause idempotent work to be duplicated
+    def ensureCache( thruEpochNumber : Long )( implicit  primer : Primer ) : Unit = {
+      require( thruEpochNumber >= primer.epochNumber, s"To compute a seed hash, thruEpochNumber (${thruEpochNumber}) must be no less than primer.epochNumber ${primer.epochNumber}" );
+
+      val lastPrecomputedEntry = {
+        val tmp = seedCache.lastEntry();
+        if ( tmp == null ) {
+          seedCache.put( primer.epochNumber, primer.value );
+          seedCache.lastEntry()
+        } else {
+          tmp
+        }
+      }
+      val lastPrecomputedKey = lastPrecomputedEntry.getKey();
+
+      var lastHash = lastPrecomputedEntry.getValue();
+      var lastKey  = lastPrecomputedKey;
+      while ( lastKey < thruEpochNumber ) {
+        var nextKey = lastKey + 1;
+        var nextHash = SHA3_256.hash( lastHash.bytes );
+        seedCache.put( nextKey, nextHash );
+        lastHash = nextHash;
+        lastKey = nextKey;
+      }
+
+      INFO.log( s"Seed cache populated from epoch number ${seedCache.firstKey} through epoch number ${lastKey}, whose seed is 0x${lastHash.bytes.hex}" )
+    }
+
+    def get( epochNumber : Long )( implicit primer : Primer ) : Array[Byte] = {
+      ensureCache( epochNumber )( primer );
+      seedCache.get( epochNumber ).toByteArray
+    }
   }
 }

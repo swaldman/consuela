@@ -21,10 +21,16 @@ object Config {
   val CryptoJceProviderClassNames         = Item.CryptoJceProviderClassNames.get;           // Note: For android include "org.spongycastle.jce.provider.BouncyCastleProvider"
   val CryptoJceForbidUseOfOtherProviders  = Item.CryptoJceForbidUseOfOtherProviders.get;    //       and ensure the spongycastle jce prov lib is bundled, it's not a consuela dependency!
 
+  val EthereumPowEthash23SeedPrimerEpochNumber = Item.EthereumPowEthash23SeedPrimerEpochNumber.get;
+  val EthereumPowEthash23SeedPrimerValue       = Item.EthereumPowEthash23SeedPrimerValue.get;
+
   private[this] object Item {
     val CryptoJceProviderName              = StringItem( "crypto.jce.providerName", "BC" ); //bouncycastle
     val CryptoJceProviderClassNames        = StringListItem( "crypto.jce.providerClassNames", List( "org.bouncycastle.jce.provider.BouncyCastleProvider" ) );
     val CryptoJceForbidUseOfOtherProviders = BooleanItem("crypto.jce.forbidUseOfOtherProviders", false);
+
+    val EthereumPowEthash23SeedPrimerEpochNumber = LongItem( "ethereum.pow.ethash23.seed.primer.epochNumber", 0L );
+    val EthereumPowEthash23SeedPrimerValue       = StringItem( "ethereum.pow.ethash23.seed.primer.value", "0x0000000000000000000000000000000000000000000000000000000000000000" );
   }
   private[this] trait Item[T] {
     def path : String;
@@ -40,5 +46,8 @@ object Config {
   }
   private[this] case class BooleanItem( path : String, dflt : Boolean ) extends Item[Boolean] {
     def get : Boolean = TRACE.attempt( _inner.getBoolean( path ) ).getOrElse( dflt );
+  }
+  private[this] case class LongItem( path : String, dflt : Long ) extends Item[Long] {
+    def get : Long = TRACE.attempt( _inner.getLong( path ) ).getOrElse( dflt );
   }
 }
