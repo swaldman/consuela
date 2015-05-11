@@ -44,37 +44,59 @@ object Ethash23 {
 
   private final val ProbablePrimeCertainty : Int = 8; //arbitrary, tune for performance...
 
-  def epochNumber( blockNumber : Long ) : Long = ( blockNumber / EpochLength )
+  def epochFromBlock( blockNumber : Long ) : Long = ( blockNumber / EpochLength )
 
-  def getCacheSize( blockNumber : Long ) : Long = {
+  def blocksRemainingInEpoch( blockNumber : Long ) : Long = EpochLength - ( blockNumber % EpochLength )
+
+  def getCacheSizeForBlock( blockNumber : Long ) : Long = getCacheSizeForEpoch( epochFromBlock( blockNumber ) );
+
+  def getCacheSizeForEpoch( epochNumber : Long ) : Long = {
     @tailrec 
     def descendToPrime( sz : Long ) : Long = if ( isPrime( sz / HashBytes ) ) sz else descendToPrime( sz - DoubleHashBytes );
 
-    val start = CacheBytesInit + ( CacheBytesGrowth * epochNumber( blockNumber ) ) - HashBytes;
+    val start = CacheBytesInit + ( CacheBytesGrowth * epochNumber ) - HashBytes;
     descendToPrime( start )
   }
 
-  def getFullSize( blockNumber : Long ) : Long = {
+  def getFullSizeForBlock( blockNumber : Long ) : Long = getFullSizeForEpoch( epochFromBlock( blockNumber ) );
+
+  def getFullSizeForEpoch( epochNumber : Long ) : Long = {
     @tailrec 
     def descendToPrime( sz : Long ) : Long = if ( isPrime( sz / MixBytes ) ) sz else descendToPrime( sz - DoubleMixBytes );
 
-    val start = DatasetBytesInit + ( DatasetBytesGrowth * epochNumber( blockNumber ) ) - MixBytes;
+    val start = DatasetBytesInit + ( DatasetBytesGrowth * epochNumber ) - MixBytes;
     descendToPrime( start )
+  }
+
+  def mkCacheForBlock( blockNumber : Long ) : Array[Array[Byte]] = mkCacheForEpoch( epochFromBlock( blockNumber ) );
+
+  def mkCacheForEpoch( epochNumber : Long ) : Array[Array[Byte]] = {
+    val cacheSize = getCacheSizeForEpoch( epochNumber );
+    val seed      = Seed.getForEpoch( epochNumber );
+    mkCache( cacheSize, seed );
   }
 
   // this seems very arcane...
   private def mkCache( cacheSize : Long, seed : Array[Byte] ) : Array[Array[Byte]] = {
-    val n = cacheSize / HashBytes;
-
-    require( n.isValidInt, s"n, our array size, must be a valid Int. but it's not, n = ${n}" ); 
-
-    val nInt = n.toInt;
-    val o = Array.iterate( SHA3_512.rawHash( seed ), nInt )( lastBytes => SHA3_512.rawHash( lastBytes ) )
-    for (_ <- 0L until CacheRounds; i <- 0 until nInt ) {
-      val v = o(i)(0) % nInt;
-      o(i) = SHA3_512.rawHash( (o((i-1+nInt) % nInt), o(v)).zipped.map( (l, r) => (l ^ r).toByte ) )
+    val n = {
+      val tmp = cacheSize / HashBytes;
+      require( tmp.isValidInt, s"n, our array size, must be a valid Int. but it's not, n = ${tmp}" );
+      tmp.toInt
+    }
+    val o = Array.iterate( SHA3_512.rawHash( seed ), n )( lastBytes => SHA3_512.rawHash( lastBytes ) )
+    for (_ <- 0L until CacheRounds; i <- 0 until n ) {
+      val v = o(i)(0) % n;
+      o(i) = SHA3_512.rawHash( (o((i-1+n) % n), o(v)).zipped.map( (l, r) => (l ^ r).toByte ) )
     }
     o
+  }
+
+  def calcDatasetForBlock( blockNumber : Long ) : Array[Array[Byte]] = calcDatasetForEpoch( epochFromBlock( blockNumber ) );
+
+  def calcDatasetForEpoch( epochNumber : Long ) : Array[Array[Byte]] = {
+    val cache = mkCacheForEpoch( epochNumber );
+    val fullSize = getFullSizeForEpoch( epochNumber );
+    calcDataset( cache, fullSize )
   }
 
   // note the lots of narrowing of integral types here. 
@@ -104,15 +126,24 @@ object Ethash23 {
     SHA3_512.rawHash( remix( mix ) )
   }
 
-  private def calcDataset( cache : Array[Array[Byte]], fullSize : Int ) : Array[Array[Byte]] = {
-    val len = fullSize / HashBytes ;
+  private def calcDataset( cache : Array[Array[Byte]], fullSize : Long ) : Array[Array[Byte]] = {
+    val len = {
+      val tmp = fullSize / HashBytes;
+      require( tmp.isValidInt, s"len, our dataset length, must be a valid Int. but it's not, len = ${tmp}" );
+      tmp.toInt;
+    }
     val out = Array.ofDim[Array[Byte]]( len );
     (0 until len).foreach( i => out(i) = calcDatasetItem( cache, i ) );
     out
   }
 
   private def combineIndexedArrays( srcAccessor : Int => Array[Byte], srcLen : Int, times : Int ) : Array[Byte] = {
-    val tmp = Array.ofDim[Byte](srcLen * times);
+    val arraylen = {
+      val longlen : Long = srcLen.toLong * times.toLong;
+      require( longlen.isValidInt, s"arraylen, our combine array length, must be a valid Int. but it's not, arraylen = ${longlen}" );
+      longlen.toInt
+    }
+    val tmp = Array.ofDim[Byte]( arraylen );
     (0 until times).foreach( i => System.arraycopy( srcAccessor(i), 0, tmp, i * srcLen, srcLen ) )
     tmp
   }
@@ -190,7 +221,7 @@ object Ethash23 {
     private val seedCache = new java.util.concurrent.ConcurrentSkipListMap[Long,SHA3_256];
 
     // we are doing some nonatomic stuff, but the worst a race will do is cause idempotent work to be duplicated
-    def ensureCache( thruEpochNumber : Long )( implicit  primer : Primer ) : Unit = {
+    def ensureCacheThruEpoch( thruEpochNumber : Long )( implicit  primer : Primer ) : Unit = {
       require( thruEpochNumber >= primer.epochNumber, s"To compute a seed hash, thruEpochNumber (${thruEpochNumber}) must be no less than primer.epochNumber ${primer.epochNumber}" );
 
       val lastPrecomputedEntry = {
@@ -217,9 +248,13 @@ object Ethash23 {
       INFO.log( s"Seed cache populated from epoch number ${seedCache.firstKey} through epoch number ${lastKey}, whose seed is 0x${lastHash.bytes.hex}" )
     }
 
-    def get( epochNumber : Long )( implicit primer : Primer ) : Array[Byte] = {
-      ensureCache( epochNumber )( primer );
+    def getForEpoch( epochNumber : Long )( implicit primer : Primer ) : Array[Byte] = {
+      ensureCacheThruEpoch( epochNumber )( primer );
       seedCache.get( epochNumber ).toByteArray
     }
+
+    def ensureCacheThruBlock( blockNumber : Long ) : Unit = ensureCacheThruEpoch( epochFromBlock( blockNumber ) )
+
+    def getForBlock( blockNumber : Long ) : Array[Byte] = getForEpoch( epochFromBlock( blockNumber ) )
   }
 }
