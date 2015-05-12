@@ -9,6 +9,8 @@ import com.mchange.sc.v1.consuela.hash.{SHA3_256,SHA3_512};
 import com.mchange.sc.v1.log.MLogger;
 import com.mchange.sc.v1.log.MLevel._;
 
+import com.mchange.lang.IntegerUtils;
+
 import scala.annotation.tailrec;
 
 //import spire.math.SafeLong;
@@ -85,11 +87,17 @@ object Ethash23 {
     }
     val o = Array.iterate( SHA3_512.rawHash( seed ), n )( lastBytes => SHA3_512.rawHash( lastBytes ) )
     for (_ <- 0L until CacheRounds; i <- 0 until n ) {
-      val v = o(i)(0) % n;
+      //val v = o(i)(0) % n;
+      //val v = unsign( o(i)(0) ) % n;
+      val v = (fourLittleEndianBytesAsUnsigned( o(i), 0 ) % n).toInt;
       o(i) = SHA3_512.rawHash( (o((i-1+n) % n), o(v)).zipped.map( (l, r) => (l ^ r).toByte ) )
     }
     o
   }
+
+  private def fourLittleEndianBytesAsUnsigned( src : Array[Byte], wordOffset : Int ) = IntegerUtils.toUnsigned( IntegerUtils.intFromByteArrayLittleEndian( src, wordOffset * 4 ) );
+
+  private def unsign( b : Byte ) : Int = b & 0xff;
 
   def calcDatasetForBlock( blockNumber : Long ) : Array[Array[Byte]] = calcDatasetForEpoch( epochFromBlock( blockNumber ) );
 
@@ -106,7 +114,7 @@ object Ethash23 {
     val r = HashBytesOverWordBytes;
 
     val mix = {
-      val tmp = cache(i % n).clone;
+      val tmp = cache( scala.math.abs(i % n) ).clone;
       tmp(0) = (tmp(0) ^ i).toByte;
       SHA3_512.rawHash( tmp )
     }
@@ -117,7 +125,7 @@ object Ethash23 {
         case DatasetParents => lastMix;
         case j              => {
           val cacheIndex = fnv( i ^ j, lastMix( j % r ) );
-          val nextMix = ( lastMix, cache( (cacheIndex % n).toInt ) ).zipped.map( (a, b) => fnv( a, b ).toByte )
+          val nextMix = ( lastMix, cache( scala.math.abs(cacheIndex % n).toInt ) ).zipped.map( (a, b) => fnv( a, b ).toByte )
           remix( nextMix, count + 1 )
         }
       }
@@ -150,13 +158,15 @@ object Ethash23 {
 
   private def replicateArray( src : Array[Byte], srcLen : Int, times : Int ) : Array[Byte] = combineIndexedArrays( _ => src, srcLen, times );
 
-  final class Hashimoto( mixDigest : Array[Byte], result : Array[Byte] );
+  final class Hashimoto( val mixDigest : Array[Byte], val result : Array[Byte] ) {
+    override def toString : String = s"Hashimote(mixDigest=${mixDigest.hex},result=${result.hex})"
+  }
 
-  private def hashimoto(truncatedHeaderRLP : Seq[Byte], nonce : Unsigned64 , fullSize : Int, datasetAccessor : Int => Array[Byte] ) : Hashimoto = {
+  private def hashimoto(truncatedHeaderRLP : Seq[Byte], nonce : Unsigned64 , fullSize : Long, datasetAccessor : Int => Array[Byte] ) : Hashimoto = {
     hashimoto( ( truncatedHeaderRLP ++ nonce.widen.unsignedBytes(8) ).toArray, fullSize, datasetAccessor )
   }
 
-  private def hashimoto( seedBytes : Array[Byte], fullSize : Int, datasetAccessor : Int => Array[Byte] ) : Hashimoto = {
+  private def hashimoto( seedBytes : Array[Byte], fullSize : Long, datasetAccessor : Int => Array[Byte] ) : Hashimoto = {
     val n = fullSize / HashBytes;
     val w = MixBytesOverWordBytes;
     val mixHashes = MixBytesOverHashBytes;
@@ -171,7 +181,8 @@ object Ethash23 {
       i match {
         case Accesses => lastMix;
         case _        => {
-          val p = (( fnv( i ^ s(0), lastMix( i % w ) ) % (n / mixHashes) ) * mixHashes).toInt;
+          //val p = (( fnv( i ^ s(0), lastMix( i % w ) ) % (n / mixHashes) ) * mixHashes).toInt;
+          val p = (( fnv( i ^ fourLittleEndianBytesAsUnsigned(s, 0), fourLittleEndianBytesAsUnsigned( lastMix, (i % w) ) ) % (n / mixHashes) ) * mixHashes).toInt;
           val offsetAccessor : Int => Array[Byte] = j => datasetAccessor( p + j );
 
           // note that we are looking up fixed-length hashes 
@@ -198,15 +209,15 @@ object Ethash23 {
     new Hashimoto( mixDigest, result )
   }
 
-  def hashimotoLight( fullSize : Int, cache : Array[Array[Byte]], truncatedHeaderRLP : Seq[Byte], nonce : Unsigned64 ) = {
+  def hashimotoLight( fullSize : Long, cache : Array[Array[Byte]], truncatedHeaderRLP : Seq[Byte], nonce : Unsigned64 ) = {
     hashimoto( truncatedHeaderRLP, nonce, fullSize, (i : Int) => calcDatasetItem( cache, i ) )
   }
  
-  def hashimotoFull( fullSize : Int, dataset : Array[Array[Byte]], truncatedHeaderRLP : Seq[Byte], nonce : Unsigned64 ) = {
+  def hashimotoFull( fullSize : Long, dataset : Array[Array[Byte]], truncatedHeaderRLP : Seq[Byte], nonce : Unsigned64 ) = {
     hashimoto( truncatedHeaderRLP, nonce, fullSize, (i : Int) => dataset( i ) )
   }
 
-  private def fnv( v1 : Long, v2 : Long ) : Long = ((v1 * FnvPrime) ^ v2) % (1 << 32)
+  def fnv( v1 : Long, v2 : Long ) : Long = ((v1 * FnvPrime) ^ v2) % (1L << 32)
 
   // we probably want to optimize this someday
   private def isPrime( num : Long ) : Boolean = {
