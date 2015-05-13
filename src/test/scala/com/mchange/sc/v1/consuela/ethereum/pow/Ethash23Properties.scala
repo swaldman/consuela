@@ -60,10 +60,10 @@ object Ethash23Properties extends Properties("Ethash23") {
     Check1.truncatedHeaderHash == SHA3_256.withBytes( "2a8de2adf89af77358250bf908bf04ba94a6e8c3ba87775564a41d269a05e4ce".decodeHex ) 
   )
   property("Expected result for first example header (Check1)") = Prop( 
-    Check1.hashimoto.result.toSeq == "dd47fd2d98db51078356852d7c4014e6a5d6c387c35f40e2875b74a256ed7906".decodeHexAsSeq
+    Check1.hashimoto.result.widen == BigInt(1, "dd47fd2d98db51078356852d7c4014e6a5d6c387c35f40e2875b74a256ed7906".decodeHex)
   )
   property("Expected mixDigest for first example header (Check1)") = Prop( 
-    Check1.hashimoto.mixDigest.toSeq == "58f759ede17a706c93f13030328bcea40c1d1341fb26f2facd21ceb0dae57017".decodeHexAsSeq
+    Check1.hashimoto.mixDigest == "58f759ede17a706c93f13030328bcea40c1d1341fb26f2facd21ceb0dae57017".decodeHexAsSeq
   )
 
   object Check2 {
@@ -80,10 +80,10 @@ object Ethash23Properties extends Properties("Ethash23") {
     Check2.truncatedHeaderHash == SHA3_256.withBytes( "100cbec5e5ef82991290d0d93d758f19082e71f234cf479192a8b94df6da6bfe".decodeHex ) 
   )
   property("Expected result for first example header (Check2)") = Prop( 
-    Check2.hashimoto.result.toSeq == "ab9b13423cface72cbec8424221651bc2e384ef0f7a560e038fc68c8d8684829".decodeHexAsSeq
+    Check2.hashimoto.result.widen == BigInt( 1, "ab9b13423cface72cbec8424221651bc2e384ef0f7a560e038fc68c8d8684829".decodeHex )
   )
   property("Expected mixDigest for first example header (Check2)") = Prop( 
-    Check2.hashimoto.mixDigest.toSeq == "e55d02c555a7969361cf74a9ec6211d8c14e4517930a00442f171bdb1698d175".decodeHexAsSeq
+    Check2.hashimoto.mixDigest == "e55d02c555a7969361cf74a9ec6211d8c14e4517930a00442f171bdb1698d175".decodeHexAsSeq
   )
 }
 

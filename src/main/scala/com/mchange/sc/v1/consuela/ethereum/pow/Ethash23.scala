@@ -4,7 +4,7 @@ import com.mchange.sc.v1.consuela._;
 import com.mchange.sc.v1.consuela.ethereum._;
 import com.mchange.sc.v1.consuela.ethereum.encoding._;
 
-import ethereum.specification.Types.Unsigned64;
+import ethereum.specification.Types.{Unsigned64,Unsigned256};
 
 import com.mchange.sc.v1.consuela.hash.{SHA3_256,SHA3_512};
 
@@ -12,6 +12,9 @@ import com.mchange.sc.v1.log.MLogger;
 import com.mchange.sc.v1.log.MLevel._;
 
 import com.mchange.lang.IntegerUtils;
+
+import scala.collection._;
+import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq;
 
 import scala.annotation.tailrec;
 
@@ -59,8 +62,8 @@ object Ethash23 {
   def epochFromBlock( blockNumber : Long ) : Long = ( blockNumber / EpochLength )
   def blocksRemainingInEpoch( blockNumber : Long ) : Long = EpochLength - ( blockNumber % EpochLength )
 
-  final class Hashimoto( val mixDigest : Array[Byte], val result : Array[Byte] ) {
-    override def toString : String = s"Hashimote(mixDigest=${mixDigest.hex},result=${result.hex})"
+  case class Hashimoto( val mixDigest : immutable.Seq[Byte], val result : Unsigned256 ) {
+    override def toString : String = s"Hashimote(mixDigest=${mixDigest.hex},result=${result.widen.unsignedBytes(32).hex})"
   }
 
   object Manager {
@@ -245,7 +248,7 @@ object Ethash23 {
         val mixDigest = crunchFlattenSwap( compressedMix );
         val result = SHA3_256.rawHash( crunchFlattenSwap( s ++ compressedMix ) )
 
-        new Hashimoto( mixDigest, result )
+        new Hashimoto( ImmutableArraySeq.Byte( mixDigest ), Unsigned256( BigInt( 1, result ) ) )
       }
 
       private def hashimotoLight( fullSize : Long, cache : Cache, truncatedHeaderHash : SHA3_256, nonce : Unsigned64 ) : Hashimoto = {
