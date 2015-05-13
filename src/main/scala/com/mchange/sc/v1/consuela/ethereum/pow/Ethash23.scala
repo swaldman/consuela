@@ -70,28 +70,28 @@ object Ethash23 {
       type Cache   = Array[Array[Long]]
       type Dataset = Array[Array[Long]]
 
-      def mkCacheForBlock( blockNumber : Long ) : Array[Array[Long]] = mkCacheForEpoch( epochFromBlock( blockNumber ) );
+      def mkCacheForBlock( blockNumber : Long ) : Cache = mkCacheForEpoch( epochFromBlock( blockNumber ) );
 
-      def mkCacheForEpoch( epochNumber : Long ) : Array[Array[Long]] = {
+      def mkCacheForEpoch( epochNumber : Long ) : Cache = {
         val cacheSize = getCacheSizeForEpoch( epochNumber );
         val seed      = Seed.getForEpoch( epochNumber );
         mkCache( cacheSize, seed );
       }
 
-      def calcDatasetForBlock( blockNumber : Long ) : Array[Array[Long]] = calcDatasetForEpoch( epochFromBlock( blockNumber ) );
+      def calcDatasetForBlock( blockNumber : Long ) : Dataset = calcDatasetForEpoch( epochFromBlock( blockNumber ) );
 
-      def calcDatasetForEpoch( epochNumber : Long ) : Array[Array[Long]] = {
+      def calcDatasetForEpoch( epochNumber : Long ) : Dataset = {
         val cache = mkCacheForEpoch( epochNumber );
         val fullSize = getFullSizeForEpoch( epochNumber );
         calcDataset( cache, fullSize )
       }
 
-      def hashimotoLight( header : EthBlock.Header, cache : Array[Array[Long]], nonce : Unsigned64 ) : Hashimoto = {
+      def hashimotoLight( header : EthBlock.Header, cache : Cache, nonce : Unsigned64 ) : Hashimoto = {
         val blockNumber = assertValidLong( header.number.widen );
         hashimotoLight( getFullSizeForBlock( blockNumber ), cache, truncatedHeaderHash( header ), nonce )
       }
 
-      def hashimotoFull( header : EthBlock.Header, dataset : Array[Array[Long]], nonce : Unsigned64 ) : Hashimoto = {
+      def hashimotoFull( header : EthBlock.Header, dataset : Dataset, nonce : Unsigned64 ) : Hashimoto = {
         val blockNumber = assertValidLong( header.number.widen );
         hashimotoFull( getFullSizeForBlock( blockNumber ), dataset, truncatedHeaderHash( header ), nonce )
       }
@@ -156,11 +156,11 @@ object Ethash23 {
         o
       }
 
-      def hashCache( cache : Array[Array[Long]] ) : SHA3_256 = SHA3_256.hash( cache.flatMap( crunchFlattenSwap ) )
+      def hashCache( cache : Cache ) : SHA3_256 = SHA3_256.hash( cache.flatMap( crunchFlattenSwap ) )
 
       //private def fourLittleEndianBytesAsUnsigned( src : Array[Byte], wordOffset : Int ) = IntegerUtils.toUnsigned( IntegerUtils.intFromByteArrayLittleEndian( src, wordOffset * 4 ) );
 
-      private def calcDatasetItem( cache : Array[Array[Long]], i : Int ) : Array[Long] = {
+      private def calcDatasetItem( cache : Cache, i : Int ) : Array[Long] = {
         val n = cache.length;
         val r = HashBytesOverWordBytes;
 
@@ -185,7 +185,7 @@ object Ethash23 {
         sha3_512_readUnsignedLittleEndianInts( crunchFlattenSwap( remix( mix ) ) )
       }
 
-      private def calcDataset( cache : Array[Array[Long]], fullSize : Long ) : Array[Array[Long]] = {
+      private def calcDataset( cache : Cache, fullSize : Long ) : Array[Array[Long]] = {
         val len = assertValidInt( fullSize / HashBytes );
         val out = Array.ofDim[Array[Long]]( len );
         (0 until len).foreach( i => out(i) = calcDatasetItem( cache, i ) );
@@ -248,11 +248,11 @@ object Ethash23 {
         new Hashimoto( mixDigest, result )
       }
 
-      private def hashimotoLight( fullSize : Long, cache : Array[Array[Long]], truncatedHeaderHash : SHA3_256, nonce : Unsigned64 ) : Hashimoto = {
+      private def hashimotoLight( fullSize : Long, cache : Cache, truncatedHeaderHash : SHA3_256, nonce : Unsigned64 ) : Hashimoto = {
         hashimoto( truncatedHeaderHash, nonce, fullSize, (i : Int) => calcDatasetItem( cache, i ) )
       }
 
-      private def hashimotoFull( fullSize : Long, dataset : Array[Array[Long]], truncatedHeaderHash : SHA3_256, nonce : Unsigned64 ) : Hashimoto = {
+      private def hashimotoFull( fullSize : Long, dataset : Dataset, truncatedHeaderHash : SHA3_256, nonce : Unsigned64 ) : Hashimoto = {
         hashimoto( truncatedHeaderHash, nonce, fullSize, (i : Int) => dataset( i ) )
       }
 
