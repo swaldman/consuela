@@ -94,30 +94,5 @@ object EthBlockDetails {
       val pow = proofOfWork( finalized.nonce, finalized );
       pow.m == finalized.mixHash && pow.n.widen <= (ProofOfWork.ThresholdNumerator / pow.n.widen)
     }
-
-    /*
-     * We need the notion of a "truncated header", which does not serialize mixHash or nonce at all
-     * for proof of work, which wants such a truncated RLP serialization in generating mixHash and nonce.
-     * 
-     * The repetitive code is ugly here, but ultimately more straightforward than infecting all of our
-     * serialization logic with condition code, so we're sucking it up.
-     * 
-     * See yellow paper section 4.3.4
-     */ 
-    case class Truncated(
-      parentHash      : EthHash,
-      ommersHash      : EthHash,
-      coinbase        : EthAddress,
-      stateRoot       : EthHash,
-      transactionRoot : EthHash,
-      receiptsRoot    : EthHash,
-      logsBloom       : EthLogBloom,
-      difficulty      : Unsigned256,
-      number          : Unsigned256,
-      gasLimit        : Unsigned256,
-      gasUsed         : Unsigned256,
-      timestamp       : Unsigned256,
-      extraData       : ByteSeqMax1024
-    )
   }
 }

@@ -196,55 +196,6 @@ package object ethereum {
     }
   }
 
-  /*
-   * We need the notion of a "truncated header", which does not serialize mixHash or nonce at all
-   * for proof of work, which wants such a truncated RLP serialization in generating mixHash and nonce.
-   * 
-   * The repetitive code is ugly here, but ultimately more straightforward than infecting all of our
-   * serialization logic with condition code, so we're sucking it up.
-   * 
-   * See yellow paper section 4.3.4
-   */ 
-  implicit object EthBlockHeaderTruncated_RLPSerializing extends RLPSerializing[EthBlock.Header.Truncated] {
-    def toElement( header : EthBlock.Header.Truncated ) : RLP.Element = {
-      import header._
-      RLP.Element.Seq.of( 
-        parentHash, ommersHash, coinbase, stateRoot, transactionRoot, receiptsRoot, logsBloom,
-        difficulty, number, gasLimit, gasUsed, timestamp, extraData
-      )
-    }
-    def fromElement( element : RLP.Element.Basic ) : Failable[EthBlock.Header.Truncated] = {
-      element match {
-        case RLP.Element.Seq.of(
-          parentHashE, ommersHashE, coinbaseE, stateRootE, transactionRootE, receiptsRootE, logsBloomE,
-          difficultyE, numberE, gasLimitE, gasUsedE, timestampE, extraDataE
-        ) => {
-          for {
-            parentHash      <- RLP.fromElement[EthHash]( parentHashE.simplify );
-            ommersHash      <- RLP.fromElement[EthHash]( ommersHashE.simplify );
-            coinbase        <- RLP.fromElement[EthAddress]( coinbaseE.simplify );
-            stateRoot       <- RLP.fromElement[EthHash]( stateRootE.simplify );
-            transactionRoot <- RLP.fromElement[EthHash]( transactionRootE.simplify )
-            receiptsRoot    <- RLP.fromElement[EthHash]( receiptsRootE.simplify );
-            logsBloom       <- RLP.fromElement[EthLogBloom]( logsBloomE.simplify );
-            difficulty      <- RLP.fromElement[Unsigned256]( difficultyE.simplify );
-            number          <- RLP.fromElement[Unsigned256]( numberE.simplify );
-            gasLimit        <- RLP.fromElement[Unsigned256]( gasLimitE.simplify );
-            gasUsed         <- RLP.fromElement[Unsigned256]( gasUsedE.simplify );
-            timestamp       <- RLP.fromElement[Unsigned256]( timestampE.simplify );
-            extraData       <- RLP.fromElement[ByteSeqMax1024]( extraDataE.simplify )
-          } yield {
-            EthBlock.Header.Truncated( 
-              parentHash, ommersHash, coinbase, stateRoot, transactionRoot, receiptsRoot, logsBloom,
-              difficulty, number, gasLimit, gasUsed, timestamp, extraData
-            )
-          }
-        }
-        case other => fail( s"${other} is not in the expected format of an EthBlock.Header" );
-      }
-    }
-  }
-
   implicit object EthTransactionSeq_RLPSerializing extends RLPSerializing.HomogeneousElementSeq[EthTransaction];
   implicit object EthBlockHeaderSeq_RLPSerializing extends RLPSerializing.HomogeneousElementSeq[EthBlock.Header];
 
