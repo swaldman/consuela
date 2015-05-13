@@ -1,6 +1,8 @@
 package com.mchange.sc.v1.consuela.ethereum.pow;
 
 import com.mchange.sc.v1.consuela._;
+import com.mchange.sc.v1.consuela.ethereum._;
+import com.mchange.sc.v1.consuela.ethereum.encoding._;
 
 import ethereum.specification.Types.Unsigned64;
 
@@ -45,6 +47,20 @@ object Ethash23 {
   private final val FnvPrime = 0x01000193;
 
   private final val ProbablePrimeCertainty : Int = 8; //arbitrary, tune for performance...
+
+  /*
+   * omit the last two elements, 
+   * convert truncated header to RLP, 
+   * take SHA3_256 hash
+   */ 
+  def truncatedHeaderHash( header : EthBlock.Header ) : SHA3_256 = {
+    val headerElement = RLP.toElement[EthBlock.Header]( header );
+    val RLP.Element.Seq( fullSeq ) = headerElement;
+    val numToKeep = fullSeq.length - 2;
+    val truncSeq = fullSeq.take( numToKeep );
+    val truncHeaderRLP = RLP.Element.encode( RLP.Element.Seq( truncSeq ) )
+    SHA3_256.hash( truncHeaderRLP )
+  }
 
   def epochFromBlock( blockNumber : Long ) : Long = ( blockNumber / EpochLength )
 
@@ -137,13 +153,15 @@ object Ethash23 {
   // this seems very arcane...
   private def mkCache( cacheSize : Long, seed : Array[Byte] ) : Array[Array[Long]] = {
     val n = assertValidInt( cacheSize / HashBytes );
-    val o = Array.iterate( sha3_512_readUnsignedLittleEndianInts( seed ), n )( lastBytes => sha3_512_readUnsignedLittleEndianInts( crunchFlattenSwap( lastBytes ) ) )
+    val o = Array.iterate( sha3_512_readUnsignedLittleEndianInts( seed ), n )( lastLongs => sha3_512_readUnsignedLittleEndianInts( crunchFlattenSwap( lastLongs ) ) )
     for (_ <- 0L until CacheRounds; i <- 0 until n ) {
       val v = (o(i)(0) +% n).toInt;
       o(i) = sha3_512_readUnsignedLittleEndianInts( crunchFlattenSwap( (o((i-1+n) % n), o(v)).zipped.map( (l, r) => (l ^ r) ) ) )
     }
     o
   }
+
+  def hashCache( cache : Array[Array[Long]] ) : SHA3_256 = SHA3_256.hash( cache.flatMap( crunchFlattenSwap ) )
 
   //private def fourLittleEndianBytesAsUnsigned( src : Array[Byte], wordOffset : Int ) = IntegerUtils.toUnsigned( IntegerUtils.intFromByteArrayLittleEndian( src, wordOffset * 4 ) );
 
@@ -204,8 +222,8 @@ object Ethash23 {
     override def toString : String = s"Hashimote(mixDigest=${mixDigest.hex},result=${result.hex})"
   }
 
-  private def hashimoto(truncatedHeaderRLP : Seq[Byte], nonce : Unsigned64 , fullSize : Long, datasetAccessor : Int => Array[Long] ) : Hashimoto = {
-    hashimoto( ( truncatedHeaderRLP ++ nonce.widen.unsignedBytes(8) ).toArray, fullSize, datasetAccessor )
+  private def hashimoto(truncatedHeaderHash : SHA3_256, nonce : Unsigned64 , fullSize : Long, datasetAccessor : Int => Array[Long] ) : Hashimoto = {
+    hashimoto( ( truncatedHeaderHash.bytes ++ nonce.widen.unsignedBytes(8).reverse ).toArray, fullSize, datasetAccessor )
   }
 
   private def hashimoto( seedBytes : Array[Byte], fullSize : Long, datasetAccessor : Int => Array[Long] ) : Hashimoto = {
@@ -251,12 +269,12 @@ object Ethash23 {
     new Hashimoto( mixDigest, result )
   }
 
-  def hashimotoLight( fullSize : Long, cache : Array[Array[Long]], truncatedHeaderRLP : Seq[Byte], nonce : Unsigned64 ) = {
-    hashimoto( truncatedHeaderRLP, nonce, fullSize, (i : Int) => calcDatasetItem( cache, i ) )
+  def hashimotoLight( fullSize : Long, cache : Array[Array[Long]], truncatedHeaderHash : SHA3_256, nonce : Unsigned64 ) = {
+    hashimoto( truncatedHeaderHash, nonce, fullSize, (i : Int) => calcDatasetItem( cache, i ) )
   }
  
-  def hashimotoFull( fullSize : Long, dataset : Array[Array[Long]], truncatedHeaderRLP : Seq[Byte], nonce : Unsigned64 ) = {
-    hashimoto( truncatedHeaderRLP, nonce, fullSize, (i : Int) => dataset( i ) )
+  def hashimotoFull( fullSize : Long, dataset : Array[Array[Long]], truncatedHeaderHash : SHA3_256, nonce : Unsigned64 ) = {
+    hashimoto( truncatedHeaderHash, nonce, fullSize, (i : Int) => dataset( i ) )
   }
 
   def fnv( v1 : Long, v2 : Long ) : Long = ((v1 * FnvPrime) ^ v2) % (1L << 32)
