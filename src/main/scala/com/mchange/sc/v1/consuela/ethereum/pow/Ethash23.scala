@@ -245,7 +245,7 @@ object Ethash23 {
 
     val compressedMix = Array.range(0, uncompressedMix.length, 4).map( i => compressNextFour( uncompressedMix, i ) );
 
-    val mixDigest = crunchFlattenNoSwap( compressedMix );
+    val mixDigest = crunchFlattenSwap( compressedMix );
     val result = SHA3_256.rawHash( crunchFlattenSwap( s ++ compressedMix ) )
 
     new Hashimoto( mixDigest, result )

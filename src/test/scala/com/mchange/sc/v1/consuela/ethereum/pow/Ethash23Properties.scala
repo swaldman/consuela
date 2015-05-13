@@ -33,5 +33,10 @@ object Ethash23Properties extends Properties("Ethash23") {
     val zeroedHeader = header.copy( mixHash = AllZeroesEthHash, nonce = Unsigned64(0) );
     RLP.encode( zeroedHeader )
   }
+
+  val headerHash = EthHash.hash( truncHeaderRLP ).bytes;
+
+  property("Expected Example headerHash") = Prop( headerHash == "2a8de2adf89af77358250bf908bf04ba94a6e8c3ba87775564a41d269a05e4ce".decodeHexAsSeq );
+
 }
 
