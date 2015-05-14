@@ -75,25 +75,169 @@ object Ethash23 {
       type Cache   = Array[Array[Int]] // we never store UInts in arrays, as they would be boxed
       type Dataset = Array[Array[Int]] // also, wrap these in value classes so that UInts appear on dereference
     }
+    */ 
+    
 
-    object Abstract {
+    object Generic {
       // type class specialized for different storage types
-      trait ManagerTarget[T] {
-        type Cache;
-        type CacheRow;
+      trait Adaptor[Storage, Item, Entry] {
+        def item( storage : Storage, i : Int ) : Item;
+        def entry( item : Int, i : Int )       : Entry;
 
-        type Dataset;
-        type DatasetRow;
+        def updateItem( item : Item, index : Int, entry : Entry ) : Unit;
 
-        def cacheRow( cache : Cache, i : Int )   : CacheRow;
-        def cacheItem( row : CacheRow, i : Int ) : T
-        def datasetRow( dataset : Dataset, i : Int )   : DatasetRow;
-        def datasetItem( row : DatasetRow, i : Int ) : T
+        def emptyStorage( length : Int ) : Storage;
+        def iterateStorage( start : Item, n : Int )( f : Item => Item ) : Storage;
+        def updateStorage( storage : Storage, index : Int, item : Item ) : Unit;
+
+        def asItem( rawBytes : Array[Byte] ) : Item; // rawBytes must be interpreted as 4-byte unsigned little-endian Ints
+        def toBytes( item : Item)            : Array[Byte];
+
+        def mod( a : Entry, b : Entry ) : Entry;
+        def xor( a : Entry, b : Entry ) : Entry;
+        def fnv( a : Entry, b : Entry ) : Entry;
+
+        def pozmod( a : Entry, b : Entry ) : Entry;
+
+        def toIntUnchecked( entry : Entry ) : Int;
+        def toIntChecked( entry : Entry ) : Int;
+
+        def fromInt( i : Int ) : Entry;
+
+        def zipMap( items : ( Item, Item ), f : ( Entry, Entry ) => Entry ) : Item;
+
+        def concatItems( a : Item, b : Item ) : Item;
+        def toItem( array : Array[Entry] ) : Item;
+
+        def combineIndexedItems( srcAccessor : Int => Item, constantSrcLen : Int, times : Int ) : Item;
       }
     }
-    abstract class Abstract[T] extends Manager {
+    final class Generic[Storage, Item, Entry]( implicit val adapter : Adaptor[Storage, Item, Entry] ) extends Manager {
+
+      implicit def widenInt( i : Int ) : Entry = adapter.fromInt( i );
+
+      implicit final class EntryOps( val me : Entry ) /* extends AnyVal */ {
+        @inline def %( you : Entry ) : Entry = adapter.mod( me, you );
+        @inline def ^( you : Entry ) : Entry = adapter.xor( me, you );
+
+        @inline def +%( you : Entry ) : Entry = adapter.pozmod( me, you );
+
+        @inline def toIntUnchecked : Int = adapter.toIntUnchecked( me );
+        @inline def toIntChecked   : Int = adapter.toIntChecked( me );
+      }
+      implicit final class EntryArrayOps( implicit val me : Array[Entry] ) /* extends AnyVal */ {
+        @inline def toItem = adapter.toItem( me );
+      }
+      implicit final class ItemOps( implicit val me : Item ) /* extends AnyVal */ {
+        @inline def apply( i : Int ) : Entry = adapter.entry( me, i )
+        @inline def update( i : Int, entry : Entry ) : Unit = adapter.updateItem( me, i, entry )
+        @inline def ++( you : Item ) : Item = adapter.concatItems( me, you );
+      }
+      implicit final class ItemPairOps( implicit val me : ( Item, Item ) ) /* extends AnyVal */ {
+        @inline def zipMap( f : ( Entry, Entry ) => Entry ) : Item = adapter.zipMap( me, f );
+      }
+      implicit final class StorageOps( implicit val me : Storage ) /* extends AnyVal */ {
+        @inline def apply( i : Int ) : item = adapter.item( me, i )
+        @inline def update( i : Int, item : Item ) : Unit = adapter.updateStorage( me, i, item )
+      }
+
+      type Cache       = Storage;
+      type Dataset     = Storage;
+      type DatasetItem = Item;
+
+      // this seems very arcane...
+      protected def mkCache( cacheSize : Long, seed : Array[Byte] ) : Cache = {
+        val n = assertValidInt( cacheSize / HashBytes );
+        val o = adapter.iterateStorage( sha3_512_readItem( seed ), n )( last => sha3_512_readItem( crunchFlattenSwap( last ) ) )
+        for (_ <- 0L until CacheRounds; i <- 0 until n ) {
+          val v = (o(i)(0) +% n).toIntUnchecked; // mod n ensures a valid Int
+          o(i) = sha3_512_readItem( toBytes( (o((i-1+n) % n), o(v)).zipMap( (l, r) => (l ^ r) ) ) )
+        }
+        o
+      }
+      protected[pow] def calcDatasetItem( cache : Cache, i : Int ) : DatasetItem = {
+        val n = cache.length;
+        val r = HashBytesOverWordBytes;
+
+        val mix = {
+          val tmp = cache( i +% n ).clone;
+          tmp(0) = tmp(0) ^ i;
+          sha3_512_readItem( toBytes( tmp ) )
+        }
+
+        @tailrec
+        def remix( lastMix : Item, count : Int = 0) : Item = {
+          count match {
+            case DatasetParents => lastMix;
+            case j              => {
+              val cacheIndex = fnv( i ^ j, lastMix( j % r ) );
+              val nextMix = ( lastMix, cache( (cacheIndex +% n).toInt ) ).zipMap( (a, b) => fnv( a, b ) )
+              remix( nextMix, count + 1 )
+            }
+          }
+        }
+
+        sha3_512_readItem( toBytes( remix( mix ) ) )
+      }
+      protected[pow] def calcDataset( cache : Cache, fullSize : Long ) : Dataset = {
+        val len = assertValidInt( fullSize / HashBytes );
+        val out = adapter.emptyStorage( len );
+        (0 until len).foreach( i => out(i) = calcDatasetItem( cache, i ) );
+        out
+      }
+      protected def extractDatasetItem( dataset : Dataset, i : Int ) : DatasetItem = dataset(i);
+
+      protected def hashimoto( seedBytes : Array[Byte], fullSize : Long, datasetAccessor : Int => DatasetItem ) : Hashimoto = {
+        def replicateItem( src : Item, srcLen : Int, times : Int ) : Item = combineIndexedItems( _ => src, srcLen, times );
+
+        val n = fullSize / HashBytes;
+        val w = MixBytesOverWordBytes;
+        val mixHashes = MixBytesOverHashBytes;
+
+        val s = sha3_512_readItem( seedBytes );
+        val len = s.length;
+
+        val startMix : Item = replicateItem(s, len, mixHashes);
+
+        @tailrec
+        def remix( lastMix : Item, i : Int = 0 ) : Item = {
+          i match {
+            case Accesses => lastMix;
+            case _        => {
+              val p = ( fnv( i ^ s(0), lastMix( i % w ) ) % (n / mixHashes) ) * mixHashes;
+              val offsetAccessor : Int => Item = j => datasetAccessor( assertValidInt( p + j ) );
+
+              // note that we are looking up fixed-length hashes
+              // all the same length as our seed hash, so len is fine
+              val newData = combineIndexedItems( offsetAccessor, len, mixHashes );
+              val nextMix = ( lastMix, newData ).zipMap( (a, b) => fnv( a, b ) )
+              remix( nextMix, i + 1 )
+            }
+          }
+        }
+
+        val uncompressedMix = remix( startMix );
+
+        def compressNextFour( src : Item, offset : Int ) : Entry = {
+          def srcval( i : Int ) = src( offset + i );
+          fnv( fnv( fnv( srcval(0), srcval(1) ), srcval(2) ), srcval(3) )
+        }
+
+        val compressedMix = Array.range(0, uncompressedMix.length, 4).map( i => compressNextFour( uncompressedMix, i ) ).toItems;
+
+        val mixDigest = toBytes( compressedMix );
+        val result = SHA3_256.rawHash( toBytes( s ++ compressedMix ) )
+
+        new Hashimoto( ImmutableArraySeq.Byte( mixDigest ), Unsigned256( BigInt( 1, result ) ) )
+      }
+
+      @inline private def sha3_512_readItem( stuff : Array[Byte] ) : Item = adapter.asItem( SHA3_512.rawHash( stuff ) )
+      @inline private def toBytes( item : Item ) : Array[Byte] = adapter.toBytes( item )
+
+      @inline private def fnv( a : Entry, b : Entry ) : Entry = adapter.fnv( a, b )
+
+      @inline private def combineIndexedItems( srcAccessor : Int => Item, constantSrcLen : Int, times : Int ) : Item = adapter.combineIndexedItems( srcAccessor, constantSrcLen, times );
     }
-    */
  
     object UInt32AsLong extends Manager {
       type Cache       = Array[Array[Long]]
@@ -105,6 +249,7 @@ object Ethash23 {
         Array.range(0, rawBytes.length, 4).map( IntegerUtils.intFromByteArrayLittleEndian( rawBytes, _ ) & 0xFFFFFFFFL )
       }
 
+      /*
       // rawBytes.length must be divisble by four, or ArrayIndexOutOfBoundsException
       private def asLittleEndianIntBytes( rawBytes : Array[Byte] ) : Array[Byte] = {
         val len = rawBytes.length;
@@ -121,7 +266,7 @@ object Ethash23 {
         }
         out
       }
-
+ 
       private def crunchFlattenNoSwap( in : Array[Long] ) : Array[Byte] = {
         val inLen = in.length;
         val out = Array.ofDim[Byte]( inLen * 4 );
@@ -132,6 +277,7 @@ object Ethash23 {
         }
         out
       }
+      */
 
       private def crunchFlattenSwap( in : Array[Long] ) : Array[Byte] = {
         val inLen = in.length;
@@ -258,8 +404,8 @@ object Ethash23 {
     type DatasetItem;
 
     protected def mkCache( cacheSize : Long, seed : Array[Byte] )  : Cache;
-    protected def calcDataset( cache : Cache, fullSize : Long )    : Dataset;
     protected def calcDatasetItem( cache : Cache, i : Int )        : DatasetItem;
+    protected def calcDataset( cache : Cache, fullSize : Long )    : Dataset;
     protected def extractDatasetItem( dataset : Dataset, i : Int ) : DatasetItem;
 
     protected def hashimoto( seedBytes : Array[Byte], fullSize : Long, datasetAccessor : Int => DatasetItem ) : Hashimoto;
