@@ -66,162 +66,123 @@ object Ethash23 {
     override def toString : String = s"Hashimote(mixDigest=${mixDigest.hex},result=${result.widen.unsignedBytes(32).hex})"
   }
 
+  /*
+   *  OK, so this is some terrible code reuse, but I couldn't figure out a good way to write this performance-sensitive,
+   *  primitive-based code generically without boxing and with decent syntax. I did try! see
+   * 
+   *      https://github.com/swaldman/consuela/blob/abortive-generic-ethash-manager/src/main/scala/com/mchange/sc/v1/consuela/ethereum/pow/Ethash23.scala 
+   *      https://github.com/swaldman/consuela/commit/a4e69183abfeaef1aa5717fd715824c1438d2a5f
+   * 
+   *  for an abortive attempt.
+   */ 
   object Manager {
-    val Default = UInt32AsLong;
+    val Default = UInt32AsInt;
 
-    /*
-     TODO
-    object SpireUInt extends Manager {
-      type Cache   = Array[Array[Int]] // we never store UInts in arrays, as they would be boxed
-      type Dataset = Array[Array[Int]] // also, wrap these in value classes so that UInts appear on dereference
-    }
+    object UInt32AsInt extends Manager {
+      type Cache       = Array[Array[Int]]
+      type Dataset     = Array[Array[Int]]
+      type Row         = Array[Int]
 
-    object Abstract {
-      // type class specialized for different storage types
-      trait ManagerTarget[T] {
-        type Cache;
-        type CacheRow;
+      /*
+       *  we must read rawBytes as 4-byte little-endian unsigned ints, but we pack them into signed ints
+       * 
+       *  rawBytes.length must be divisble by four, or ArrayIndexOutOfBoundsException
+       */ 
+      private def readRow( rawBytes : Array[Byte] ) : Row = Array.range(0, rawBytes.length, 4).map( IntegerUtils.intFromByteArrayLittleEndian( rawBytes, _ ) )
 
-        type Dataset;
-        type DatasetRow;
-
-        def cacheRow( cache : Cache, i : Int )   : CacheRow;
-        def cacheItem( row : CacheRow, i : Int ) : T
-        def datasetRow( dataset : Dataset, i : Int )   : DatasetRow;
-        def datasetItem( row : DatasetRow, i : Int ) : T
-      }
-    }
-    abstract class Abstract[T] extends Manager {
-    }
-    */
- 
-    object UInt32AsLong extends Manager {
-      type Cache       = Array[Array[Long]]
-      type Dataset     = Array[Array[Long]]
-      type DatasetItem = Array[Long]
-
-      // rawBytes.length must be divisble by four, or ArrayIndexOutOfBoundsException
-      private def asUnsignedLittleEndianInts( rawBytes : Array[Byte] ) : Array[Long] = {
-        Array.range(0, rawBytes.length, 4).map( IntegerUtils.intFromByteArrayLittleEndian( rawBytes, _ ) & 0xFFFFFFFFL )
-      }
-
-      // rawBytes.length must be divisble by four, or ArrayIndexOutOfBoundsException
-      private def asLittleEndianIntBytes( rawBytes : Array[Byte] ) : Array[Byte] = {
-        val len = rawBytes.length;
-        val out = Array.ofDim[Byte]( rawBytes.length );
-        def mapIndex( srcIndex : Int ) : Int = {
-          val base = srcIndex / 4;
-          val offset = 3 - (srcIndex % 4);
-          base + offset
-        }
-        var i = 0;
-        while ( i < len ) {
-          out(i) = rawBytes( mapIndex(i) )
-          i += 1;
-        }
-        out
-      }
-
-      private def crunchFlattenNoSwap( in : Array[Long] ) : Array[Byte] = {
+      /*
+       *  we must write the unsigned ints packed into the row's Longs as 4-byte little-endian unsigned ints
+       * 
+       */ 
+      private def writeRow( in : Row ) : Array[Byte] = {
         val inLen = in.length;
         val out = Array.ofDim[Byte]( inLen * 4 );
         var i = 0;
         while ( i < inLen ) {
-          IntegerUtils.intIntoByteArray( in(i).toInt, i * 4, out );
+          IntegerUtils.intIntoByteArrayLittleEndian( in(i), i * 4, out );
           i += 1
         }
         out
       }
 
-      private def crunchFlattenSwap( in : Array[Long] ) : Array[Byte] = {
-        val inLen = in.length;
-        val out = Array.ofDim[Byte]( inLen * 4 );
-        var i = 0;
-        while ( i < inLen ) {
-          IntegerUtils.intIntoByteArrayLittleEndian( in(i).toInt, i * 4, out );
-          i += 1
-        }
-        out
-      }
-
-      private def sha3_512_readUnsignedLittleEndianInts( stuff : Array[Byte] ) : Array[Long] = asUnsignedLittleEndianInts( SHA3_512.rawHash( stuff ) )
+      private def sha3_512_readRow( stuff : Array[Byte] ) : Row = readRow( SHA3_512.rawHash( stuff ) )
 
       // this seems very arcane...
       protected def mkCache( cacheSize : Long, seed : Array[Byte] ) : Cache = {
         val n = assertValidInt( cacheSize / HashBytes );
-        val o = Array.iterate( sha3_512_readUnsignedLittleEndianInts( seed ), n )( lastLongs => sha3_512_readUnsignedLittleEndianInts( crunchFlattenSwap( lastLongs ) ) )
+        val o = Array.iterate( sha3_512_readRow( seed ), n )( lastLongs => sha3_512_readRow( writeRow( lastLongs ) ) )
         for (_ <- 0L until CacheRounds; i <- 0 until n ) {
-          val v = (o(i)(0) +% n).toInt;
-          o(i) = sha3_512_readUnsignedLittleEndianInts( crunchFlattenSwap( (o((i-1+n) % n), o(v)).zipped.map( (l, r) => (l ^ r) ) ) )
+          val v = (UP( o(i)(0) ) +% n).toInt;
+          o(i) = sha3_512_readRow( writeRow( (o( (i-1+n) % n ), o(v)).zipped.map( (l, r) => (l ^ r) ) ) )
         }
         o
       }
 
-      def hashCache( cache : Cache ) : SHA3_256 = SHA3_256.hash( cache.flatMap( crunchFlattenSwap ) )
+      def hashCache( cache : Cache ) : SHA3_256 = SHA3_256.hash( cache.flatMap( writeRow ) )
 
-      //private def fourLittleEndianBytesAsUnsigned( src : Array[Byte], wordOffset : Int ) = IntegerUtils.toUnsigned( IntegerUtils.intFromByteArrayLittleEndian( src, wordOffset * 4 ) );
+      // unsigned promote
+      private def UP( i : Int ) : Long = i & 0xFFFFFFFFL
 
-      protected[pow] def extractDatasetItem( dataset : Dataset, i : Int ) : DatasetItem = dataset(i)
+      protected[pow] def extractDatasetRow( dataset : Dataset, i : Int ) : Row = dataset(i)
 
-      protected[pow] def calcDatasetItem( cache : Cache, i : Int ) : DatasetItem = {
+      protected[pow] def calcDatasetRow( cache : Cache, i : Int ) : Row = {
         val n = cache.length;
         val r = HashBytesOverWordBytes;
 
         val mix = {
-          val tmp = cache( i +% n ).clone;
+          val tmp = cache( i % n ).clone;
           tmp(0) = tmp(0) ^ i;
-          sha3_512_readUnsignedLittleEndianInts( crunchFlattenSwap( tmp ) )
+          sha3_512_readRow( writeRow( tmp ) )
         }
 
         @tailrec
-        def remix( lastMix : Array[Long], count : Int = 0) : Array[Long] = {
+        def remix( lastMix : Row, count : Int = 0) : Row = {
           count match {
             case DatasetParents => lastMix;
             case j              => {
               val cacheIndex = fnv( i ^ j, lastMix( j % r ) );
-              val nextMix = ( lastMix, cache( (cacheIndex +% n).toInt ) ).zipped.map( (a, b) => fnv( a, b ) )
+              val nextMix = ( lastMix, cache( (UP(cacheIndex) +% n).toInt ) ).zipped.map( (a, b) => fnv( a, b ) )
               remix( nextMix, count + 1 )
             }
           }
         }
 
-        sha3_512_readUnsignedLittleEndianInts( crunchFlattenSwap( remix( mix ) ) )
+        sha3_512_readRow( writeRow( remix( mix ) ) )
       }
 
       protected[pow] def calcDataset( cache : Cache, fullSize : Long ) : Dataset = {
         val len = assertValidInt( fullSize / HashBytes );
-        val out = Array.ofDim[Array[Long]]( len );
-        (0 until len).foreach( i => out(i) = calcDatasetItem( cache, i ) );
+        val out = Array.ofDim[Row]( len );
+        (0 until len).foreach( i => out(i) = calcDatasetRow( cache, i ) );
         out
       }
 
-      private def combineIndexedArrays( srcAccessor : Int => Array[Long], srcLen : Int, times : Int ) : Array[Long] = {
+      private def combineIndexedArrays( srcAccessor : Int => Row, srcLen : Int, times : Int ) : Row = {
         val arraylen = assertValidInt( srcLen.toLong * times.toLong );
-        val tmp = Array.ofDim[Long]( arraylen );
+        val tmp = Array.ofDim[Int]( arraylen );
         (0 until times).foreach( i => System.arraycopy( srcAccessor(i), 0, tmp, i * srcLen, srcLen ) )
         tmp
       }
 
-      private def replicateArray( src : Array[Long], srcLen : Int, times : Int ) : Array[Long] = combineIndexedArrays( _ => src, srcLen, times );
+      private def replicateArray( src : Row, srcLen : Int, times : Int ) : Row = combineIndexedArrays( _ => src, srcLen, times );
 
-      protected def hashimoto( seedBytes : Array[Byte], fullSize : Long, datasetAccessor : Int => DatasetItem ) : Hashimoto = {
+      protected def hashimoto( seedBytes : Array[Byte], fullSize : Long, datasetAccessor : Int => Row ) : Hashimoto = {
         val n = fullSize / HashBytes;
         val w = MixBytesOverWordBytes;
         val mixHashes = MixBytesOverHashBytes;
 
-        val s = sha3_512_readUnsignedLittleEndianInts( seedBytes );
+        val s = sha3_512_readRow( seedBytes );
         val len = s.length;
 
-        val startMix : Array[Long] = replicateArray(s, len, mixHashes);
+        val startMix : Row = replicateArray(s, len, mixHashes);
 
         @tailrec
-        def remix( lastMix : Array[Long], i : Int = 0 ) : Array[Long] = {
+        def remix( lastMix : Row, i : Int = 0 ) : Row = {
           i match {
             case Accesses => lastMix;
             case _        => {
-              val p = ( fnv( i ^ s(0), lastMix( i % w ) ) % (n / mixHashes) ) * mixHashes;
-              //val p = (( fnv( i ^ fourLittleEndianBytesAsUnsigned(s, 0), fourLittleEndianBytesAsUnsigned( lastMix, (i % w) ) ) % (n / mixHashes) ) * mixHashes).toInt;
-              val offsetAccessor : Int => Array[Long] = j => datasetAccessor( assertValidInt( p + j ) );
+              val p = ( UP( fnv( i ^ s(0), lastMix( i % w ) ) ) % (n / mixHashes) ) * mixHashes;
+              val offsetAccessor : Int => Row = j => datasetAccessor( assertValidInt( p + j ) );
 
               // note that we are looking up fixed-length hashes
               // all the same length as our seed hash, so len is fine
@@ -234,20 +195,151 @@ object Ethash23 {
 
         val uncompressedMix = remix( startMix );
 
-        def compressNextFour( src : Array[Long], offset : Int ) : Long = {
+        def compressNextFour( src : Row, offset : Int ) : Int = {
           def srcval( i : Int ) = src( offset + i );
           fnv( fnv( fnv( srcval(0), srcval(1) ), srcval(2) ), srcval(3) )
         }
 
         val compressedMix = Array.range(0, uncompressedMix.length, 4).map( i => compressNextFour( uncompressedMix, i ) );
 
-        val mixDigest = crunchFlattenSwap( compressedMix );
-        val result = SHA3_256.rawHash( crunchFlattenSwap( s ++ compressedMix ) )
+        val mixDigest = writeRow( compressedMix );
+        val result = SHA3_256.rawHash( writeRow( s ++ compressedMix ) )
 
         new Hashimoto( ImmutableArraySeq.Byte( mixDigest ), Unsigned256( BigInt( 1, result ) ) )
       }
 
-      private def fnv( v1 : Long, v2 : Long ) : Long = ((v1 * FnvPrime) ^ v2) % (1L << 32)
+      private def fnv( v1 : Int, v2 : Int ) : Int = (((UP(v1) * FnvPrime) ^ UP(v2))  & 0xFFFFFFFFL).toInt
+    }
+    object UInt32AsLong extends Manager {
+      type Cache       = Array[Array[Long]]
+      type Dataset     = Array[Array[Long]]
+      type Row         = Array[Long]
+
+      /*
+       *  we must read rawBytes as 4-byte little-endian unsigned ints, so we pack them into longs
+       * 
+       *  rawBytes.length must be divisble by four, or ArrayIndexOutOfBoundsException
+       */ 
+      private def readRow( rawBytes : Array[Byte] ) : Row = Array.range(0, rawBytes.length, 4).map( IntegerUtils.intFromByteArrayLittleEndian( rawBytes, _ ) & 0xFFFFFFFFL )
+
+      /*
+       *  we must write the unsigned ints packed into the row's Longs as 4-byte little-endian unsigned ints
+       * 
+       */ 
+      private def writeRow( in : Row ) : Array[Byte] = {
+        val inLen = in.length;
+        val out = Array.ofDim[Byte]( inLen * 4 );
+        var i = 0;
+        while ( i < inLen ) {
+          IntegerUtils.intIntoByteArrayLittleEndian( in(i).toInt, i * 4, out );
+          i += 1
+        }
+        out
+      }
+
+      private def sha3_512_readRow( stuff : Array[Byte] ) : Row = readRow( SHA3_512.rawHash( stuff ) )
+
+      // this seems very arcane...
+      protected def mkCache( cacheSize : Long, seed : Array[Byte] ) : Cache = {
+        val n = assertValidInt( cacheSize / HashBytes );
+        val o = Array.iterate( sha3_512_readRow( seed ), n )( lastLongs => sha3_512_readRow( writeRow( lastLongs ) ) )
+        for (_ <- 0L until CacheRounds; i <- 0 until n ) {
+          val v = (o(i)(0) +% n).toInt;
+          o(i) = sha3_512_readRow( writeRow( (o((i-1+n) % n), o(v)).zipped.map( (l, r) => (l ^ r) ) ) )
+        }
+        o
+      }
+
+      def hashCache( cache : Cache ) : SHA3_256 = SHA3_256.hash( cache.flatMap( writeRow ) )
+
+      //private def fourLittleEndianBytesAsUnsigned( src : Array[Byte], wordOffset : Int ) = IntegerUtils.toUnsigned( IntegerUtils.intFromByteArrayLittleEndian( src, wordOffset * 4 ) );
+
+      protected[pow] def extractDatasetRow( dataset : Dataset, i : Int ) : Row = dataset(i)
+
+      protected[pow] def calcDatasetRow( cache : Cache, i : Int ) : Row = {
+        val n = cache.length;
+        val r = HashBytesOverWordBytes;
+
+        val mix = {
+          val tmp = cache( i % n ).clone;
+          tmp(0) = tmp(0) ^ i;
+          sha3_512_readRow( writeRow( tmp ) )
+        }
+
+        @tailrec
+        def remix( lastMix : Row, count : Int = 0) : Row = {
+          count match {
+            case DatasetParents => lastMix;
+            case j              => {
+              val cacheIndex = fnv( i ^ j, lastMix( j % r ) );
+              val nextMix = ( lastMix, cache( (cacheIndex +% n).toInt ) ).zipped.map( (a, b) => fnv( a, b ) )
+              remix( nextMix, count + 1 )
+            }
+          }
+        }
+
+        sha3_512_readRow( writeRow( remix( mix ) ) )
+      }
+
+      protected[pow] def calcDataset( cache : Cache, fullSize : Long ) : Dataset = {
+        val len = assertValidInt( fullSize / HashBytes );
+        val out = Array.ofDim[Row]( len );
+        (0 until len).foreach( i => out(i) = calcDatasetRow( cache, i ) );
+        out
+      }
+
+      private def combineIndexedArrays( srcAccessor : Int => Row, srcLen : Int, times : Int ) : Row = {
+        val arraylen = assertValidInt( srcLen.toLong * times.toLong );
+        val tmp = Array.ofDim[Long]( arraylen );
+        (0 until times).foreach( i => System.arraycopy( srcAccessor(i), 0, tmp, i * srcLen, srcLen ) )
+        tmp
+      }
+
+      private def replicateArray( src : Row, srcLen : Int, times : Int ) : Row = combineIndexedArrays( _ => src, srcLen, times );
+
+      protected def hashimoto( seedBytes : Array[Byte], fullSize : Long, datasetAccessor : Int => Row ) : Hashimoto = {
+        val n = fullSize / HashBytes;
+        val w = MixBytesOverWordBytes;
+        val mixHashes = MixBytesOverHashBytes;
+
+        val s = sha3_512_readRow( seedBytes );
+        val len = s.length;
+
+        val startMix : Row = replicateArray(s, len, mixHashes);
+
+        @tailrec
+        def remix( lastMix : Row, i : Int = 0 ) : Row = {
+          i match {
+            case Accesses => lastMix;
+            case _        => {
+              val p = ( fnv( i ^ s(0), lastMix( i % w ) ) % (n / mixHashes) ) * mixHashes;
+              val offsetAccessor : Int => Row = j => datasetAccessor( assertValidInt( p + j ) );
+
+              // note that we are looking up fixed-length hashes
+              // all the same length as our seed hash, so len is fine
+              val newData = combineIndexedArrays( offsetAccessor, len, mixHashes );
+              val nextMix = ( lastMix, newData ).zipped.map( (a, b) => fnv( a, b ) )
+              remix( nextMix, i + 1 )
+            }
+          }
+        }
+
+        val uncompressedMix = remix( startMix );
+
+        def compressNextFour( src : Row, offset : Int ) : Long = {
+          def srcval( i : Int ) = src( offset + i );
+          fnv( fnv( fnv( srcval(0), srcval(1) ), srcval(2) ), srcval(3) )
+        }
+
+        val compressedMix = Array.range(0, uncompressedMix.length, 4).map( i => compressNextFour( uncompressedMix, i ) );
+
+        val mixDigest = writeRow( compressedMix );
+        val result = SHA3_256.rawHash( writeRow( s ++ compressedMix ) )
+
+        new Hashimoto( ImmutableArraySeq.Byte( mixDigest ), Unsigned256( BigInt( 1, result ) ) )
+      }
+
+      private def fnv( v1 : Long, v2 : Long ) : Long = ((v1 * FnvPrime) ^ v2) & 0xFFFFFFFFL
     }
   }
   trait Manager {
@@ -255,14 +347,14 @@ object Ethash23 {
     //abstract members
     type Cache;
     type Dataset;
-    type DatasetItem;
+    type Row;
 
     protected def mkCache( cacheSize : Long, seed : Array[Byte] )  : Cache;
+    protected def calcDatasetRow( cache : Cache, i : Int )        : Row;
     protected def calcDataset( cache : Cache, fullSize : Long )    : Dataset;
-    protected def calcDatasetItem( cache : Cache, i : Int )        : DatasetItem;
-    protected def extractDatasetItem( dataset : Dataset, i : Int ) : DatasetItem;
+    protected def extractDatasetRow( dataset : Dataset, i : Int ) : Row;
 
-    protected def hashimoto( seedBytes : Array[Byte], fullSize : Long, datasetAccessor : Int => DatasetItem ) : Hashimoto;
+    protected def hashimoto( seedBytes : Array[Byte], fullSize : Long, datasetAccessor : Int => Row ) : Hashimoto;
 
     // public utilities
     def epochFromBlock( blockNumber : Long )         : Long = Ethash23.epochFromBlock( blockNumber );
@@ -333,12 +425,12 @@ object Ethash23 {
 
     // private utilities
     private def hashimotoLight( fullSize : Long, cache : Cache, truncatedHeaderHash : SHA3_256, nonce : Unsigned64 ) : Hashimoto = {
-      hashimoto( truncatedHeaderHash, nonce, fullSize, (i : Int) => calcDatasetItem( cache, i ) )
+      hashimoto( truncatedHeaderHash, nonce, fullSize, (i : Int) => calcDatasetRow( cache, i ) )
     }
     private def hashimotoFull( fullSize : Long, dataset : Dataset, truncatedHeaderHash : SHA3_256, nonce : Unsigned64 ) : Hashimoto = {
-      hashimoto( truncatedHeaderHash, nonce, fullSize, (i : Int) => extractDatasetItem( dataset, i ) )
+      hashimoto( truncatedHeaderHash, nonce, fullSize, (i : Int) => extractDatasetRow( dataset, i ) )
     }
-    private def hashimoto(truncatedHeaderHash : SHA3_256, nonce : Unsigned64 , fullSize : Long, datasetAccessor : Int => DatasetItem ) : Hashimoto = {
+    private def hashimoto(truncatedHeaderHash : SHA3_256, nonce : Unsigned64 , fullSize : Long, datasetAccessor : Int => Row ) : Hashimoto = {
       hashimoto( ( truncatedHeaderHash.bytes ++ nonce.widen.unsignedBytes(8).reverse ).toArray, fullSize, datasetAccessor )
     }
 
