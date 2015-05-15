@@ -21,10 +21,15 @@ import scala.annotation.tailrec;
 //import spire.math.SafeLong;
 import spire.implicits._
 
+import scala.reflect.ClassTag;
+
 // is Long math good enough? (looking at the magnitudes, i think it is, but i'm not certain)
 // we can put the whole class in terms of spire SafeLong easily enough if not...
+// but when the dataset gets bigger than ~8GB, we'll exceed int array indices, and have to encode
+// values into fully packed longs, rather than ints or longs representing unsigned ints as currently
+// implements. (the current implementation will fail fast when this limit is exceeded.)
 
-object Ethash23 {
+final object Ethash23 {
   // implementing REVISION 23 of Ethash spec, defined https://github.com/ethereum/wiki/wiki/Ethash
 
   private final val WordBytes          = 1 << 2;  // 4
@@ -75,13 +80,72 @@ object Ethash23 {
    * 
    *  for an abortive attempt.
    */ 
-  object Manager {
-    val Default = UInt32AsInt;
+  final object Manager {
+    private implicit lazy val logger = MLogger( this );
 
-    object UInt32AsInt extends Manager {
+    lazy val Default = ParallelUInt32AsInt;
+
+    // learn something new every day! mark objects as final
+    // http://stackoverflow.com/questions/30265070/whats-the-point-of-nonfinal-singleton-objects-in-scala
+    final object SequentialUInt32AsInt extends UInt32AsInt;
+    final object SequentialUInt32AsLong extends UInt32AsLong;
+
+    final object ParallelUInt32AsInt extends UInt32AsInt with Parallel;
+    final object ParallelUInt32AsLong extends UInt32AsLong with Parallel;
+
+    final object LoggingSequentialUInt32AsInt extends UInt32AsInt with Logging;
+    final object LoggingSequentialUInt32AsLong extends UInt32AsLong with Logging;
+
+    final object LoggingParallelUInt32AsInt extends UInt32AsInt with Parallel with Logging;
+    final object LoggingParallelUInt32AsLong extends UInt32AsLong with Parallel with Logging;
+
+    // for reasons I don't quite understand, embedding these implicitlys in object initializers directly,
+    // lazy or not, led to errors in initialization ( null pointer or stack overflow). by trial and error,
+    // this lazy computation in the parent object resolves the problem
+    lazy val IntArrayClassTag  = implicitly[ClassTag[Array[Int]]];
+    lazy val LongArrayClassTag = implicitly[ClassTag[Array[Long]]];
+
+    trait Parallel extends Manager {
+      override protected[pow] def calcDataset( cache : Cache, fullSize : Long ) : Dataset = calcDatasetParallel( cache, fullSize )
+    }
+
+    trait Logging extends Manager { // must not be specified before Parallel, or else pre- and post- logging won't happen
+      lazy val parModifier = if ( this.isInstanceOf[Parallel] ) "parallel" else "sequential";
+
+      override def mkCacheForEpoch( epochNumber : Long ) : Cache = {
+        val startBlock = epochNumber * EpochLength;
+        val lastBlock  = startBlock + EpochLength - 1;
+        val start = System.currentTimeMillis();
+        INFO.log( s"Beginning computation of cache for epoch ${epochNumber} (blocks ${startBlock} thru ${lastBlock})" );
+        val out = super.mkCacheForEpoch( epochNumber );
+        val done = System.currentTimeMillis();
+        val secs = ( done - start ) / 1000d
+        INFO.log( s"Completed computation of cache for epoch ${epochNumber} (blocks ${startBlock} thru ${lastBlock}) in ${secs} seconds" );
+        out
+      }
+
+      override protected[pow] def calcDataset( cache : Cache, fullSize : Long ) : Dataset = {
+        val start = System.currentTimeMillis();
+        INFO.log( s"Beginning ${parModifier} computation of dataset, fullSize=${fullSize}, rows=${datasetLen(fullSize)}" );
+        val out = super.calcDataset( cache, fullSize );
+        val done = System.currentTimeMillis();
+        val secs = ( done - start ) / 1000d
+        INFO.log( s"Completed ${parModifier} computation of dataset in ${secs} seconds, fullSize=${fullSize}, rows=${datasetLen(fullSize)}" );
+        out
+      }
+      abstract override protected[pow] def calcDatasetRow( cache : Cache, i : Int ) : Row = {
+        val out = super.calcDatasetRow( cache : Cache, i : Int );
+        INFO.log( s"Computed dataset row #${i}" )
+        out
+      }
+    }
+
+    class UInt32AsInt extends Manager {
       type Cache       = Array[Array[Int]]
       type Dataset     = Array[Array[Int]]
       type Row         = Array[Int]
+
+      protected implicit val rowClassTag : ClassTag[Row] = IntArrayClassTag;
 
       /*
        *  we must read rawBytes as 4-byte little-endian unsigned ints, but we pack them into signed ints
@@ -109,7 +173,7 @@ object Ethash23 {
 
       // this seems very arcane...
       protected def mkCache( cacheSize : Long, seed : Array[Byte] ) : Cache = {
-        val n = assertValidInt( cacheSize / HashBytes );
+        val n = requireValidInt( cacheSize / HashBytes );
         val o = Array.iterate( sha3_512_readRow( seed ), n )( lastLongs => sha3_512_readRow( writeRow( lastLongs ) ) )
         for (_ <- 0L until CacheRounds; i <- 0 until n ) {
           val v = (UP( o(i)(0) ) +% n).toInt;
@@ -150,15 +214,10 @@ object Ethash23 {
         sha3_512_readRow( writeRow( remix( mix ) ) )
       }
 
-      protected[pow] def calcDataset( cache : Cache, fullSize : Long ) : Dataset = {
-        val len = assertValidInt( fullSize / HashBytes );
-        val out = Array.ofDim[Row]( len );
-        (0 until len).foreach( i => out(i) = calcDatasetRow( cache, i ) );
-        out
-      }
+      protected[pow] def toDataset( array : Array[Row] ) : Dataset = array;
 
       private def combineIndexedArrays( srcAccessor : Int => Row, srcLen : Int, times : Int ) : Row = {
-        val arraylen = assertValidInt( srcLen.toLong * times.toLong );
+        val arraylen = requireValidInt( srcLen.toLong * times.toLong );
         val tmp = Array.ofDim[Int]( arraylen );
         (0 until times).foreach( i => System.arraycopy( srcAccessor(i), 0, tmp, i * srcLen, srcLen ) )
         tmp
@@ -182,7 +241,7 @@ object Ethash23 {
             case Accesses => lastMix;
             case _        => {
               val p = ( UP( fnv( i ^ s(0), lastMix( i % w ) ) ) % (n / mixHashes) ) * mixHashes;
-              val offsetAccessor : Int => Row = j => datasetAccessor( assertValidInt( p + j ) );
+              val offsetAccessor : Int => Row = j => datasetAccessor( requireValidInt( p + j ) );
 
               // note that we are looking up fixed-length hashes
               // all the same length as our seed hash, so len is fine
@@ -210,10 +269,12 @@ object Ethash23 {
 
       private def fnv( v1 : Int, v2 : Int ) : Int = (((UP(v1) * FnvPrime) ^ UP(v2))  & 0xFFFFFFFFL).toInt
     }
-    object UInt32AsLong extends Manager {
+    class UInt32AsLong extends Manager {
       type Cache       = Array[Array[Long]]
       type Dataset     = Array[Array[Long]]
       type Row         = Array[Long]
+
+      protected implicit val rowClassTag : ClassTag[Row] = LongArrayClassTag;
 
       /*
        *  we must read rawBytes as 4-byte little-endian unsigned ints, so we pack them into longs
@@ -241,7 +302,7 @@ object Ethash23 {
 
       // this seems very arcane...
       protected def mkCache( cacheSize : Long, seed : Array[Byte] ) : Cache = {
-        val n = assertValidInt( cacheSize / HashBytes );
+        val n = requireValidInt( cacheSize / HashBytes );
         val o = Array.iterate( sha3_512_readRow( seed ), n )( lastLongs => sha3_512_readRow( writeRow( lastLongs ) ) )
         for (_ <- 0L until CacheRounds; i <- 0 until n ) {
           val v = (o(i)(0) +% n).toInt;
@@ -281,15 +342,10 @@ object Ethash23 {
         sha3_512_readRow( writeRow( remix( mix ) ) )
       }
 
-      protected[pow] def calcDataset( cache : Cache, fullSize : Long ) : Dataset = {
-        val len = assertValidInt( fullSize / HashBytes );
-        val out = Array.ofDim[Row]( len );
-        (0 until len).foreach( i => out(i) = calcDatasetRow( cache, i ) );
-        out
-      }
+      protected[pow] def toDataset( array : Array[Row] ) : Dataset = array;
 
       private def combineIndexedArrays( srcAccessor : Int => Row, srcLen : Int, times : Int ) : Row = {
-        val arraylen = assertValidInt( srcLen.toLong * times.toLong );
+        val arraylen = requireValidInt( srcLen.toLong * times.toLong );
         val tmp = Array.ofDim[Long]( arraylen );
         (0 until times).foreach( i => System.arraycopy( srcAccessor(i), 0, tmp, i * srcLen, srcLen ) )
         tmp
@@ -313,7 +369,7 @@ object Ethash23 {
             case Accesses => lastMix;
             case _        => {
               val p = ( fnv( i ^ s(0), lastMix( i % w ) ) % (n / mixHashes) ) * mixHashes;
-              val offsetAccessor : Int => Row = j => datasetAccessor( assertValidInt( p + j ) );
+              val offsetAccessor : Int => Row = j => datasetAccessor( requireValidInt( p + j ) );
 
               // note that we are looking up fixed-length hashes
               // all the same length as our seed hash, so len is fine
@@ -349,9 +405,11 @@ object Ethash23 {
     type Dataset;
     type Row;
 
-    protected def mkCache( cacheSize : Long, seed : Array[Byte] )  : Cache;
+    protected implicit val rowClassTag : ClassTag[Row];
+
+    protected def mkCache( cacheSize : Long, seed : Array[Byte] ) : Cache;
     protected def calcDatasetRow( cache : Cache, i : Int )        : Row;
-    protected def calcDataset( cache : Cache, fullSize : Long )    : Dataset;
+    protected def toDataset( array : Array[Row] )                 : Dataset;
     protected def extractDatasetRow( dataset : Dataset, i : Int ) : Row;
 
     protected def hashimoto( seedBytes : Array[Byte], fullSize : Long, datasetAccessor : Int => Row ) : Hashimoto;
@@ -376,18 +434,20 @@ object Ethash23 {
     }
 
     def hashimotoLight( header : EthBlock.Header, cache : Cache, nonce : Unsigned64 ) : Hashimoto = {
-      val blockNumber = assertValidLong( header.number.widen );
+      val blockNumber = requireValidLong( header.number.widen );
       hashimotoLight( getFullSizeForBlock( blockNumber ), cache, truncatedHeaderHash( header ), nonce )
     }
 
     def hashimotoFull( header : EthBlock.Header, dataset : Dataset, nonce : Unsigned64 ) : Hashimoto = {
-      val blockNumber = assertValidLong( header.number.widen );
+      val blockNumber = requireValidLong( header.number.widen );
       hashimotoFull( getFullSizeForBlock( blockNumber ), dataset, truncatedHeaderHash( header ), nonce )
     }
 
     // protected utilities
-    protected[pow] def assertValidInt( l : Long )     : Int  = if (l.isValidInt) l.toInt else throw new AssertionError( s"${l} is not a valid Int, as required." );
-    protected[pow] def assertValidLong( bi : BigInt ) : Long = if (bi.isValidLong) bi.toLong else throw new AssertionError( s"${bi} is not a valid Long, as required." );
+    protected[pow] val isParallel = false;
+
+    protected[pow] def requireValidInt( l : Long )     : Int  = if (l.isValidInt) l.toInt else throw new IllegalArgumentException( s"${l} is not a valid Int, as required." );
+    protected[pow] def requireValidLong( bi : BigInt ) : Long = if (bi.isValidLong) bi.toLong else throw new IllegalArgumentException( s"${bi} is not a valid Long, as required." );
 
     protected[pow] def getCacheSizeForBlock( blockNumber : Long ) : Long = getCacheSizeForEpoch( epochFromBlock( blockNumber ) );
 
@@ -408,6 +468,20 @@ object Ethash23 {
       val start = DatasetBytesInit + ( DatasetBytesGrowth * epochNumber ) - MixBytes;
       descendToPrime( start )
     }
+
+    protected[pow] def calcDataset( cache : Cache, fullSize : Long ) : Dataset = calcDatasetSequential( cache, fullSize )
+
+    protected[pow] final def calcDatasetSequential( cache : Cache, fullSize : Long ) : Dataset = {
+      val len = datasetLen( fullSize )
+      val out = (0 until len).toArray.map( calcDatasetRow( cache, _ ) )
+      toDataset( out )
+    }
+    protected[pow] final def calcDatasetParallel( cache : Cache, fullSize : Long ) : Dataset = {
+      val len = datasetLen( fullSize )
+      val out = (0 until len).toArray.par.map( calcDatasetRow( cache, _ ) ).toArray
+      toDataset( out )
+    }
+    protected[pow] final def datasetLen( fullSize : Long ) : Int = requireValidInt( fullSize / HashBytes );
 
     /*
      * omit the last two elements, 
