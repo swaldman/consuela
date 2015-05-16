@@ -29,7 +29,7 @@ import scala.reflect.ClassTag;
 // values into fully packed longs, rather than ints or longs representing unsigned ints as currently
 // implements. (the current implementation will fail fast when this limit is exceeded.)
 
-final object Ethash23 {
+object Ethash23 {
   // implementing REVISION 23 of Ethash spec, defined https://github.com/ethereum/wiki/wiki/Ethash
 
   private final val WordBytes          = 1 << 2;  // 4
@@ -80,24 +80,15 @@ final object Ethash23 {
    * 
    *  for an abortive attempt.
    */ 
-  final object Manager {
+  object Manager {
     private implicit lazy val logger = MLogger( this );
 
     lazy val Default = ParallelUInt32AsInt;
 
-    // learn something new every day! mark objects as final
-    // http://stackoverflow.com/questions/30265070/whats-the-point-of-nonfinal-singleton-objects-in-scala
-    final object SequentialUInt32AsInt extends UInt32AsInt;
-    final object SequentialUInt32AsLong extends UInt32AsLong;
-
-    final object ParallelUInt32AsInt extends UInt32AsInt with Parallel;
-    final object ParallelUInt32AsLong extends UInt32AsLong with Parallel;
-
-    final object LoggingSequentialUInt32AsInt extends UInt32AsInt with Logging;
-    final object LoggingSequentialUInt32AsLong extends UInt32AsLong with Logging;
-
-    final object LoggingParallelUInt32AsInt extends UInt32AsInt with Parallel with Logging;
-    final object LoggingParallelUInt32AsLong extends UInt32AsLong with Parallel with Logging;
+    object SequentialUInt32AsInt extends UInt32AsInt;
+    object ParallelUInt32AsInt extends UInt32AsInt with Parallel;
+    object LoggingSequentialUInt32AsInt extends UInt32AsInt with Logging;
+    object LoggingParallelUInt32AsInt extends UInt32AsInt with Parallel with Logging;
 
     // for reasons I don't quite understand, embedding these implicitlys in object initializers directly,
     // lazy or not, led to errors in initialization ( null pointer or stack overflow). by trial and error,
@@ -192,7 +183,7 @@ final object Ethash23 {
         val o = Array.iterate( sha3_512_readRow( seed ), n )( last => sha3_512_readRow( writeRow( last ) ) )
         for (_ <- 0L until CacheRounds; i <- 0 until n ) {
           val v = (UP( o(i)(0) ) +% n).toInt;
-          o(i) = sha3_512_roundTrip( zipWithXor(o( (i-1+n) % n ), o(v)) )
+          o(i) = sha3_512_roundTrip_DESTRUCTIVE( zipWithXor(o( (i-1+n) % n ), o(v)) )
         }
         o
       }
@@ -211,7 +202,7 @@ final object Ethash23 {
         val mix = {
           val tmp = cache( i % n ).clone;
           tmp(0) = tmp(0) ^ i;
-          sha3_512_roundTrip( tmp )
+          sha3_512_roundTrip_DESTRUCTIVE( tmp )
         }
 
         @tailrec
@@ -220,13 +211,13 @@ final object Ethash23 {
             case DatasetParents => lastMix;
             case j              => {
               val cacheIndex = fnv( i ^ j, lastMix( j % r ) );
-              val nextMix = zipWithFnv( lastMix, cache( (UP(cacheIndex) +% n).toInt ) )
+              val nextMix = zipWithFnv_DESTRUCTIVE( lastMix, cache( (UP(cacheIndex) +% n).toInt ) )
               remix( nextMix, count + 1 )
             }
           }
         }
 
-        sha3_512_roundTrip( remix( mix ) )
+        sha3_512_roundTrip_DESTRUCTIVE( remix( mix ) )
       }
 
       protected[pow] def toDataset( array : Array[Row] ) : Dataset = array;
@@ -261,7 +252,7 @@ final object Ethash23 {
               // note that we are looking up fixed-length hashes
               // all the same length as our seed hash, so len is fine
               val newData = combineIndexedArrays( offsetAccessor, len, mixHashes );
-              val nextMix = zipWithFnv( lastMix, newData )
+              val nextMix = zipWithFnv_DESTRUCTIVE( lastMix, newData )
               remix( nextMix, i + 1 )
             }
           }
@@ -303,10 +294,26 @@ final object Ethash23 {
         }
         out
       }
+      /* overwrites first argument */
+      private def zipWithFnv_DESTRUCTIVE( ls : Array[Int], rs : Array[Int] ) : Array[Int] = {
+        val len = ls.length;
+        var i = 0;
+        while (i < len ) {
+          ls(i) = fnv( ls(i), rs(i) );
+          i += 1
+        }
+        ls
+      }
 
       private def fnv( v1 : Int, v2 : Int ) : Int = (((UP(v1) * FnvPrime) ^ UP(v2))  & 0xFFFFFFFFL).toInt
     }
-    class UInt32AsLong extends Manager {
+
+    /*
+     * We're really keeping this around as documentation.
+     * An implementation with UInts ineffectiently packed into LSB of longs (so they look like UInts without extra work),
+     * without much in the way of optimization.
+     */ 
+    class UInt32AsLongUnoptimized extends Manager {
       type Cache       = Array[Array[Long]]
       type Dataset     = Array[Array[Long]]
       type Row         = Array[Long]
