@@ -177,7 +177,7 @@ final object Ethash23 {
         val o = Array.iterate( sha3_512_readRow( seed ), n )( lastLongs => sha3_512_readRow( writeRow( lastLongs ) ) )
         for (_ <- 0L until CacheRounds; i <- 0 until n ) {
           val v = (UP( o(i)(0) ) +% n).toInt;
-          o(i) = sha3_512_readRow( writeRow( (o( (i-1+n) % n ), o(v)).zipped.map( (l, r) => (l ^ r) ) ) )
+          o(i) = sha3_512_readRow( writeRow( zipWithXor(o( (i-1+n) % n ), o(v)) ) )
         }
         o
       }
@@ -205,7 +205,7 @@ final object Ethash23 {
             case DatasetParents => lastMix;
             case j              => {
               val cacheIndex = fnv( i ^ j, lastMix( j % r ) );
-              val nextMix = ( lastMix, cache( (UP(cacheIndex) +% n).toInt ) ).zipped.map( (a, b) => fnv( a, b ) )
+              val nextMix = zipWithFnv( lastMix, cache( (UP(cacheIndex) +% n).toInt ) )
               remix( nextMix, count + 1 )
             }
           }
@@ -246,7 +246,7 @@ final object Ethash23 {
               // note that we are looking up fixed-length hashes
               // all the same length as our seed hash, so len is fine
               val newData = combineIndexedArrays( offsetAccessor, len, mixHashes );
-              val nextMix = ( lastMix, newData ).zipped.map( (a, b) => fnv( a, b ) )
+              val nextMix = zipWithFnv( lastMix, newData )
               remix( nextMix, i + 1 )
             }
           }
@@ -265,6 +265,28 @@ final object Ethash23 {
         val result = SHA3_256.rawHash( writeRow( s ++ compressedMix ) )
 
         new Hashimoto( ImmutableArraySeq.Byte( mixDigest ), Unsigned256( BigInt( 1, result ) ) )
+      }
+
+      // using Tuple2.zipped.map causes serious memory stress, so this
+      private def zipWithXor( ls : Array[Int], rs : Array[Int] ) : Array[Int] = {
+        val len = ls.length;
+        val out = Array.ofDim[Int]( len );
+        var i = 0;
+        while (i < len ) {
+          out(i) = ls(i) ^ rs(i);
+          i += 1
+        }
+        out
+      }
+      private def zipWithFnv( ls : Array[Int], rs : Array[Int] ) : Array[Int] = {
+        val len = ls.length;
+        val out = Array.ofDim[Int]( len );
+        var i = 0;
+        while (i < len ) {
+          out(i) = fnv( ls(i), rs(i) );
+          i += 1
+        }
+        out
       }
 
       private def fnv( v1 : Int, v2 : Int ) : Int = (((UP(v1) * FnvPrime) ^ UP(v2))  & 0xFFFFFFFFL).toInt
@@ -306,7 +328,7 @@ final object Ethash23 {
         val o = Array.iterate( sha3_512_readRow( seed ), n )( lastLongs => sha3_512_readRow( writeRow( lastLongs ) ) )
         for (_ <- 0L until CacheRounds; i <- 0 until n ) {
           val v = (o(i)(0) +% n).toInt;
-          o(i) = sha3_512_readRow( writeRow( (o((i-1+n) % n), o(v)).zipped.map( (l, r) => (l ^ r) ) ) )
+          o(i) = sha3_512_readRow( writeRow( zipWithXor(o((i-1+n) % n), o(v)) ) )
         }
         o
       }
@@ -333,7 +355,7 @@ final object Ethash23 {
             case DatasetParents => lastMix;
             case j              => {
               val cacheIndex = fnv( i ^ j, lastMix( j % r ) );
-              val nextMix = ( lastMix, cache( (cacheIndex +% n).toInt ) ).zipped.map( (a, b) => fnv( a, b ) )
+              val nextMix = zipWithFnv( lastMix, cache( (cacheIndex +% n).toInt ) )
               remix( nextMix, count + 1 )
             }
           }
@@ -374,7 +396,7 @@ final object Ethash23 {
               // note that we are looking up fixed-length hashes
               // all the same length as our seed hash, so len is fine
               val newData = combineIndexedArrays( offsetAccessor, len, mixHashes );
-              val nextMix = ( lastMix, newData ).zipped.map( (a, b) => fnv( a, b ) )
+              val nextMix = zipWithFnv( lastMix, newData )
               remix( nextMix, i + 1 )
             }
           }
@@ -393,6 +415,28 @@ final object Ethash23 {
         val result = SHA3_256.rawHash( writeRow( s ++ compressedMix ) )
 
         new Hashimoto( ImmutableArraySeq.Byte( mixDigest ), Unsigned256( BigInt( 1, result ) ) )
+      }
+
+      // using Tuple2.zipped.map causes serious memory stress, so this
+      private def zipWithXor( ls : Array[Long], rs : Array[Long] ) : Array[Long] = {
+        val len = ls.length;
+        val out = Array.ofDim[Long]( len );
+        var i = 0;
+        while (i < len ) {
+          out(i) = ls(i) ^ rs(i);
+          i += 1
+        }
+        out
+      }
+      private def zipWithFnv( ls : Array[Long], rs : Array[Long] ) : Array[Long] = {
+        val len = ls.length;
+        val out = Array.ofDim[Long]( len );
+        var i = 0;
+        while (i < len ) {
+          out(i) = fnv( ls(i), rs(i) );
+          i += 1
+        }
+        out
       }
 
       private def fnv( v1 : Long, v2 : Long ) : Long = ((v1 * FnvPrime) ^ v2) & 0xFFFFFFFFL
