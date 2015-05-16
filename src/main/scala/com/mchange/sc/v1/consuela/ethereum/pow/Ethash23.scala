@@ -171,13 +171,28 @@ final object Ethash23 {
 
       private def sha3_512_readRow( stuff : Array[Byte] ) : Row = readRow( SHA3_512.rawHash( stuff ) )
 
+      private def sha3_512_roundTrip( start : Array[Int] ) : Row = readRow( SHA3_512.rawHash( writeRow( start ) ) )
+
+      private def sha3_512_roundTrip_DESTRUCTIVE( start : Array[Int] ) : Row = {
+        val asBytes = writeRow( start );
+        val asHash = SHA3_512.rawHash( asBytes )
+
+        var len = start.length;
+        var i = 0;
+        while( i < len ) {
+          start(i) = IntegerUtils.intFromByteArrayLittleEndian( asHash, i * 4 );
+          i += 1;
+        }
+        start
+      }
+
       // this seems very arcane...
       protected def mkCache( cacheSize : Long, seed : Array[Byte] ) : Cache = {
         val n = requireValidInt( cacheSize / HashBytes );
-        val o = Array.iterate( sha3_512_readRow( seed ), n )( lastLongs => sha3_512_readRow( writeRow( lastLongs ) ) )
+        val o = Array.iterate( sha3_512_readRow( seed ), n )( last => sha3_512_readRow( writeRow( last ) ) )
         for (_ <- 0L until CacheRounds; i <- 0 until n ) {
           val v = (UP( o(i)(0) ) +% n).toInt;
-          o(i) = sha3_512_readRow( writeRow( zipWithXor(o( (i-1+n) % n ), o(v)) ) )
+          o(i) = sha3_512_roundTrip( zipWithXor(o( (i-1+n) % n ), o(v)) )
         }
         o
       }
@@ -196,7 +211,7 @@ final object Ethash23 {
         val mix = {
           val tmp = cache( i % n ).clone;
           tmp(0) = tmp(0) ^ i;
-          sha3_512_readRow( writeRow( tmp ) )
+          sha3_512_roundTrip( tmp )
         }
 
         @tailrec
@@ -211,7 +226,7 @@ final object Ethash23 {
           }
         }
 
-        sha3_512_readRow( writeRow( remix( mix ) ) )
+        sha3_512_roundTrip( remix( mix ) )
       }
 
       protected[pow] def toDataset( array : Array[Row] ) : Dataset = array;
