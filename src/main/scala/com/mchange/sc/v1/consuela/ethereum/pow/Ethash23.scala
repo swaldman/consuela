@@ -56,6 +56,8 @@ object Ethash23 {
 
   private final val ProbablePrimeCertainty : Int = 8; //arbitrary, tune for performance...
 
+  private final val RowWidth = 16; // four-byte Ints
+
   implicit final class PlusModInt( val i : Int ) extends AnyVal {
     def +%( other : Int ) = scala.math.abs( i % other )
   }
@@ -189,6 +191,43 @@ object Ethash23 {
       }
 
       def hashCache( cache : Cache ) : SHA3_256 = SHA3_256.hash( cache.flatMap( writeRow ) )
+
+      // for memoization / caching to files
+      def dumpDatasetBytes( os : java.io.OutputStream, dataset : Dataset ) : Unit = dataset.foreach( iarr => os.write( writeRow( iarr ) ) )
+
+      // this is ugly, but since these files are gigantic, i'm avoiding abstractions that
+      // might require preloading or carry much overhead per byte or row
+      def readDatasetBytes( is : java.io.InputStream ) : Dataset = {
+        val bufferLen = RowWidth * 4;
+        val buffer = Array.ofDim[Byte]( bufferLen );
+
+        def handleRow : Array[Int] = {
+          var b = is.read();
+          if ( b < 0 ) {
+            null //so sue me
+          } else {
+            var i = 0;
+            var done = false;
+            while (!done) {
+              buffer(i) = b.toByte;
+              i += 1;
+              if (i == bufferLen) {
+                done = true;
+              } else {
+                b = is.read();
+                if (b < 0) throw new java.io.EOFException("Unexpected EOF reading byte ${i} of Ethash23.Dataset row! (should be ${bufferLen} bytes)");
+              }
+            } 
+            // ok, we've filled the buffer, now we just have to interpret
+            readRow( buffer )
+          }
+        }
+
+        val arrays = scala.collection.mutable.ArrayBuffer.empty[Array[Int]];
+        var row = handleRow;
+        while ( row != null ) arrays += row;
+        arrays.toArray
+      }
 
       // unsigned promote
       private def UP( i : Int ) : Long = i & 0xFFFFFFFFL
