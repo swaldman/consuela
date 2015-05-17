@@ -21,29 +21,29 @@ import com.mchange.sc.v1.consuela.hash.SHA3_256;
  */ 
 object Ethash23Properties extends Properties("Ethash23") {
 
-  val Manager = Ethash23.Manager.Default;
+  val Implementation = Ethash23.Default;
 
   //MT : protected by its own lock
-  private val cacheHashes = scala.collection.mutable.HashMap.empty[Long,Manager.Cache];
+  private val cacheHashes = scala.collection.mutable.HashMap.empty[Long,Implementation.Cache];
 
-  def getCacheForEpoch( epochNumber : Long ) : Manager.Cache = cacheHashes.synchronized { 
-    cacheHashes.getOrElseUpdate( epochNumber, Manager.mkCacheForEpoch( epochNumber ) ) 
+  def getCacheForEpoch( epochNumber : Long ) : Implementation.Cache = cacheHashes.synchronized { 
+    cacheHashes.getOrElseUpdate( epochNumber, Implementation.mkCacheForEpoch( epochNumber ) ) 
   }
 
-  def getCacheForBlock( blockNumber : Long ) : Manager.Cache = getCacheForEpoch( Ethash23.epochFromBlock( blockNumber ) );
+  def getCacheForBlock( blockNumber : Long ) : Implementation.Cache = getCacheForEpoch( Ethash23.epochFromBlock( blockNumber ) );
 
-  property("Zeroth Block (Zeroth Epoch) Cache Size")       = Prop( Manager.getCacheSizeForBlock(0) == 16776896L );
-  property("30000th Block (First Epoch) Cache Size")       = Prop( Manager.getCacheSizeForBlock(30000) == 16907456L );
-  property("2047*30000th Block (2047th Epoch) Cache Size") = Prop( Manager.getCacheSizeForBlock(2047 * 30000) == 285081536L );
+  property("Zeroth Block (Zeroth Epoch) Cache Size")       = Prop( Implementation.getCacheSizeForBlock(0) == 16776896L );
+  property("30000th Block (First Epoch) Cache Size")       = Prop( Implementation.getCacheSizeForBlock(30000) == 16907456L );
+  property("2047*30000th Block (2047th Epoch) Cache Size") = Prop( Implementation.getCacheSizeForBlock(2047 * 30000) == 285081536L );
 
-  property("Zeroth Block (Zeroth Epoch) Full Size")       = Prop( Manager.getFullSizeForBlock(0) == 1073739904L );
-  property("30000th Block (First Epoch) Full Size")       = Prop( Manager.getFullSizeForBlock(30000) == 1082130304L );
-  property("2047*30000th Block (2047th Epoch) Full Size") = Prop( Manager.getFullSizeForBlock(2047 * 30000) == 18245220736L );
+  property("Zeroth Block (Zeroth Epoch) Full Size")       = Prop( Implementation.getFullSizeForBlock(0) == 1073739904L );
+  property("30000th Block (First Epoch) Full Size")       = Prop( Implementation.getFullSizeForBlock(30000) == 1082130304L );
+  property("2047*30000th Block (2047th Epoch) Full Size") = Prop( Implementation.getFullSizeForBlock(2047 * 30000) == 18245220736L );
 
   val epochZeroCache = getCacheForEpoch( 0 );
 
   property("Expected Epoch Zero Cache Hash") = Prop{
-    Manager.hashCache( epochZeroCache ) == SHA3_256.withBytes( "35ded12eecf2ce2e8da2e15c06d463aae9b84cb2530a00b932e4bbc484cde353".decodeHex );
+    Implementation.hashCache( epochZeroCache ) == SHA3_256.withBytes( "35ded12eecf2ce2e8da2e15c06d463aae9b84cb2530a00b932e4bbc484cde353".decodeHex );
   }
 
   object Check1 {
@@ -52,8 +52,8 @@ object Ethash23Properties extends Properties("Ethash23") {
     val nonce = Unsigned64(0x4242424242424242L);
     val blockNumber = header.number.widen.toLong;
     val cache = getCacheForBlock( blockNumber );
-    val truncatedHeaderHash = Manager.truncatedHeaderHash( header );
-    val hashimoto = Manager.hashimotoLight( header, cache, nonce );
+    val truncatedHeaderHash = Implementation.truncatedHeaderHash( header );
+    val hashimoto = Implementation.hashimotoLight( header, cache, nonce );
   }
 
   property("Expected hash of (truncated) first example header (Check1)") = Prop( 
@@ -72,8 +72,8 @@ object Ethash23Properties extends Properties("Ethash23") {
     val nonce = Unsigned64(0x307692cf71b12f6dL);
     val blockNumber = header.number.widen.toLong;
     val cache = getCacheForBlock( blockNumber );
-    val truncatedHeaderHash = Manager.truncatedHeaderHash( header );
-    val hashimoto = Manager.hashimotoLight( header, cache, nonce );
+    val truncatedHeaderHash = Implementation.truncatedHeaderHash( header );
+    val hashimoto = Implementation.hashimotoLight( header, cache, nonce );
   }
 
   property("Expected hash of (truncated) first example header (Check2)") = Prop( 
