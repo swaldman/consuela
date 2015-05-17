@@ -4,6 +4,7 @@ import java.security.Provider;
 import java.security.Security;
 
 import com.mchange.sc.v1.consuela.crypto.jce;
+import com.mchange.sc.v1.consuela.ethereum.pow.Ethash23;
 
 import com.typesafe.config.{Config => TSConfig, ConfigFactory => TSConfigFactory};
 
@@ -31,6 +32,7 @@ object Config {
 
     val EthereumPowEthash23SeedPrimerEpochNumber = LongItem( "ethereum.pow.ethash23.seed.primer.epochNumber", 0L );
     val EthereumPowEthash23SeedPrimerValue       = StringItem( "ethereum.pow.ethash23.seed.primer.value", "0x0000000000000000000000000000000000000000000000000000000000000000" );
+    val EthereumPowEthash23DagFileDiriectory     = StringItem( "ethereum.pow.ethash23.dagfile.directory",  Ethash23.DagFile.DefaultDirectory );
   }
   private[this] trait Item[T] {
     def path : String;

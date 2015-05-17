@@ -11,7 +11,7 @@ import com.mchange.sc.v1.consuela.hash.{SHA3_256,SHA3_512};
 import com.mchange.sc.v1.log.MLogger;
 import com.mchange.sc.v1.log.MLevel._;
 
-import com.mchange.lang.IntegerUtils;
+import com.mchange.lang.{LongUtils,IntegerUtils};
 
 import scala.collection._;
 import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq;
@@ -22,6 +22,8 @@ import scala.annotation.tailrec;
 import spire.implicits._
 
 import scala.reflect.ClassTag;
+
+import java.io.{InputStream,OutputStream,EOFException}
 
 // is Long math good enough? (looking at the magnitudes, i think it is, but i'm not certain)
 // we can put the whole class in terms of spire SafeLong easily enough if not...
@@ -58,6 +60,46 @@ object Ethash23 {
   private final val ProbablePrimeCertainty : Int = 8; //arbitrary, tune for performance...
 
   private final val RowWidth = 16; // four-byte Ints
+
+  // see https://github.com/ethereum/wiki/wiki/Ethash-DAG
+  object DagFile {
+    private[Ethash23] final val MagicNumber = 0xFEE1DEADBADDCAFEL
+    private[Ethash23] final val MagicNumberLittleEndianBytes = {
+      val bytes = Array.ofDim[Byte](8);
+      LongUtils.longIntoByteArrayLittleEndian( MagicNumber, 0, bytes );
+      bytes
+    }
+
+    val DefaultDirectory : String = {
+      val osName = {
+        val tmp = System.getProperty( "os.name" );
+        if ( tmp == null ) {
+          WARNING.log("Could not find a value for System property 'os.name'. Will presume UNIX-like.");
+          ""
+        } else {
+          tmp.toLowerCase
+        }
+      }
+      val isWin = osName.indexOf("win") >= 0;
+      def homeless( dflt : String ) : String = {
+        WARNING.log(s"Could not find a value for System property 'user.home'. Using default directory '${dflt}'.");
+        dflt
+      }
+      val homeDir = {
+        val userHome = System.getProperty( "user.home" );
+        ( isWin, userHome ) match {
+          case ( true, null )  => homeless("C:\\TEMP")
+          case ( false, null ) => homeless("/tmp")
+          case _               => userHome
+        }
+      }
+      def windowsDir = s"${homeDir}\\Appdata\\Ethash";
+      def unixDir = s"${homeDir}/.ethash";
+      if ( isWin ) windowsDir else unixDir;
+    }
+
+    class BadMagicNumberException private[Ethash23] ( message : String, t : Throwable = null ) extends EthereumException( message, t );
+  }
 
   implicit final class PlusModInt( val i : Int ) extends AnyVal {
     def +%( other : Int ) = scala.math.abs( i % other )
@@ -182,11 +224,23 @@ object Ethash23 {
     def hashCache( cache : Cache ) : SHA3_256 = SHA3_256.hash( cache.flatMap( writeRow ) )
 
     // for memoization / caching to files
-    def dumpDatasetBytes( os : java.io.OutputStream, dataset : Dataset ) : Unit = dataset.foreach( iarr => os.write( writeRow( iarr ) ) )
+    def writeDagFile( os : OutputStream, dataset : Dataset ) : Unit = {
+      os.write( DagFile.MagicNumberLittleEndianBytes );
+      dumpDatasetBytes( os, dataset );
+    }
+    def dumpDatasetBytes( os : OutputStream, dataset : Dataset ) : Unit = dataset.foreach( iarr => os.write( writeRow( iarr ) ) )
 
+    def readDagFile( is : InputStream ) : Dataset = {
+      val checkBytes = Array.ofDim[Byte](DagFile.MagicNumberLittleEndianBytes.length);
+      (0 until 8).foreach( i => checkBytes(i) = is.read.toByte );
+      val startsWithMagicNumber = DagFile.MagicNumberLittleEndianBytes.zip( checkBytes ).forall( tup => tup._1 == tup._2 );
+      if (! startsWithMagicNumber ) throw new DagFile.BadMagicNumberException( s"Found 0x${checkBytes.hex}, should be 0x${DagFile.MagicNumberLittleEndianBytes.hex}" );
+
+      readDatasetBytes( is )
+    }
     // this is ugly, but since these files are gigantic, i'm avoiding abstractions that
     // might require preloading or carry much overhead per byte or row
-    def readDatasetBytes( is : java.io.InputStream ) : Dataset = {
+    def readDatasetBytes( is : InputStream ) : Dataset = {
       val bufferLen = RowWidth * 4;
       val buffer = Array.ofDim[Byte]( bufferLen );
 
@@ -204,7 +258,7 @@ object Ethash23 {
               done = true;
             } else {
               b = is.read();
-              if (b < 0) throw new java.io.EOFException("Unexpected EOF reading byte ${i} of Ethash23.Dataset row! (should be ${bufferLen} bytes)");
+              if (b < 0) throw new EOFException("Unexpected EOF reading byte ${i} of Ethash23.Dataset row! (should be ${bufferLen} bytes)");
             }
           }
           // ok, we've filled the buffer, now we just have to interpret
@@ -532,7 +586,9 @@ object Ethash23 {
         lastKey = nextKey;
       }
 
-      INFO.log( s"Seed cache populated from epoch number ${seedCache.firstKey} through epoch number ${lastKey}, whose seed is 0x${lastHash.bytes.hex}" )
+      if ( lastKey != lastPrecomputedKey ) {
+        INFO.log( s"Seed cache populated from epoch number ${seedCache.firstKey} through epoch number ${lastKey}, whose seed is 0x${lastHash.bytes.hex}" )
+      }
     }
 
     def getForEpoch( epochNumber : Long )( implicit primer : Primer ) : Array[Byte] = {
