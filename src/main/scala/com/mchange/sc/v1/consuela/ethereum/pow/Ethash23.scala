@@ -1,8 +1,10 @@
 package com.mchange.sc.v1.consuela.ethereum.pow;
 
 import com.mchange.sc.v1.consuela._;
-import com.mchange.sc.v1.consuela.ethereum._;
-import com.mchange.sc.v1.consuela.ethereum.encoding._;
+import conf.Config;
+
+import ethereum._;
+import ethereum.encoding._;
 
 import ethereum.specification.Types.{Unsigned64,Unsigned256};
 
@@ -16,6 +18,11 @@ import com.mchange.lang.{LongUtils,IntegerUtils};
 import scala.collection._;
 import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq;
 
+import scala.concurrent.Future;
+import scala.concurrent.ExecutionContext.Implicits.global;
+
+import scala.util.{Try,Success,Failure}
+
 import scala.annotation.tailrec;
 
 //import spire.math.SafeLong;
@@ -23,7 +30,7 @@ import spire.implicits._
 
 import scala.reflect.ClassTag;
 
-import java.io.{InputStream,OutputStream,EOFException}
+import java.io.{BufferedInputStream,File,FileInputStream,InputStream,OutputStream,EOFException}
 
 // is Long math good enough? (looking at the magnitudes, i think it is, but i'm not certain)
 // we can put the whole class in terms of spire SafeLong easily enough if not...
@@ -55,6 +62,8 @@ object Ethash23 {
   private final val MixBytesOverWordBytes  = MixBytes / WordBytes;  //32
   private final val MixBytesOverHashBytes  = MixBytes / HashBytes;  //2
 
+  private final val Revision = 23; // the version of the Ethash spec we are implementing
+
   private final val FnvPrime = 0x01000193;
 
   private final val ProbablePrimeCertainty : Int = 8; //arbitrary, tune for performance...
@@ -69,6 +78,12 @@ object Ethash23 {
       LongUtils.longIntoByteArrayLittleEndian( MagicNumber, 0, bytes );
       bytes
     }
+
+    def nameForSeed( seed : Array[Byte] ) : String = s"full-R${Revision}-${seed.take(8).hex}"
+
+    def fileForSeed( seed : Array[Byte] ) : File = new File( ConfiguredDirectory, nameForSeed( seed ) );
+
+    lazy val ConfiguredDirectory = Config.EthereumPowEthash23DagFileDirectory
 
     val DefaultDirectory : String = {
       val osName = {
@@ -130,7 +145,7 @@ object Ethash23 {
   lazy val LongArrayClassTag = implicitly[ClassTag[Array[Long]]];
 
   trait Parallel extends Ethash23 {
-    override protected[pow] def calcDataset( cache : Cache, fullSize : Long ) : Dataset = calcDatasetParallel( cache, fullSize )
+    override def calcDataset( cache : Cache, fullSize : Long ) : Dataset = calcDatasetParallel( cache, fullSize )
   }
 
   trait Logging extends Ethash23 { // must not be specified before Parallel, or else pre- and post- logging won't happen
@@ -148,7 +163,7 @@ object Ethash23 {
       out
     }
 
-    override protected[pow] def calcDataset( cache : Cache, fullSize : Long ) : Dataset = {
+    override def calcDataset( cache : Cache, fullSize : Long ) : Dataset = {
       val start = System.currentTimeMillis();
       INFO.log( s"Beginning ${parModifier} computation of dataset, fullSize=${fullSize}, rows=${datasetLen(fullSize)}" );
       val out = super.calcDataset( cache, fullSize );
@@ -223,21 +238,8 @@ object Ethash23 {
 
     def hashCache( cache : Cache ) : SHA3_256 = SHA3_256.hash( cache.flatMap( writeRow ) )
 
-    // for memoization / caching to files
-    def writeDagFile( os : OutputStream, dataset : Dataset ) : Unit = {
-      os.write( DagFile.MagicNumberLittleEndianBytes );
-      dumpDatasetBytes( os, dataset );
-    }
     def dumpDatasetBytes( os : OutputStream, dataset : Dataset ) : Unit = dataset.foreach( iarr => os.write( writeRow( iarr ) ) )
 
-    def readDagFile( is : InputStream ) : Dataset = {
-      val checkBytes = Array.ofDim[Byte](DagFile.MagicNumberLittleEndianBytes.length);
-      (0 until 8).foreach( i => checkBytes(i) = is.read.toByte );
-      val startsWithMagicNumber = DagFile.MagicNumberLittleEndianBytes.zip( checkBytes ).forall( tup => tup._1 == tup._2 );
-      if (! startsWithMagicNumber ) throw new DagFile.BadMagicNumberException( s"Found 0x${checkBytes.hex}, should be 0x${DagFile.MagicNumberLittleEndianBytes.hex}" );
-
-      readDatasetBytes( is )
-    }
     // this is ugly, but since these files are gigantic, i'm avoiding abstractions that
     // might require preloading or carry much overhead per byte or row
     def readDatasetBytes( is : InputStream ) : Dataset = {
@@ -529,6 +531,42 @@ object Ethash23 {
       new Hashimoto( ImmutableArraySeq.Byte( mixDigest ), Unsigned256( BigInt( 1, result ) ) )
     }
 
+    protected def dumpDatasetBytes( os : OutputStream, dataset : Dataset ) : Unit = dataset.foreach( row => os.write( writeRow( row ) ) );
+
+    // this is ugly, but since these files are gigantic, i'm avoiding abstractions that
+    // might require preloading or carry much overhead per byte or row
+    protected def readDatasetBytes( is : InputStream ) : Dataset = {
+      val bufferLen = RowWidth * 4;
+      val buffer = Array.ofDim[Byte]( bufferLen );
+
+      def handleRow : Array[Long] = {
+        var b = is.read();
+        if ( b < 0 ) {
+          null //so sue me
+        } else {
+          var i = 0;
+          var done = false;
+          while (!done) {
+            buffer(i) = b.toByte;
+            i += 1;
+            if (i == bufferLen) {
+              done = true;
+            } else {
+              b = is.read();
+              if (b < 0) throw new EOFException("Unexpected EOF reading byte ${i} of Ethash23.Dataset row! (should be ${bufferLen} bytes)");
+            }
+          }
+          // ok, we've filled the buffer, now we just have to interpret
+          readRow( buffer )
+        }
+      }
+
+      val arrays = scala.collection.mutable.ArrayBuffer.empty[Array[Long]];
+      var row = handleRow;
+      while ( row != null ) arrays += row;
+      arrays.toArray
+    }
+
     // using Tuple2.zipped.map causes serious memory stress, so this
     private def zipWithXor( ls : Array[Long], rs : Array[Long] ) : Array[Long] = {
       val len = ls.length;
@@ -600,6 +638,141 @@ object Ethash23 {
 
     def getForBlock( blockNumber : Long ) : Array[Byte] = getForEpoch( epochFromBlock( blockNumber ) )
   }
+
+  object Manager {
+
+    val FileBufferSize = 16 * 1024 * 1024; // 16MB
+
+    val DoubleDag = Config.EthereumPowEthash23ManagerDoubleDag;
+
+    abstract class Abstract( val implementation : Ethash23 ) {
+      class EpochRecord( val epochNumber : Long, val seed : Array[Byte], val cache : implementation.Cache, val mbDataset : Option[implementation.Dataset] )
+
+      //MT: protected by this' lock
+      private[this] var preparing  : Option[Long]        = None;
+      private[this] var lastRecord : EpochRecord         = null; //so sue me, only for light clients
+      private[this] var record     : EpochRecord         = null; //so sue me
+      private[this] val waiters    : mutable.Set[Thread] = mutable.Set.empty[Thread];
+
+      protected val holdsDataset : Boolean;
+
+      private def keepLastRecord = (!holdsDataset) || DoubleDag;
+
+      protected def prepareForBlock( blockNumber : Long ) : EpochRecord = {
+        try { this.synchronized( _prepareForBlock( blockNumber ) ); } 
+        catch { case ie : InterruptedException => throw new FailureDuringDAGAcquisition( ie ) }
+      }
+
+      //MT: Must be called by while holding this' lock
+      @tailrec
+      private def _prepareForBlock( blockNumber : Long ) : EpochRecord = {
+        val DesiredEpoch = epochFromBlock( blockNumber );
+
+        def oneOff( warningMessage : String ) : EpochRecord = {
+          WARNING.log( warningMessage );
+          buildEpochRecord( DesiredEpoch );
+        }
+        def lastRecordOrOneOff( warning : => String ) : EpochRecord = {
+          if ( lastRecord != null && lastRecord.epochNumber == DesiredEpoch ) lastRecord else oneOff( warning )
+        }
+        def lastRecordOrOneOffPriorEpoch : EpochRecord = lastRecordOrOneOff { 
+          s"Ethash data for epoch ${DesiredEpoch} was requested, which is prior to the latest requested epoch ${record.epochNumber}. " +
+           "This data will be generated for one-time use, which may impair application performance. Please mine/verify in order."
+        }
+        def lastRecordOrAlreadyPreparing : EpochRecord = lastRecordOrOneOff { 
+          s"Ethash data for epoch ${DesiredEpoch} was requested, while the application has already been instructed to prepare data for epoch ${preparing}. " +
+           "This data will be generated for one-time use, which may impair application performance. Please mine/verify in order."
+        }
+        def startAsyncUpdate : Unit = {
+          this.preparing = Some( DesiredEpoch );
+          val fut = Future[EpochRecord] {
+            buildEpochRecord( DesiredEpoch );
+          }
+          fut.onComplete { myTry =>
+            myTry match {
+              case Success( record ) => updateRecord( record ); // calls this.notifyAll()
+              case Failure( t )      => panic( DesiredEpoch, t ); // interrupts wait()ers
+            }
+          }
+        }
+
+        if ( record == null || DesiredEpoch != record.epochNumber ) {
+          this.preparing match {
+            case Some( DesiredEpoch ) => {
+              waiters += Thread.currentThread();
+              this.wait();
+              waiters -= Thread.currentThread();
+              _prepareForBlock( blockNumber )
+            }
+            case None => {
+              if ( record == null || DesiredEpoch > record.epochNumber ) {
+                startAsyncUpdate;
+                _prepareForBlock( blockNumber )
+              } else {
+                lastRecordOrOneOffPriorEpoch
+              }
+            }
+            case Some( _ ) => lastRecordOrAlreadyPreparing
+          }
+        } else {
+          record
+        }
+      }
+
+
+      private def panic( failedEpochNumber : Long, t : Throwable ) : Unit = this.synchronized {
+        SEVERE.log( s"While preparing to verify/mine for epoch ${failedEpochNumber}, an Exception occurred. Interrupting clients.", t );
+        waiters.foreach( _.interrupt() )
+      }
+
+      private def updateRecord( record : EpochRecord ) : Unit = this.synchronized {
+        this.lastRecord = if ( this.holdsDataset ) null else this.record; 
+        this.record     = record;
+        this.preparing  = None;
+        this.notifyAll();
+      }
+
+      private def buildEpochRecord( epochNumber : Long ) : EpochRecord = {
+        val seed      = Seed.getForEpoch( epochNumber );
+        val cache     = implementation.mkCacheForEpoch( epochNumber );
+        val mbDataset = if ( this.holdsDataset ) Some( acquireDataset( epochNumber, seed, cache ) ) else None;
+        new EpochRecord( epochNumber, seed, cache, mbDataset )
+      }
+
+      private def acquireDataset( epochNumber : Long, seed : Array[Byte], cache : implementation.Cache ) : implementation.Dataset = {
+        val persistedDataset = loadDagFile( seed );
+        persistedDataset.getOrElse {
+          val fullSize = implementation.getFullSizeForEpoch( epochNumber );
+          implementation.calcDataset( cache, fullSize )
+        }
+      }
+
+      private def loadDagFile( seed : Array[Byte] ) : Option[implementation.Dataset] = {
+        val Yuk : PartialFunction[Throwable, Option[Nothing]] = {
+          case e : Exception => {
+            WARNING.log( "Exception during DAG file load.", e );
+            None
+          }
+        }
+
+        val file = DagFile.fileForSeed( seed );
+        if ( file.exists() && file.canRead() ) {
+          val is = new BufferedInputStream( new FileInputStream( file ), FileBufferSize );
+          try Some( implementation.readDagFile( is ) ) catch Yuk finally is.close
+        } else {
+          FINE.log( s"Failed to read DAG from ${file}; The file does not exist or is unreadble." );
+          None
+        }
+      }
+    }
+
+    val AcqFailureMessage = {
+      "A failure occurred during the acquisition DAG data for which this Thread was waiting. " +
+      "Please review your logs prior to this Exception for more information."
+    }
+    class FailureDuringDAGAcquisition private[Manager] ( ie : InterruptedException ) extends EthereumException( AcqFailureMessage, ie );
+  }
+
 }
 trait Ethash23 {
   import Ethash23._
@@ -617,6 +790,9 @@ trait Ethash23 {
   protected def extractDatasetRow( dataset : Dataset, i : Int ) : Row;
 
   protected def hashimoto( seedBytes : Array[Byte], fullSize : Long, datasetAccessor : Int => Row ) : Hashimoto;
+
+  protected def dumpDatasetBytes( os : OutputStream, dataset : Dataset ) : Unit;
+  protected def readDatasetBytes( is : InputStream ) : Dataset;
 
   // public utilities
   def epochFromBlock( blockNumber : Long )         : Long = Ethash23.epochFromBlock( blockNumber );
@@ -647,15 +823,9 @@ trait Ethash23 {
     hashimotoFull( getFullSizeForBlock( blockNumber ), dataset, truncatedHeaderHash( header ), nonce )
   }
 
-  // protected utilities
-  protected[pow] val isParallel = false;
+  def getCacheSizeForBlock( blockNumber : Long ) : Long = getCacheSizeForEpoch( epochFromBlock( blockNumber ) );
 
-  protected[pow] def requireValidInt( l : Long )     : Int  = if (l.isValidInt) l.toInt else throw new IllegalArgumentException( s"${l} is not a valid Int, as required." );
-  protected[pow] def requireValidLong( bi : BigInt ) : Long = if (bi.isValidLong) bi.toLong else throw new IllegalArgumentException( s"${bi} is not a valid Long, as required." );
-
-  protected[pow] def getCacheSizeForBlock( blockNumber : Long ) : Long = getCacheSizeForEpoch( epochFromBlock( blockNumber ) );
-
-  protected[pow] def getCacheSizeForEpoch( epochNumber : Long ) : Long = {
+  def getCacheSizeForEpoch( epochNumber : Long ) : Long = {
     @tailrec
     def descendToPrime( sz : Long ) : Long = if ( isPrime( sz / HashBytes ) ) sz else descendToPrime( sz - DoubleHashBytes );
 
@@ -663,9 +833,9 @@ trait Ethash23 {
     descendToPrime( start )
   }
 
-  protected[pow] def getFullSizeForBlock( blockNumber : Long ) : Long = getFullSizeForEpoch( epochFromBlock( blockNumber ) );
+  def getFullSizeForBlock( blockNumber : Long ) : Long = getFullSizeForEpoch( epochFromBlock( blockNumber ) );
 
-  protected[pow] def getFullSizeForEpoch( epochNumber : Long ) : Long = {
+  def getFullSizeForEpoch( epochNumber : Long ) : Long = {
     @tailrec
     def descendToPrime( sz : Long ) : Long = if ( isPrime( sz / MixBytes ) ) sz else descendToPrime( sz - DoubleMixBytes );
 
@@ -673,7 +843,28 @@ trait Ethash23 {
     descendToPrime( start )
   }
 
-  protected[pow] def calcDataset( cache : Cache, fullSize : Long ) : Dataset = calcDatasetSequential( cache, fullSize )
+  def calcDataset( cache : Cache, fullSize : Long ) : Dataset = calcDatasetSequential( cache, fullSize )
+
+  // for memoization / caching to files
+  def writeDagFile( os : OutputStream, dataset : Dataset ) : Unit = {
+    os.write( DagFile.MagicNumberLittleEndianBytes );
+    dumpDatasetBytes( os, dataset );
+  }
+
+  def readDagFile( is : InputStream ) : Dataset = {
+    val checkBytes = Array.ofDim[Byte](DagFile.MagicNumberLittleEndianBytes.length);
+    (0 until 8).foreach( i => checkBytes(i) = is.read.toByte );
+    val startsWithMagicNumber = DagFile.MagicNumberLittleEndianBytes.zip( checkBytes ).forall( tup => tup._1 == tup._2 );
+    if (! startsWithMagicNumber ) throw new DagFile.BadMagicNumberException( s"Found 0x${checkBytes.hex}, should be 0x${DagFile.MagicNumberLittleEndianBytes.hex}" );
+
+    readDatasetBytes( is )
+  }
+
+  // protected utilities
+  protected[pow] val isParallel = false;
+
+  protected[pow] def requireValidInt( l : Long )     : Int  = if (l.isValidInt) l.toInt else throw new IllegalArgumentException( s"${l} is not a valid Int, as required." );
+  protected[pow] def requireValidLong( bi : BigInt ) : Long = if (bi.isValidLong) bi.toLong else throw new IllegalArgumentException( s"${bi} is not a valid Long, as required." );
 
   protected[pow] final def calcDatasetSequential( cache : Cache, fullSize : Long ) : Dataset = {
     val len = datasetLen( fullSize )

@@ -24,6 +24,8 @@ object Config {
 
   val EthereumPowEthash23SeedPrimerEpochNumber = Item.EthereumPowEthash23SeedPrimerEpochNumber.get;
   val EthereumPowEthash23SeedPrimerValue       = Item.EthereumPowEthash23SeedPrimerValue.get;
+  val EthereumPowEthash23DagFileDirectory      = Item.EthereumPowEthash23DagFileDirectory.get;
+  val EthereumPowEthash23ManagerDoubleDag      = Item.EthereumPowEthash23ManagerDoubleDag.get;
 
   private[this] object Item {
     val CryptoJceProviderName              = StringItem( "crypto.jce.providerName", "BC" ); //bouncycastle
@@ -32,7 +34,8 @@ object Config {
 
     val EthereumPowEthash23SeedPrimerEpochNumber = LongItem( "ethereum.pow.ethash23.seed.primer.epochNumber", 0L );
     val EthereumPowEthash23SeedPrimerValue       = StringItem( "ethereum.pow.ethash23.seed.primer.value", "0x0000000000000000000000000000000000000000000000000000000000000000" );
-    val EthereumPowEthash23DagFileDiriectory     = StringItem( "ethereum.pow.ethash23.dagfile.directory",  Ethash23.DagFile.DefaultDirectory );
+    val EthereumPowEthash23DagFileDirectory      = StringItem( "ethereum.pow.ethash23.dagfile.directory",  Ethash23.DagFile.DefaultDirectory );
+    val EthereumPowEthash23ManagerDoubleDag      = BooleanItem( "ethereum.pow.ethash23.manager.doubleDag",  false );
   }
   private[this] trait Item[T] {
     def path : String;
