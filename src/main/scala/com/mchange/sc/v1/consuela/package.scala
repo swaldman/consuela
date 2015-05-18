@@ -20,7 +20,7 @@ package object consuela {
 
   // kind of yuk, but we've renamed this from "Failure" to "Fail" to avoid inconvenient
   // need to qualify names when working with scala.util.Failure.
-  case class Fail( message : String, source : Any, mbStackTrace : Option[Array[StackTraceElement]] ) {
+  final case class Fail( message : String, source : Any, mbStackTrace : Option[Array[StackTraceElement]] ) {
     override def toString() : String = mbStackTrace.fold( message ) { stackTrace =>
       (List( message ) ++ stackTrace).mkString( lineSeparator )
     }
@@ -37,11 +37,11 @@ package object consuela {
     }
   }
 
-  implicit object StringAsFailSource extends FailSource[String] {
+  implicit final object StringAsFailSource extends FailSource[String] {
     def getMessage( source : String ) : String = source;
   }
 
-  implicit object ThrowableAsFailSource extends FailSource[Throwable] {
+  implicit final object ThrowableAsFailSource extends FailSource[Throwable] {
     def getMessage( source : Throwable ) : String = s"${source.getClass.getName}: ${source.getMessage()}";
 
     override def getStackTrace( source : Throwable ) = source.getStackTrace;

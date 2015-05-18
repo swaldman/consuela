@@ -15,7 +15,7 @@ object EthBloom {
     immutable.Set( uint11(0), uint11(16), uint11(32) )
   }
 
-  class Definition[T]( xform : T => EthHash ) extends Bloom.Definition[T] {
+  abstract class Definition[T]( xform : T => EthHash ) extends Bloom.Definition[T] {
     def indices( t : T ) : immutable.Set[Int] = indicesFromEthHash( xform(t) ); // no need to mod, since these are 11 bit values
 
     val NumHashes : Int = 3

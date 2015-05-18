@@ -22,7 +22,7 @@ package object crypto {
 
   implicit val logger = MLogger( this );
 
-  object secp256k1 {
+  final object secp256k1 {
 
     val ValueByteLength = 32;
 
@@ -141,7 +141,7 @@ package object crypto {
       verifySignatureBytes( signed, parser.encode( signature ), pubKeyX, pubKeyY )( provider )
     }
 
-    case class Signature( val r : BigInteger, s : BigInteger, v : Option[Byte] = None);
+    final case class Signature( val r : BigInteger, s : BigInteger, v : Option[Byte] = None);
     trait SignatureParser {
       def implementingProvider : jce.Provider;
       def parse( sigBytes : Array[Byte] ) : Either[Array[Byte],Signature];
@@ -239,7 +239,7 @@ package object crypto {
       * Derived from https://github.com/ethereum/ethereumj/blob/master/ethereumj-core/src/main/java/org/ethereum/crypto/ECKey.java
       * which is in turn derived from https://github.com/bitcoinj/bitcoinj/blob/master/core/src/main/java/com/google/bitcoin/core/ECKey.java
       */   
-    private object BouncyCastlePublicKeyComputer extends PublicKeyComputer {
+    private final object BouncyCastlePublicKeyComputer extends PublicKeyComputer {
       import org.bouncycastle.asn1.sec.SECNamedCurves;
       import org.bouncycastle.asn1.x9.X9IntegerConverter;
       import org.bouncycastle.asn1.x9.X9ECParameters;
@@ -328,7 +328,7 @@ package object crypto {
       }
     }
 
-    private object BouncyCastleSignatureParser extends SignatureParser {
+    private final object BouncyCastleSignatureParser extends SignatureParser {
       import java.io._;
       import org.bouncycastle.asn1._;
       import com.mchange.sc.v2.lang.borrow;

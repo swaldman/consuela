@@ -6,7 +6,7 @@ import scala.collection._;
 
 import specification.Types.{SignatureV, SignatureR, SignatureS};
 
-case class EthSignature( val v : SignatureV, val r : SignatureR, val s : SignatureS ) {
+final case class EthSignature( val v : SignatureV, val r : SignatureR, val s : SignatureS ) {
 
   private def rawBytesWereSigned( bytes : Array[Byte] ) : Option[EthPublicKey] = {
     crypto.secp256k1.recoverPublicKeyBytesV( v.widen, r.widen.bigInteger, s.widen.bigInteger, bytes ).map( EthPublicKey(_) )

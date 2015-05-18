@@ -13,12 +13,12 @@ import encoding.{RLP, RLPSerializing};
 import specification.Types.{SignatureV, SignatureR, SignatureS, Unsigned256};
 
 object EthTransaction {
-  object Unsigned {
-    case class Message( nonce : Unsigned256, gasPrice : Unsigned256, gasLimit : Unsigned256, to : EthAddress, value : Unsigned256, data : immutable.Seq[Byte] ) 
+  final object Unsigned {
+    final case class Message( nonce : Unsigned256, gasPrice : Unsigned256, gasLimit : Unsigned256, to : EthAddress, value : Unsigned256, data : immutable.Seq[Byte] ) 
         extends Unsigned with EthTransaction.Message {
       def sign( privateKey : EthPrivateKey ) : Signed.Message = Signed.Message( this, privateKey.sign( RLP.encode[EthTransaction]( this ).toArray ) );
     }
-    case class ContractCreation( nonce : Unsigned256, gasPrice : Unsigned256, gasLimit : Unsigned256, value : Unsigned256, init : immutable.Seq[Byte] ) 
+    final case class ContractCreation( nonce : Unsigned256, gasPrice : Unsigned256, gasLimit : Unsigned256, value : Unsigned256, init : immutable.Seq[Byte] ) 
         extends Unsigned with EthTransaction.ContractCreation {
       def sign( privateKey : EthPrivateKey ) : Signed.ContractCreation = Signed.ContractCreation( this, privateKey.sign( RLP.encode[EthTransaction]( this ).toArray ) );
     }
@@ -28,14 +28,14 @@ object EthTransaction {
 
     def sign( privateKey : EthPrivateKey ) : Signed;
   }
-  object Signed {
+  final object Signed {
     def apply( base : Unsigned, sig : EthSignature ) : Signed = {
       base match {
         case msg : Unsigned.Message          => Message( msg, sig );
         case cc  : Unsigned.ContractCreation => ContractCreation( cc, sig );
       }
     }
-    case class Message( base : Unsigned.Message, val signature : EthSignature ) extends Signed with EthTransaction.Message {
+    final case class Message( base : Unsigned.Message, val signature : EthSignature ) extends Signed with EthTransaction.Message {
       def nonce    : Unsigned256         = base.nonce;
       def gasPrice : Unsigned256         = base.gasPrice;
       def gasLimit : Unsigned256         = base.gasLimit;
@@ -43,7 +43,7 @@ object EthTransaction {
       def value    : Unsigned256         = base.value;
       def data     : immutable.Seq[Byte] = base.data;
     }
-    case class ContractCreation( base : Unsigned.ContractCreation, val signature : EthSignature ) extends Signed  with EthTransaction.ContractCreation {
+    final case class ContractCreation( base : Unsigned.ContractCreation, val signature : EthSignature ) extends Signed  with EthTransaction.ContractCreation {
       def nonce    : Unsigned256         = base.nonce;
       def gasPrice : Unsigned256         = base.gasPrice;
       def gasLimit : Unsigned256         = base.gasLimit;

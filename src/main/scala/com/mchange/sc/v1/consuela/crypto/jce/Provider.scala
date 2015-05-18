@@ -52,4 +52,4 @@ object Provider{
     }
   }
 }
-case class Provider( name : String ) // e.g. "BC"
+final case class Provider( name : String ) // e.g. "BC"

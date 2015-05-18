@@ -8,13 +8,13 @@ object AltPMTrie {
     def children : IndexedSeq[H];
     def value    : Option[V];
   }
-  case class Branch[L,V,H]( val letter : Option[L], val children : IndexedSeq[H], val value : Option[V] ) extends Node[L,V,H] {
+  final case class Branch[L,V,H]( val letter : Option[L], val children : IndexedSeq[H], val value : Option[V] ) extends Node[L,V,H] {
     def subkey = letter.fold( IndexedSeq.empty[L] )( l => IndexedSeq( l ) );
   }
-  case class Extension[L,V,H]( val subkey : IndexedSeq[L], val child : H, val value : Option[V] ) extends Node[L,V,H] {
+  final case class Extension[L,V,H]( val subkey : IndexedSeq[L], val child : H, val value : Option[V] ) extends Node[L,V,H] {
     def children = IndexedSeq( child );
   }
-  case object Empty extends Node[Nothing,Nothing,Nothing] {
+  final case object Empty extends Node[Nothing,Nothing,Nothing] {
     def subkey   = IndexedSeq.empty[Nothing];
     def children = IndexedSeq.empty[Nothing];
     def value    = None;
@@ -121,7 +121,7 @@ trait AltPMTrie[L,V,H,I<:AltPMTrie[L,V,H,I]] extends PMTrie[L,V,H,I] with PMTrie
 
   private[this] def aerr( message : String ) : Nothing = throw new AssertionError( message );
 
-  private[this] object Path {
+  private[this] final object Path {
 
     def build( key : IndexedSeq[L] ) : Path = { 
       //println( s"root->${root} db(root)->${db(root)}" ); 
@@ -255,19 +255,19 @@ trait AltPMTrie[L,V,H,I<:AltPMTrie[L,V,H,I]] extends PMTrie[L,V,H,I] with PMTrie
         case ( Some( _ ), key, _ )                         => Truncated( parents, key ) //since our letter doesn't match the first letter of the key, our best match was the parent node
       }
     }
-    object Element {
+    final object Element {
       val Root     = Element( EmptyHash, Empty );
       val Deletion = Element( EmptyHash, null );
 
       def apply( node : Node ) : Element = Element( db.hash( node ), node );
     }
-    case class Element( hash : H, node : Node );
+    final case class Element( hash : H, node : Node );
 
     // note that the head element of a NewElements becomes the last element in modifiedPath in an UpdatedPath
-    case class NewElements( head : Element, children : Set[Element] = Set.empty) {
+    final case class NewElements( head : Element, children : Set[Element] = Set.empty) {
       def all : Set[Element] = children + head;
     }
-    case class UpdatedPath( modifiedPath : List[Element], lastAndChildren : Option[NewElements] ) { /* Note that lastAndChildren include children of the updated path not in elements */
+    final case class UpdatedPath( modifiedPath : List[Element], lastAndChildren : Option[NewElements] ) { /* Note that lastAndChildren include children of the updated path not in elements */
       assert( 
         lastAndChildren == None || lastAndChildren.get.head == modifiedPath.head, 
         s"The head of lastAndChildren should be the leaf element of our updated path. [modifiedPath -> ${modifiedPath}, lastAndChildren -> ${lastAndChildren}]" 
@@ -315,7 +315,7 @@ trait AltPMTrie[L,V,H,I<:AltPMTrie[L,V,H,I]] extends PMTrie[L,V,H,I] with PMTrie
       }
     }
 
-    case class Divergent( val elements : List[Element], commonPrefix : IndexedSeq[L], newDivergence : IndexedSeq[L] ) extends Path {
+    final case class Divergent( val elements : List[Element], commonPrefix : IndexedSeq[L], newDivergence : IndexedSeq[L] ) extends Path {
       assert( 
         {
           val cpLen = commonPrefix.length;
@@ -359,7 +359,7 @@ trait AltPMTrie[L,V,H,I<:AltPMTrie[L,V,H,I]] extends PMTrie[L,V,H,I] with PMTrie
         updatedPath( newElements )
       }
     }
-    case class Exact( val elements : List[Element] ) extends Path {
+    final case class Exact( val elements : List[Element] ) extends Path {
       assert( elements != Nil, "Even with an empty search key, we consider a Nil path to be truncated, not exact. Exact would be an empty subkey node." );
       def including( value : V ) : UpdatedPath = {
         // the easiest case, we just change the value of whatever we find
@@ -382,7 +382,7 @@ trait AltPMTrie[L,V,H,I<:AltPMTrie[L,V,H,I]] extends PMTrie[L,V,H,I] with PMTrie
       def apply( key : IndexedSeq[L] ) : Option[V]     = elements.head.node.value;
     }
     // at root, we can overshoot an empty String, for Branches or Extensions. Elsewhere, only Extensions can overshoot
-    case class Overshot( val elements : List[Element], desiredSubkey : IndexedSeq[L], remainderSubkey : IndexedSeq[L] ) extends Path {
+    final case class Overshot( val elements : List[Element], desiredSubkey : IndexedSeq[L], remainderSubkey : IndexedSeq[L] ) extends Path {
       def including( value : V ) : UpdatedPath = {
         def _overshotBranch( branchHash : H, l : L ) : NewElements = {
           assert(
@@ -412,7 +412,7 @@ trait AltPMTrie[L,V,H,I<:AltPMTrie[L,V,H,I]] extends PMTrie[L,V,H,I] with PMTrie
         updatedPath( newElements )
       }
     }
-    case class Truncated( val elements : List[Element], val unhandled : IndexedSeq[L] ) extends Path {
+    final case class Truncated( val elements : List[Element], val unhandled : IndexedSeq[L] ) extends Path {
       assert(
         unhandled.length > 0 || elements == Nil,
         s"If there are no unhandled characters, this should have been an exact match rather than a trucation. [unhandled=${unhandled}, elements.length=${elements.length}]"

@@ -22,11 +22,11 @@ object RLP {
   // convenience methods
   def encodeString( str : String, charset : Charset ) : immutable.Seq[Byte] = Element.encode( Element.ByteSeq( str.getBytes( charset ).toSeq ) );
 
-  object Encoded {
+  final object Encoded {
     val EmptyByteSeq = Element.encode( Element.EmptyByteSeq );
     val EmptySeq     = Element.encode( Element.EmptySeq );
   }
-  object UTF_8 {
+  final object UTF_8 {
     val _Charset = StandardCharsets.UTF_8;
 
     /**
@@ -40,59 +40,59 @@ object RLP {
   /**
    * Elements are now formally immutable.
    */ 
-  object Element {
+  final object Element {
 
     sealed trait Basic extends Element;
 
     def sameBytes( a : Element, b : Element ) = a.simplify == b.simplify
 
-    object ByteSeq {
+    final object ByteSeq {
       def apply( array : Array[Byte] )   : ByteSeq = new ByteSeq( ImmutableArraySeq.Byte( array ) );
       def apply( seq : scala.Seq[Byte] ) : ByteSeq = new ByteSeq( toImmutableBytes( seq ) );
     }
-    case class ByteSeq( bytes : immutable.Seq[Byte] ) extends Element.Basic {
+    final case class ByteSeq( bytes : immutable.Seq[Byte] ) extends Element.Basic {
       def isSimple = true;
       def simplify = this;
     }
-    case class UnsignedByte( value : scala.Byte ) extends Element {
+    final case class UnsignedByte( value : scala.Byte ) extends Element {
       require( value >= 0 );
 
       def isSimple = false;
       def simplify = Element.ByteSeq( scalarBytes( value ) )
     }
-    case class UnsignedShort( value : scala.Short ) extends Element {
+    final case class UnsignedShort( value : scala.Short ) extends Element {
       require( value >= 0 );
 
       def isSimple = false;
       def simplify = Element.ByteSeq( scalarBytes( value ) )
     }
-    case class UnsignedInt( value : scala.Int ) extends Element {
+    final case class UnsignedInt( value : scala.Int ) extends Element {
       require( value >= 0 );
 
       def isSimple = false;
       def simplify = Element.ByteSeq( scalarBytes( value ) )
     }
-    case class UnsignedLong( value : scala.Long ) extends Element {
+    final case class UnsignedLong( value : scala.Long ) extends Element {
       require( value >= 0 );
 
       def isSimple = false;
       def simplify = Element.ByteSeq( scalarBytes( value ) )
     }
-    case class UnsignedBigInt( value : scala.BigInt ) extends Element {
+    final case class UnsignedBigInt( value : scala.BigInt ) extends Element {
       require( value >= 0 );
 
       def isSimple = false;
       def simplify = Element.ByteSeq( scalarBytes( value ) )
     }
-    object Seq {
-      object of {
+    final object Seq {
+      final object of {
         def apply( elements : Element* )  : Element.Seq = new Seq( ImmutableArraySeq( elements.toArray ) );
         def unapplySeq( seq : Element.Seq ) : Option[immutable.Seq[Element]] = Some(seq.seq);
       }
       def apply( array : Array[Element] )   = new Seq( ImmutableArraySeq( array ) );
       def apply( seq : scala.Seq[Element] ) = new Seq( toImmutable( seq ) );
     }
-    case class Seq( seq : immutable.Seq[Element] ) extends Element.Basic {
+    final case class Seq( seq : immutable.Seq[Element] ) extends Element.Basic {
       lazy val isSimple = seq.forall( _.isSimple )
       def simplify = if ( this.isSimple ) this else Seq( seq.map( _.simplify ) )
     }

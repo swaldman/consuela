@@ -6,7 +6,7 @@ object PMTrie {
   class UnknownHashException[H]( h : H, t : Throwable = null ) extends TrieException(s"Looked up but failed to find node for hash '${h}'", t);
   class DuplicateHashException[H]( h : H, t : Throwable = null) extends TrieException(s"The hash '${h}' has already been placed in the database. Cannot update immutable bindings", t);
 
-  object Database {
+  final object Database {
     trait NodeHashing[N,H] {
       self : Database[N,H] =>
 

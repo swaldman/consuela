@@ -2,29 +2,34 @@ package com.mchange.sc.v1.consuela.trie;
 
 import scala.annotation.tailrec;
 
+// i'd like to make the dependent case classes final, but doing so runs into an annoying
+// issue (whose only harm to us would be to emit lots of unsuppressable warnings).
+//
+// see https://groups.google.com/forum/#!msg/scala-internals/vw8Kek4zlZ8/LAeakfeR3RoJ
+
 object EmbeddableEthStylePMTrie {
   val UTF_8 = java.nio.charset.StandardCharsets.UTF_8;
 
   sealed trait Node[+L,+V,+H];
-  case class Branch[L,V,H] ( val children : IndexedSeq[NodeSource[L,V,H]], val mbValue : Option[V] ) extends Node[L,V,H];
-  case class Extension[L,V,H] ( val subkey : IndexedSeq[L], val child : NodeSource[L,V,H] ) extends Node[L,V,H] with UniqueSubkey[L,V,H];
-  case class Leaf[L,V,H] ( val subkey : IndexedSeq[L], val value : V ) extends Node[L,V,H] with UniqueSubkey[L,V,H];
-  case object Empty extends Node[Nothing,Nothing,Nothing];
+  final case class Branch[L,V,H] ( val children : IndexedSeq[NodeSource[L,V,H]], val mbValue : Option[V] ) extends Node[L,V,H];
+  final case class Extension[L,V,H] ( val subkey : IndexedSeq[L], val child : NodeSource[L,V,H] ) extends Node[L,V,H] with UniqueSubkey[L,V,H];
+  final case class Leaf[L,V,H] ( val subkey : IndexedSeq[L], val value : V ) extends Node[L,V,H] with UniqueSubkey[L,V,H];
+  final case object Empty extends Node[Nothing,Nothing,Nothing];
 
   trait UniqueSubkey[L,V,H] {
     self : Node[L,V,H] =>
 
     def subkey : IndexedSeq[L];
   }
-  object NodeSource {
+  final object NodeSource {
     trait Defaults {
       def isHash : Boolean     = false;
       def isEmbedded : Boolean = false;
       def isEmpty : Boolean    = false;
     }
-    case class Hash[L,V,H]( hash : H ) extends Defaults with NodeSource[L,V,H]               { override def isHash     : Boolean = true; }
-    case class Embedded[L,V,H]( node : Node[L,V,H] ) extends Defaults with NodeSource[L,V,H] { override def isEmbedded : Boolean = true; }
-    case object Empty extends Defaults with NodeSource[Nothing,Nothing,Nothing]              { override def isEmpty    : Boolean = true; }
+    final case class Hash[L,V,H]( hash : H ) extends Defaults with NodeSource[L,V,H]               { override def isHash     : Boolean = true; }
+    final case class Embedded[L,V,H]( node : Node[L,V,H] ) extends Defaults with NodeSource[L,V,H] { override def isEmbedded : Boolean = true; }
+    final case object Empty extends Defaults with NodeSource[Nothing,Nothing,Nothing]              { override def isEmpty    : Boolean = true; }
   }
   sealed trait NodeSource[+L,+V,+H]{
     def isHash : Boolean;
@@ -59,7 +64,7 @@ object EmbeddableEthStylePMTrie {
     def EmptyHash : H;
   }
 
-  case class EarlyInit[L,V,H]( alphabet : IndexedSeq[L], database : Database[L,V,H], RootHash : H );
+  final case class EarlyInit[L,V,H]( alphabet : IndexedSeq[L], database : Database[L,V,H], RootHash : H );
 }
 
 trait EmbeddableEthStylePMTrie[L,V,H,I<:EmbeddableEthStylePMTrie[L,V,H,I]] extends PMTrie[L,V,H,I] {
@@ -237,8 +242,8 @@ trait EmbeddableEthStylePMTrie[L,V,H,I<:EmbeddableEthStylePMTrie[L,V,H,I]] exten
 
   private[this] def aerr( message : String ) : Nothing = throw new AssertionError( message );
 
-  object Path {
-    object Builder {
+  final object Path {
+    final object Builder {
       def build( key : Subkey ) : Path = if (key.isEmpty) buildEmptySubkey() else buildNonemptySubkey( RootSource, RootNode, key, Nil )
 
       private def buildEmptySubkey() : Path = {
@@ -304,7 +309,7 @@ trait EmbeddableEthStylePMTrie[L,V,H,I<:EmbeddableEthStylePMTrie[L,V,H,I]] exten
           }
         }
       }
-      object SubkeyComparison {
+      final object SubkeyComparison {
         case class  MatchLessThan( matched : Subkey, unmatchedB : Subkey ) extends SubkeyComparison;
         case class  MatchGreaterThan( matched : Subkey, unmatchedA : Subkey ) extends SubkeyComparison;
         case class  MatchExact( matched : Subkey ) extends SubkeyComparison;
@@ -332,7 +337,7 @@ trait EmbeddableEthStylePMTrie[L,V,H,I<:EmbeddableEthStylePMTrie[L,V,H,I]] exten
         }
       }
     }
-    object Element {
+    final object Element {
       val Root = Element( RootSource, RootNode );
       val Deletion = Element( NodeSource.Empty, null );
 
@@ -340,7 +345,7 @@ trait EmbeddableEthStylePMTrie[L,V,H,I<:EmbeddableEthStylePMTrie[L,V,H,I]] exten
     }
     case class Element( source : NodeSource, node : Node )
 
-    object NewElements {
+    final object NewElements {
       def apply( head : Element, uniqueChild : Element )   : NewElements = apply( head, Set( uniqueChild ) );
       def apply( headNode : Node )                         : NewElements = apply( Element( headNode ) );
       def apply( headNode : Node, childNodes : Set[Node] ) : NewElements = apply( Element( headNode ), childNodes.map( Element( _ ) ) );
@@ -498,7 +503,6 @@ trait EmbeddableEthStylePMTrie[L,V,H,I<:EmbeddableEthStylePMTrie[L,V,H,I]] exten
         case _                  => droppingBranch.copy( children=droppingBranch.children.updated( dropLetterIndex, NodeSource.Empty ) )
       }
     }
-
     case class DivergentLeaf( leaf : Leaf, elements : List[Element], matched : Subkey, oldRemainder : Subkey, newDivergence : Subkey ) extends Path {
       def replacementForIncluding( v : V ) : NewElements = {
         val oldRemainderLeaf = Leaf( oldRemainder.tail, leaf.value ); //tail can be empty, leaves can have empty keys

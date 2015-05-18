@@ -29,12 +29,12 @@ package object ethereum {
   val EmptyByteSeqHash = EthHash.hash( encoding.RLP.Encoded.EmptyByteSeq );
   val AllZeroesEthHash = EthHash.withBytes( Array.ofDim[Byte]( EthHashLen ) );
 
-  implicit object EthHash_RLPSerializing extends RLPSerializing.ByteArrayValue[EthHash]( EthHash.withBytes );
+  implicit final object EthHash_RLPSerializing extends RLPSerializing.ByteArrayValue[EthHash]( EthHash.withBytes );
 
   // I'm not sure why the compiler fails to find, requires me to supply, the RLPSerializing implicit parameter explicitly here
-  implicit object EthLogBloomDefinition extends EthBloom.Definition[EthLogEntry]( (entry : EthLogEntry) => EthHash.hash( RLP.encode( entry )( EthLogEntry_RLPSerializing ) ) );
+  implicit final object EthLogBloomDefinition extends EthBloom.Definition[EthLogEntry]( (entry : EthLogEntry) => EthHash.hash( RLP.encode( entry )( EthLogEntry_RLPSerializing ) ) );
 
-  object EthLogBloom {
+  final object EthLogBloom {
     def fromBytes( bytes : Array[Byte] ) : EthLogBloom = BitSetBloom.fromBytes[EthLogEntry]( bytes );
     val empty                            : EthLogBloom = BitSetBloom.empty[EthLogEntry];
   }
@@ -44,7 +44,7 @@ package object ethereum {
     def toByteSeqExact256 : ByteSeqExact256 = ByteSeqExact256( elb.bytes );
   }
 
-  implicit object EthLogBloom_RLPSerializing extends RLPSerializing[EthLogBloom] {
+  implicit final object EthLogBloom_RLPSerializing extends RLPSerializing[EthLogBloom] {
     def toElement( elb : EthLogBloom ) : RLP.Element = RLP.toElement[ByteSeqExact256]( elb.toByteSeqExact256 );
     def fromElement( element : RLP.Element.Basic ) : Failable[EthLogBloom] = {
       RLP.fromElement[ByteSeqExact256]( element ).map( bse256 => BitSetBloom.fromBytes[EthLogEntry]( bse256.widen ) );
@@ -52,14 +52,14 @@ package object ethereum {
   }
 
   // XXX: should I switch to the more strongly typed version below?
-  implicit object EthAddress_RLPSerializing extends RLPSerializing.ByteArrayValue[EthAddress]( EthAddress.apply );
+  implicit final object EthAddress_RLPSerializing extends RLPSerializing.ByteArrayValue[EthAddress]( EthAddress.apply );
 
-  //implicit object EthAddress_RLPSerializing extends RLPSerializing[EthAddress] {
+  //implicit final object EthAddress_RLPSerializing extends RLPSerializing[EthAddress] {
   //  def toElement( address : EthAddress ) : RLP.Element = RLP.toElement[ByteSeqExact20]( address.toByteSeqExact20 );
   //  def fromElement( element : RLP.Element.Basic ) : Failable[EthAddress] = RLP.fromElement[ByteSeqExact20]( element ).map( EthAddress( _ ) );
   //}
 
-  implicit object EthTransaction_RLPSerializing extends RLPSerializing[EthTransaction] {
+  implicit final object EthTransaction_RLPSerializing extends RLPSerializing[EthTransaction] {
     import EthTransaction._;
 
     override def toElement( txn : EthTransaction ): RLP.Element = {
@@ -125,7 +125,7 @@ package object ethereum {
     }
   }
 
-  implicit object EthWorldStateAccount_RLPSerializing extends RLPSerializing[EthWorldState.Account] {
+  implicit final object EthWorldStateAccount_RLPSerializing extends RLPSerializing[EthWorldState.Account] {
     def toElement( account : EthWorldState.Account ) : RLP.Element = {
       val codeHash = {
         account match {
@@ -154,7 +154,7 @@ package object ethereum {
     }
   }
 
-  implicit object EthBlockHeader_RLPSerializing extends RLPSerializing[EthBlock.Header] {
+  implicit final object EthBlockHeader_RLPSerializing extends RLPSerializing[EthBlock.Header] {
     def toElement( header : EthBlock.Header ) : RLP.Element = {
       import header._
       RLP.Element.Seq.of( 
@@ -196,10 +196,10 @@ package object ethereum {
     }
   }
 
-  implicit object EthTransactionSeq_RLPSerializing extends RLPSerializing.HomogeneousElementSeq[EthTransaction];
-  implicit object EthBlockHeaderSeq_RLPSerializing extends RLPSerializing.HomogeneousElementSeq[EthBlock.Header];
+  implicit final object EthTransactionSeq_RLPSerializing extends RLPSerializing.HomogeneousElementSeq[EthTransaction];
+  implicit final object EthBlockHeaderSeq_RLPSerializing extends RLPSerializing.HomogeneousElementSeq[EthBlock.Header];
 
-  implicit object EthBlock_RLPSerializing extends RLPSerializing[EthBlock] {
+  implicit final object EthBlock_RLPSerializing extends RLPSerializing[EthBlock] {
     def toElement( block : EthBlock ) : RLP.Element = {
       val txnsSeq = RLP.Element.Seq( asElements( block.transactions ) );
       val ommersSeq = RLP.Element.Seq( asElements( block.ommers ) );
@@ -221,9 +221,9 @@ package object ethereum {
     }
   }
 
-  implicit object ByteSeqExact32Seq_RLPSerializing extends RLPSerializing.HomogeneousElementSeq[ByteSeqExact32];
+  implicit final object ByteSeqExact32Seq_RLPSerializing extends RLPSerializing.HomogeneousElementSeq[ByteSeqExact32];
 
-  implicit object EthLogEntry_RLPSerializing extends RLPSerializing[EthLogEntry] {
+  implicit final object EthLogEntry_RLPSerializing extends RLPSerializing[EthLogEntry] {
     def toElement( entry : EthLogEntry ) : RLP.Element = {
       import entry._
       RLP.Element.Seq.of( address, topics, data );
@@ -244,9 +244,9 @@ package object ethereum {
     }
   }
 
-  implicit object EthLogEntrySeq_RLPSerializing extends RLPSerializing.HomogeneousElementSeq[EthLogEntry];
+  implicit final object EthLogEntrySeq_RLPSerializing extends RLPSerializing.HomogeneousElementSeq[EthLogEntry];
 
-  implicit object EthTransactionReceipt_RLPSerializing extends RLPSerializing[EthTransactionReceipt] {
+  implicit final object EthTransactionReceipt_RLPSerializing extends RLPSerializing[EthTransactionReceipt] {
     def toElement( receipt : EthTransactionReceipt ) : RLP.Element = {
       import receipt._
       RLP.Element.Seq.of( postTransactionState, gasUsed, logsBloom, logEntries );

@@ -2,6 +2,11 @@ package com.mchange.sc.v1.consuela.trie;
 
 import scala.annotation.tailrec;
 
+// i'd like to make the dependent case classes final, but doing so runs into an annoying
+// issue (whose only harm to us would be to emit lots of unsuppressable warnings).
+//
+// see https://groups.google.com/forum/#!msg/scala-internals/vw8Kek4zlZ8/LAeakfeR3RoJ
+
 object EthStylePMTrie {
   trait UniqueSubkey[L] {
     self : Node[L,_,_] =>
@@ -9,10 +14,10 @@ object EthStylePMTrie {
     def subkey : IndexedSeq[L];
   }
   sealed trait Node[+L,+V,+H];
-  case class Branch[L,V,H] ( val children : IndexedSeq[H], val mbValue : Option[V] ) extends Node[L,V,H];
-  case class Extension[L,V,H] ( val subkey : IndexedSeq[L], val child : H ) extends Node[L,V,H] with UniqueSubkey[L];
-  case class Leaf[L,V,H] ( val subkey : IndexedSeq[L], val value : V ) extends Node[L,V,H] with UniqueSubkey[L];
-  case object Empty extends Node[Nothing,Nothing,Nothing];
+  final case class Branch[L,V,H] ( val children : IndexedSeq[H], val mbValue : Option[V] ) extends Node[L,V,H];
+  final case class Extension[L,V,H] ( val subkey : IndexedSeq[L], val child : H ) extends Node[L,V,H] with UniqueSubkey[L];
+  final case class Leaf[L,V,H] ( val subkey : IndexedSeq[L], val value : V ) extends Node[L,V,H] with UniqueSubkey[L];
+  final case object Empty extends Node[Nothing,Nothing,Nothing];
 
   type Database[L,V,H] = PMTrie.Database[Node[L,V,H],H] with PMTrie.Database.NodeHashing[Node[L,V,H],H]
 }
@@ -120,8 +125,8 @@ trait EthStylePMTrie[L,V,H,I<:EthStylePMTrie[L,V,H,I]] extends PMTrie[L,V,H,I] w
 
   private[this] def aerr( message : String ) : Nothing = throw new AssertionError( message );
 
-  object Path {
-    object Builder {
+  final object Path {
+    final object Builder {
       def build( key : IndexedSeq[L] ) : Path = if (key.isEmpty) buildEmptySubkey() else buildNonemptySubkey( RootHash, RootNode, key, Nil )
 
       private def buildEmptySubkey() : Path = {
@@ -187,7 +192,7 @@ trait EthStylePMTrie[L,V,H,I<:EthStylePMTrie[L,V,H,I]] extends PMTrie[L,V,H,I] w
           }
         }
       }
-      object SubkeyComparison {
+      final object SubkeyComparison {
         case class  MatchLessThan( matched : Subkey, unmatchedB : Subkey ) extends SubkeyComparison;
         case class  MatchGreaterThan( matched : Subkey, unmatchedA : Subkey ) extends SubkeyComparison;
         case class  MatchExact( matched : Subkey ) extends SubkeyComparison;
@@ -215,7 +220,7 @@ trait EthStylePMTrie[L,V,H,I<:EthStylePMTrie[L,V,H,I]] extends PMTrie[L,V,H,I] w
         }
       }
     }
-    object Element {
+    final object Element {
       lazy val Root = Element( RootHash, RootNode );
       val Deletion = Element( EmptyHash, null );
 
@@ -223,7 +228,7 @@ trait EthStylePMTrie[L,V,H,I<:EthStylePMTrie[L,V,H,I]] extends PMTrie[L,V,H,I] w
     }
     case class Element( hash : H, node : Node )
 
-    object NewElements {
+    final object NewElements {
       def apply( head : Element, uniqueChild : Element )   : NewElements = apply( head, Set( uniqueChild ) );
       def apply( headNode : Node )                         : NewElements = apply( Element( headNode ) );
       def apply( headNode : Node, childNodes : Set[Node] ) : NewElements = apply( Element( headNode ), childNodes.map( Element( _ ) ) );

@@ -53,21 +53,21 @@ package object encoding {
    * 
    */ 
   // serializers
-  implicit object ByteSeqSerializer extends RLPSerializing[Seq[Byte]] {
+  implicit final object ByteSeqSerializer extends RLPSerializing[Seq[Byte]] {
     def toElement( bytes : Seq[Byte] )             : RLP.Element = RLP.Element.ByteSeq( bytes );
     def fromElement( element : RLP.Element.Basic ) : Failable[Seq[Byte]] = element match {
       case RLP.Element.ByteSeq( bytes ) => succeed( bytes );
       case _                            => failNotLeaf( element );
     }
   }
-  implicit object ImmutableByteSeqSerializer extends RLPSerializing[immutable.Seq[Byte]] {
+  implicit final object ImmutableByteSeqSerializer extends RLPSerializing[immutable.Seq[Byte]] {
     def toElement( bytes : immutable.Seq[Byte] )   : RLP.Element = RLP.Element.ByteSeq( bytes );
     def fromElement( element : RLP.Element.Basic ) : Failable[immutable.Seq[Byte]] = element match {
       case RLP.Element.ByteSeq( bytes ) => succeed( bytes );
       case _                            => failNotLeaf( element );
     }
   }
-  implicit object ByteArraySerializer extends RLPSerializing[Array[Byte]] {
+  implicit final object ByteArraySerializer extends RLPSerializing[Array[Byte]] {
     def toElement( bytes : Array[Byte] )           : RLP.Element = RLP.Element.ByteSeq( bytes );
     def fromElement( element : RLP.Element.Basic ) : Failable[Array[Byte]] = element match {
       case RLP.Element.ByteSeq( bytes ) => succeed( bytes.toArray );
@@ -75,7 +75,7 @@ package object encoding {
     }
   }
   /*
-  implicit object UnsignedIntSerializer extends RLPSerializing[Int] {
+  implicit final object UnsignedIntSerializer extends RLPSerializing[Int] {
     def toElement( i : Int )                       : RLP.Element = RLP.Element.UnsignedInt( i );
     def fromElement( element : RLP.Element.Basic ) : Failable[Int] = element match {
       case RLP.Element.ByteSeq( bytes ) if (bytes.length <= 4) => {
@@ -93,7 +93,7 @@ package object encoding {
       case _                                                   => failNotLeaf( element );
     }
   }
-  implicit object UnsignedBigIntSerializer extends RLPSerializing[BigInt] {
+  implicit final object UnsignedBigIntSerializer extends RLPSerializing[BigInt] {
     def toElement( bi : BigInt )                   : RLP.Element = RLP.Element.UnsignedBigInt( bi );
     def fromElement( element : RLP.Element.Basic ) : Failable[BigInt] = element match {
       case RLP.Element.ByteSeq( bytes ) => succeed( BigInt( 1, bytes.toArray ) );
@@ -103,7 +103,7 @@ package object encoding {
   */
  
   // pimps
-  object RLPOps {
+  final object RLPOps {
     trait Lazy[T] { // classes can implement RLPOps.Lazy if they wish to implement offer on-structure memoization
       this : T =>
 

@@ -32,7 +32,7 @@ object EthBlockDetails {
     EthBlock( header, Seq.empty, Seq.empty )
   }
 
-  object Header {
+  final object Header {
     val LateChildThreshold = 8; // seconds
 
     def isValidChildOfParent( putativeChild : EthBlock.Header, putativeParent : EthBlock.Header ) : Boolean = {
@@ -83,10 +83,10 @@ object EthBlockDetails {
 
     private val _GenesisDifficulty = GenesisDifficulty.widen;
 
-    object ProofOfWork {
+    final object ProofOfWork {
       private[Header] val ThresholdNumerator : BigInt = BigInt(1) << 256;
     }
-    case class ProofOfWork( m : EthHash, n : Unsigned256 );
+    final case class ProofOfWork( m : EthHash, n : Unsigned256 );
 
     def proofOfWork( putativeNonce : Unsigned64, ignoreMixNonceHeader : EthBlock.Header ) : ProofOfWork = ???
 

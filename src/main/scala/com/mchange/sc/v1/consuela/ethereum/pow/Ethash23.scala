@@ -71,7 +71,7 @@ object Ethash23 {
   private final val RowWidth = 16; // four-byte Ints
 
   // see https://github.com/ethereum/wiki/wiki/Ethash-DAG
-  object DagFile {
+  final object DagFile {
     private[Ethash23] final val MagicNumber = 0xFEE1DEADBADDCAFEL
     private[Ethash23] final val MagicNumberLittleEndianBytes = {
       val bytes = Array.ofDim[Byte](8);
@@ -133,10 +133,11 @@ object Ethash23 {
 
   lazy val Default = ParallelUInt32AsInt;
 
-  object SequentialUInt32AsInt extends UInt32AsInt;
-  object ParallelUInt32AsInt extends UInt32AsInt with Parallel;
-  object LoggingSequentialUInt32AsInt extends UInt32AsInt with Logging;
-  object LoggingParallelUInt32AsInt extends UInt32AsInt with Parallel with Logging;
+  // learn something new every day! mark nested objects as final
+  // http://stackoverflow.com/questions/30265070/whats-the-point-of-nonfinal-singleton-objects-in-scala  final object SequentialUInt32AsInt extends UInt32AsInt;
+  final object ParallelUInt32AsInt extends UInt32AsInt with Parallel;
+  final object LoggingSequentialUInt32AsInt extends UInt32AsInt with Logging;
+  final object LoggingParallelUInt32AsInt extends UInt32AsInt with Parallel with Logging;
 
   // for reasons I don't quite understand, embedding these implicitlys in object initializers directly,
   // lazy or not, led to errors in initialization ( null pointer or stack overflow). by trial and error,
@@ -592,7 +593,7 @@ object Ethash23 {
     private def fnv( v1 : Long, v2 : Long ) : Long = ((v1 * FnvPrime) ^ v2) & 0xFFFFFFFFL
   }
 
-  object Seed {
+  final object Seed {
     private implicit lazy val logger = MLogger( this );
 
     case class Primer( epochNumber : Long, value : SHA3_256 );
@@ -639,7 +640,7 @@ object Ethash23 {
     def getForBlock( blockNumber : Long ) : Array[Byte] = getForEpoch( epochFromBlock( blockNumber ) )
   }
 
-  object Manager {
+  final object Manager {
 
     val FileBufferSize = 16 * 1024 * 1024; // 16MB
 

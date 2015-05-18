@@ -10,10 +10,10 @@ import scala.collection.immutable.Seq;
 object EthBlock {
   val Genesis : EthBlock = Details.GenesisBlock;
 
-  object Header {
+  final object Header {
     def isValidChildOfParent( putativeChild : Header, putativeParent : Header ) : Boolean = Details.Header.isValidChildOfParent( putativeChild, putativeParent );
   }
-  case class Header( 
+  final case class Header( 
     parentHash      : EthHash, 
     ommersHash      : EthHash, 
     coinbase        : EthAddress, 
@@ -33,4 +33,4 @@ object EthBlock {
     def isValidChild( putativeParent : Header ) : Boolean = Header.isValidChildOfParent( this, putativeParent );
   }
 }
-case class EthBlock( header : EthBlock.Header, transactions : Seq[EthTransaction], ommers : Seq[EthBlock.Header] );
+final case class EthBlock( header : EthBlock.Header, transactions : Seq[EthTransaction], ommers : Seq[EthBlock.Header] );

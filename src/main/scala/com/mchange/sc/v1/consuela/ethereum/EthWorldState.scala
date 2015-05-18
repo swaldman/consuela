@@ -10,17 +10,17 @@ import scala.collection.Traversable;
 import specification.Types.Unsigned256;
 
 object EthWorldState {
-  object Account {
+  final object Account {
     def apply( nonce : Unsigned256, balance : Unsigned256, storageRoot : EthHash, codeHash : EthHash ) : EthWorldState.Account = {
       codeHash match {
         case EmptyTrieHash => Agent( nonce, balance, storageRoot );
         case nonempty      => Contract( nonce, balance, storageRoot, nonempty );
       }
     }
-    case class Contract( nonce : Unsigned256, balance : Unsigned256, storageRoot : EthHash, codeHash : EthHash ) extends Account {
+    final case class Contract( nonce : Unsigned256, balance : Unsigned256, storageRoot : EthHash, codeHash : EthHash ) extends Account {
       require( codeHash != EmptyTrieHash );
     }
-    case class Agent( nonce : Unsigned256, balance : Unsigned256, storageRoot : EthHash ) extends Account {
+    final case class Agent( nonce : Unsigned256, balance : Unsigned256, storageRoot : EthHash ) extends Account {
       def codeHash = EmptyTrieHash;
     }
   }
@@ -34,7 +34,7 @@ object EthWorldState {
     def isContract : Boolean = !this.isAgent;
   }
 }
-class EthWorldState( private val trie : SimpleEthTrie ) {
+final class EthWorldState( private val trie : SimpleEthTrie ) {
   import EthWorldState.Account;
 
   def this( db : EthTrieDb, rootHash : EthHash ) = this( new SimpleEthTrie( db, rootHash ) );

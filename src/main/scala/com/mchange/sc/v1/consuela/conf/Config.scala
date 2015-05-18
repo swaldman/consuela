@@ -27,7 +27,7 @@ object Config {
   val EthereumPowEthash23DagFileDirectory      = Item.EthereumPowEthash23DagFileDirectory.get;
   val EthereumPowEthash23ManagerDoubleDag      = Item.EthereumPowEthash23ManagerDoubleDag.get;
 
-  private[this] object Item {
+  private[this] final object Item {
     val CryptoJceProviderName              = StringItem( "crypto.jce.providerName", "BC" ); //bouncycastle
     val CryptoJceProviderClassNames        = StringListItem( "crypto.jce.providerClassNames", List( "org.bouncycastle.jce.provider.BouncyCastleProvider" ) );
     val CryptoJceForbidUseOfOtherProviders = BooleanItem("crypto.jce.forbidUseOfOtherProviders", false);
@@ -42,17 +42,17 @@ object Config {
     def dflt : T;
     def get  : T;
   }
-  private[this] case class StringItem( path : String, dflt : String ) extends Item[String] {
+  private[this] final case class StringItem( path : String, dflt : String ) extends Item[String] {
     def get : String = TRACE.attempt( _inner.getString( path ) ).getOrElse( dflt );
   }
-  private[this] case class StringListItem( path : String, dflt : List[String] ) extends Item[List[String]] {
+  private[this] final case class StringListItem( path : String, dflt : List[String] ) extends Item[List[String]] {
     import scala.collection.JavaConverters._;
     def get : List[String] =  TRACE.attempt( _inner.getStringList( path ).asScala.toList ).getOrElse( dflt );
   }
-  private[this] case class BooleanItem( path : String, dflt : Boolean ) extends Item[Boolean] {
+  private[this] final case class BooleanItem( path : String, dflt : Boolean ) extends Item[Boolean] {
     def get : Boolean = TRACE.attempt( _inner.getBoolean( path ) ).getOrElse( dflt );
   }
-  private[this] case class LongItem( path : String, dflt : Long ) extends Item[Long] {
+  private[this] final case class LongItem( path : String, dflt : Long ) extends Item[Long] {
     def get : Long = TRACE.attempt( _inner.getLong( path ) ).getOrElse( dflt );
   }
 }

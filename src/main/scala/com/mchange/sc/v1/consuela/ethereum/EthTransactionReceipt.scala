@@ -10,7 +10,7 @@ object EthTransactionReceipt {
   }
   def computeLogsBloom( entries : Seq[EthLogEntry] ) : EthLogBloom = BitSetBloom[EthLogEntry]( entries : _* )
 }
-case class EthTransactionReceipt( postTransactionState : EthHash, gasUsed : Unsigned256, logsBloom : EthLogBloom, logEntries : immutable.Seq[EthLogEntry] ) {
+final case class EthTransactionReceipt( postTransactionState : EthHash, gasUsed : Unsigned256, logsBloom : EthLogBloom, logEntries : immutable.Seq[EthLogEntry] ) {
   lazy val isValid : Boolean = ( logsBloom == EthTransactionReceipt.computeLogsBloom( logEntries ) );
 
   def isInvalid : Boolean = !this.isValid;

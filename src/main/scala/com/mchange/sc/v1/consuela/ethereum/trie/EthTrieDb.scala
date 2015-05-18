@@ -11,7 +11,7 @@ object EthTrieDb {
 
   private def aerr( msg : String ) = throw new AssertionError( msg );
 
-  object Test {
+  final object Test {
     import EmbeddableEthStylePMTrie.EarlyInit;
 
     class Db extends EthTrieDb {
