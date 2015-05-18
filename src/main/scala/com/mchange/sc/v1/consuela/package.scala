@@ -10,6 +10,9 @@ import javax.xml.bind.DatatypeConverter;
 
 import scala.util.{Try, Success, Failure};
 
+import com.mchange.sc.v1.log.{MLogger,MLevel};
+import com.mchange.sc.v1.log.MLevel._;
+
 package object consuela {
   class ConsuelaException( message : String, t : Throwable = null ) extends Exception( message, t );
   class UnhandledFailException( fail : Fail ) extends Exception( fail.toString, fail.source match { case th : Throwable => th; case _ => null } );
@@ -87,7 +90,7 @@ package object consuela {
    */  
   def refail( prefail : Left[Fail,Any] ) : Failable[Nothing] = prefail.asInstanceOf[Failable[Nothing]]
 
-  def succeed[T]( value : T) : Failable[T] = Right( value );
+  def succeed[T]( value : T ) : Failable[T] = Right( value );
 
   val poop : PartialFunction[Throwable, Failable[Nothing]] = { case scala.util.control.NonFatal( t : Throwable ) => fail( t ) }
 
@@ -103,6 +106,21 @@ package object consuela {
       maybe match {
         case Some( value )  => succeed( value );
         case None           => fail( source, true );
+      }
+    }
+  }
+
+  implicit class FailableLoggingOps[T]( val failable : Failable[T] ) extends AnyVal {
+    def logFail( level : MLevel )( implicit logger : MLogger ) : Unit = {
+      failable match {
+        case Left( oops ) => level.log( oops.toString )( logger )
+        case Right( _ )   => /* ignore */;
+      }
+    }
+    def logFail( level : MLevel, premessage : =>String )( implicit logger : MLogger ) : Unit = {
+      failable match {
+        case Left( oops ) => level.log( premessage + lineSeparator + oops )( logger )
+        case Right( _ )   => /* ignore */;
       }
     }
   }
