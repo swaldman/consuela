@@ -648,6 +648,10 @@ object Ethash23 {
     import java.nio.file._
     import java.nio.file.attribute._
 
+    final object Light                 extends Light( Ethash23.Default );
+    final object FullManualCaching     extends Full ( Ethash23.Default );
+    final object FullStochasticCaching extends Full ( Ethash23.Default ) with StochasticNextCaching;
+
     val FileBufferSize = 16 * 1024 * 1024; // 16MB
 
     val DoubleDag = Config.EthereumPowEthash23ManagerDoubleDag;
@@ -907,7 +911,7 @@ object Ethash23 {
         val failableFile = file.fold( dagFileReadyToWrite( epochRecord.seed ) )( succeed(_) ) 
         failableFile.flatMap( f => streamDagFileForEpochNumber( epochNumber, epochRecord.cache, f ) )
       }
-      protected def streamDagFileForEpochNumber( epochNumber : Long, cache : implementation.Cache, file : File ) : Failable[Unit] = {
+      private def streamDagFileForEpochNumber( epochNumber : Long, cache : implementation.Cache, file : File ) : Failable[Unit] = {
         def doStream( path : Path ) : Failable[Unit] = {
           Try {
             // now create the stream we mean to write to
@@ -915,9 +919,12 @@ object Ethash23 {
 
             // now write and deal with any problems
             try {
-              implementation.streamDatasetAsDagFile( os, record.cache, implementation.getFullSizeForEpoch( epochNumber ) )
+              implementation.streamDatasetAsDagFile( os, cache, implementation.getFullSizeForEpoch( epochNumber ) )
             } catch {
-              case t : Throwable => Files.delete( path );
+              case t : Throwable => { 
+                Files.delete( path );
+                throw t;
+              }
             }finally {
               os.close
             }
@@ -934,7 +941,7 @@ object Ethash23 {
       }
       def hashimoto( header : EthBlock.Header ) : Hashimoto = this.hashimoto( header, header.nonce );
     }
-    class Light( i8n : Ethash23 ) extends Abstract( i8n ) {
+    abstract class Light( i8n : Ethash23 ) extends Abstract( i8n ) {
       val holdsDataset = false;
 
       def hashimoto( header : EthBlock.Header, nonce : Unsigned64 ) : Hashimoto = {
@@ -943,7 +950,7 @@ object Ethash23 {
         implementation.hashimotoLight( header, epochRecord.cache, nonce );
       }
     }
-    class Full( i8n : Ethash23 ) extends Abstract( i8n ) {
+    abstract class Full( i8n : Ethash23 ) extends Abstract( i8n ) {
       val holdsDataset = true;
 
       def hashimoto( header : EthBlock.Header, nonce : Unsigned64 ) : Hashimoto = {
@@ -1061,7 +1068,7 @@ trait Ethash23 {
   def streamDatasetAsDagFile( os : OutputStream, cache : Cache, fullSize : Long ) : Unit = {
     os.write( DagFile.MagicNumberLittleEndianBytes );
     val len = datasetLen( fullSize )
-    (0 until len).foreach( i => writeRow( calcDatasetRow( cache, i ) ) )
+    (0 until len).foreach( i => os.write( writeRow( calcDatasetRow( cache, i ) ) ) )
   }
 
   // protected utilities
