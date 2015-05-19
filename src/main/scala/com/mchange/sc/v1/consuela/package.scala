@@ -111,18 +111,22 @@ package object consuela {
   }
 
   implicit class FailableLoggingOps[T]( val failable : Failable[T] ) extends AnyVal {
-    def logFail( level : MLevel )( implicit logger : MLogger ) : Unit = {
+    def logFail( level : MLevel, premessage : =>String  = "" )( implicit logger : MLogger ) : Failable[T] = {
+      val pm = premessage; // avoid multiple executions of the by name expression
+      val prefix = if ( pm == "" || pm == null ) "" else pm + lineSeparator;
       failable match {
-        case Left( oops ) => level.log( oops.toString )( logger )
+        case Left( oops ) => level.log( prefix + oops )( logger )
         case Right( _ )   => /* ignore */;
       }
+      failable
     }
-    def logFail( level : MLevel, premessage : =>String )( implicit logger : MLogger ) : Unit = {
-      failable match {
-        case Left( oops ) => level.log( premessage + lineSeparator + oops )( logger )
-        case Right( _ )   => /* ignore */;
-      }
-    }
+    def warning( premessage : String = "" )( implicit logger : MLogger ) : Failable[T] = logFail( WARNING, premessage )( logger )
+    def severe( premessage : String = "" )( implicit logger : MLogger )  : Failable[T] = logFail( SEVERE, premessage )( logger )
+    def info( premessage : String = "" )( implicit logger : MLogger )    : Failable[T] = logFail( INFO, premessage )( logger )
+    def debug( premessage : String = "" )( implicit logger : MLogger )   : Failable[T] = logFail( DEBUG, premessage )( logger )
+    def trace( premessage : String = "" )( implicit logger : MLogger )   : Failable[T] = logFail( TRACE, premessage )( logger )
+
+    def warn( premessage : String = "" )( implicit logger : MLogger ) : Failable[T] = warning( premessage )( logger )
   }
 
   implicit class RichString( val string : String ) extends AnyVal {
