@@ -760,7 +760,7 @@ object Ethash23 {
 
       protected val holdsDataset : Boolean;
 
-      private def keepLastRecord = (!holdsDataset) || DoubleDag;
+      private def keepsLastRecord = (!holdsDataset) || DoubleDag;
 
       protected def prepareForBlock( blockNumber : Long ) : EpochRecord = {
         val DesiredEpoch = epochFromBlock( blockNumber );
@@ -832,7 +832,7 @@ object Ethash23 {
       }
 
       private def updateRecord( record : EpochRecord ) : Unit = this.synchronized {
-        this.lastRecord = if ( this.holdsDataset ) null else this.record; 
+        this.lastRecord = if ( !this.keepsLastRecord ) null else this.record; 
         this.record     = record;
         this.preparing  = None;
         this.notifyAll();
