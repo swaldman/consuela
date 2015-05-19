@@ -53,7 +53,7 @@ package object specification {
   }
   abstract class RestrictedTypeRLPSerializing[BELLY, SHIELD <: ShieldType[BELLY]]( factory : RestrictedType[_, BELLY, SHIELD] ) extends RLPSerializing[SHIELD] {
     def toElement( shield : SHIELD )               : RLP.Element      = elementFromBelly( shield.unwrap ); // boxes then unboxes, but that's okay.
-    def fromElement( element : RLP.Element.Basic ) : Failable[SHIELD] = try succeed( factory( bellyFromElement( element ) ) ) catch poop; 
+    def fromElement( element : RLP.Element.Basic ) : Failable[SHIELD] = try succeed( factory( bellyFromElement( element ) ) ) catch Poop; 
 
     def elementFromBelly( belly : BELLY )               : RLP.Element;
     def bellyFromElement( element : RLP.Element.Basic ) : BELLY; // let it throw its Exceptions

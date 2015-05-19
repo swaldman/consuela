@@ -110,7 +110,7 @@ package object consuela {
 
   def succeed[T]( value : T ) : Failable[T] = Right( value );
 
-  val poop : PartialFunction[Throwable, Failable[Nothing]] = { case scala.util.control.NonFatal( t : Throwable ) => fail( t ) }
+  val Poop : PartialFunction[Throwable, Failable[Nothing]] = { case scala.util.control.NonFatal( t : Throwable ) => fail( t ) }
 
   implicit class FailableTry[T]( val attempt : Try[T] ) extends AnyVal {
     def toFailable : Failable[T] = attempt match {

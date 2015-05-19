@@ -32,6 +32,9 @@ import scala.reflect.ClassTag;
 
 import java.io.{BufferedInputStream,BufferedOutputStream,File,FileInputStream,InputStream,OutputStream,EOFException}
 
+import java.nio.file._
+import java.nio.file.attribute._
+
 // is Long math good enough? (looking at the magnitudes, i think it is, but i'm not certain)
 // we can put the whole class in terms of spire SafeLong easily enough if not...
 // but when the dataset gets bigger than ~8GB, we'll exceed int array indices, and have to encode
@@ -72,6 +75,22 @@ object Ethash23 {
 
   // see https://github.com/ethereum/wiki/wiki/Ethash-DAG
   final object DagFile {
+    val BufferSize = 16 * 1024 * 1024; // 16MB
+
+    val PosixCacheDirPermissions = {
+      val jhs = new java.util.HashSet[PosixFilePermission];
+      jhs.add( PosixFilePermission.OWNER_READ );
+      jhs.add( PosixFilePermission.OWNER_WRITE );
+      jhs.add( PosixFilePermission.OWNER_EXECUTE );
+      jhs
+    }
+    val PosixCacheFilePermissions = {
+      val jhs = new java.util.HashSet[PosixFilePermission];
+      jhs.add( PosixFilePermission.OWNER_READ );
+      jhs.add( PosixFilePermission.OWNER_WRITE );
+      jhs
+    }
+
     private[Ethash23] final val MagicNumber = 0xFEE1DEADBADDCAFEL
     private[Ethash23] final val MagicNumberLittleEndianBytes = {
       val bytes = Array.ofDim[Byte](8);
@@ -134,7 +153,7 @@ object Ethash23 {
     override def toString : String = s"Hashimote(mixDigest=${mixDigest.hex},result=${result.widen.unsignedBytes(32).hex})"
   }
 
-  lazy val Default = ParallelUInt32AsInt;
+  lazy val Default = LoggingParallelUInt32AsInt;
 
   // learn something new every day! mark nested objects as final
   // http://stackoverflow.com/questions/30265070/whats-the-point-of-nonfinal-singleton-objects-in-scala  final object SequentialUInt32AsInt extends UInt32AsInt;
@@ -149,10 +168,29 @@ object Ethash23 {
   lazy val LongArrayClassTag = implicitly[ClassTag[Array[Long]]];
 
   trait Parallel extends Ethash23 {
-    override def calcDataset( cache : Cache, fullSize : Long ) : Dataset = calcDatasetParallel( cache, fullSize )
+    override def doCalcDataset( cache : Cache, fullSize : Long ) : Dataset = calcDatasetParallel( cache, fullSize )
   }
+  object Monitored {
+    trait Monitor {
+      def newRowsPromised( count : Long );
+      def rowHandled;
+    }
+  }
+  trait Monitored extends Ethash23 {
+    val monitor : Monitored.Monitor;
 
-  trait Logging extends Ethash23 { // must not be specified before Parallel, or else pre- and post- logging won't happen
+    override def calcDataset( cache : Cache, fullSize : Long ) : Dataset = {
+      monitor.newRowsPromised( datasetLen( fullSize ) );
+      super.calcDataset( cache, fullSize );
+    }
+
+    abstract override protected[pow] def calcDatasetRow( cache : Cache, i : Int ) : Row = {
+      val out = super.calcDatasetRow( cache : Cache, i : Int );
+      monitor.rowHandled;
+      out
+    }
+  }
+  trait Logging extends Ethash23 { 
     lazy val parModifier = if ( this.isInstanceOf[Parallel] ) "parallel" else "sequential";
 
     override def mkCacheForEpoch( epochNumber : Long ) : Cache = {
@@ -645,30 +683,11 @@ object Ethash23 {
 
   final object Manager {
 
-    import java.nio.file._
-    import java.nio.file.attribute._
-
     final object Light                 extends Light( Ethash23.Default );
     final object FullManualCaching     extends Full ( Ethash23.Default );
     final object FullStochasticCaching extends Full ( Ethash23.Default ) with StochasticNextCaching;
 
-    val FileBufferSize = 16 * 1024 * 1024; // 16MB
-
     val DoubleDag = Config.EthereumPowEthash23ManagerDoubleDag;
-
-    val PosixCacheDirPermissions = {
-      val jhs = new java.util.HashSet[PosixFilePermission];
-      jhs.add( PosixFilePermission.OWNER_READ );
-      jhs.add( PosixFilePermission.OWNER_WRITE );
-      jhs.add( PosixFilePermission.OWNER_EXECUTE );
-      jhs
-    }
-    val PosixCacheFilePermissions = {
-      val jhs = new java.util.HashSet[PosixFilePermission];
-      jhs.add( PosixFilePermission.OWNER_READ );
-      jhs.add( PosixFilePermission.OWNER_WRITE );
-      jhs
-    }
 
     object StochasticNextCaching {
       val ExpectedEnsureNextCacheChecksPerEpoch  = 10;
@@ -712,45 +731,24 @@ object Ethash23 {
           if (! midpersist ) {
             midpersistEpochs += epochNumber;
             Future[Unit] { 
-              try persistDataset( epochNumber, seed, out ) finally unmidpersistEpoch( epochNumber ) 
+              try { 
+                implementation.cacheDataset( seed, out )
+                  .warn( s"Failed to cache in-memory dataset for epoch number ${epochNumber} to ethash DAG file." ) 
+              } finally {
+                unmidpersistEpoch( epochNumber )
+              }
             }
           }
         }
         out
       }
-
       private[this] def cacheEpoch( epochNumber : Long ) : Unit = {
-        val failable = streamDagFileForEpochNumber( epochNumber );
-        failable.logFail( WARNING, s"Failed to stream and cache ethash DAG file for epoch number ${epochNumber}." );
-      }
-
-      private[this] def persistDataset( epochNumber : Long, seed : Array[Byte], dataset : implementation.Dataset ) : Unit = {
-        val file = DagFile.fileForSeed( seed );
-        val path = file.toPath;
-
-        def writeFile : Failable[Unit] = {
-          Try {
-            val os = new BufferedOutputStream( Files.newOutputStream( path ), FileBufferSize );
-            try { implementation.writeDagFile( os, dataset ); } 
-            catch { 
-              case t : Throwable => {
-                Files.delete( path );
-                throw t;
-              }
-            }
-            finally {
-              os.close
-            }
-          }.toFailable
-        }
-
-        val failable = ensureCacheDirectory.flatMap( _ => touchDagFile( path ).flatMap( _ => writeFile ) );
-        failable.logFail( WARNING, s"Failed to persist in-memory dataset to ethash DAG file ${path} for epoch number ${epochNumber}." )
+        implementation.streamDagFileForEpochNumber( epochNumber ).warn(s"Failed to stream and cache ethash DAG file for epoch number ${epochNumber}.");
       }
     }
 
     abstract class Abstract( val implementation : Ethash23 ) extends Manager {
-      final class EpochRecord( val epochNumber : Long, val seed : Array[Byte], val cache : implementation.Cache, val mbDataset : Option[implementation.Dataset] )
+      protected final class EpochRecord( val epochNumber : Long, val seed : Array[Byte], val cache : implementation.Cache, val mbDataset : Option[implementation.Dataset] )
 
       //MT: protected by this' lock
       private[this] var preparing  : Option[Long]        = None;
@@ -777,7 +775,7 @@ object Ethash23 {
       private def _prepareForEpoch( DesiredEpoch : Long ) : EpochRecord = {
         def oneOff( warningMessage : String ) : EpochRecord = {
           WARNING.log( warningMessage );
-          buildEpochRecord( DesiredEpoch );
+          this.buildEpochRecord( DesiredEpoch );
         }
         def lastRecordOrOneOff( warning : => String ) : EpochRecord = {
           if ( lastRecord != null && lastRecord.epochNumber == DesiredEpoch ) lastRecord else oneOff( warning )
@@ -793,7 +791,7 @@ object Ethash23 {
         def startAsyncUpdate : Unit = {
           this.preparing = Some( DesiredEpoch );
           val fut = Future[EpochRecord] {
-            buildEpochRecord( DesiredEpoch );
+            this.buildEpochRecord( DesiredEpoch );
           }
           fut.onComplete { myTry =>
             myTry match {
@@ -848,8 +846,8 @@ object Ethash23 {
       }
 
       private def acquireDataset( epochNumber : Long, seed : Array[Byte], cache : implementation.Cache ) : implementation.Dataset = {
-        val persistedDataset = loadDagFile( seed );
-        persistedDataset.getOrElse {
+        val persistedDataset = implementation.loadDagFile( seed );
+        persistedDataset.warn("Failed to load DAG file. Will create.").getOrElse {
           val fullSize = implementation.getFullSizeForEpoch( epochNumber );
           implementation.calcDataset( cache, fullSize )
         }
@@ -860,79 +858,6 @@ object Ethash23 {
         implementation.calcDataset( cache, fullSize )
       }
 
-      private def loadDagFile( seed : Array[Byte] ) : Option[implementation.Dataset] = {
-        val Yuk : PartialFunction[Throwable, Option[Nothing]] = {
-          case e : Exception => {
-            WARNING.log( "Exception during DAG file load.", e );
-            None
-          }
-        }
-
-        val file = DagFile.fileForSeed( seed );
-        if ( file.exists() && file.canRead() ) {
-          val is = new BufferedInputStream( new FileInputStream( file ), FileBufferSize );
-          try Some( implementation.readDagFile( is ) ) catch Yuk finally is.close
-        } else {
-          FINE.log( s"Failed to read DAG from ${file}; The file does not exist or is unreadble." );
-          None
-        }
-      }
-      protected def ensureCacheDirectory : Failable[File] = {
-        Try {
-          val dir = new File( DagFile.ConfiguredDirectory );
-          if (! dir.exists() ) {
-            dir.mkdirs();
-            if ( DagFile.isPosix ) {
-              Files.setPosixFilePermissions( dir.toPath, PosixCacheDirPermissions )
-            }
-          }
-          dir
-        }.toFailable
-      }
-
-      protected def dagFileReadyToWrite( seed : Array[Byte] ) : Failable[File] = ensureCacheDirectory.map( _ => DagFile.fileForSeed( seed ) )
-
-      protected def touchDagFile( path : Path ) : Failable[Path] = {
-        Try {
-          Files.newOutputStream( path ).close();
-          Files.setPosixFilePermissions( path, PosixCacheFilePermissions );
-          path
-        }.toFailable
-      }
-
-      def streamDagFileForBlockNumber( blockNumber : Long ) : Failable[Unit] = streamDagFileForEpochNumber( epochFromBlock( blockNumber ) );
-      def streamDagFileForBlockNumber( blockNumber : Long, file : Option[File] ) : Failable[Unit] = streamDagFileForEpochNumber( epochFromBlock( blockNumber ), file );
-
-      def streamDagFileForEpochNumber( epochNumber : Long ) : Failable[Unit] = streamDagFileForEpochNumber( epochNumber, None )
-      def streamDagFileForEpochNumber( epochNumber : Long, file : Option[File] ) : Failable[Unit] = {
-        // this is intended to be callable for arbitary epochs, so we build a light record,
-        // which we don't use to update our member record
-        val epochRecord = this.buildEpochRecord( epochNumber, false );
-        val failableFile = file.fold( dagFileReadyToWrite( epochRecord.seed ) )( succeed(_) ) 
-        failableFile.flatMap( f => streamDagFileForEpochNumber( epochNumber, epochRecord.cache, f ) )
-      }
-      private def streamDagFileForEpochNumber( epochNumber : Long, cache : implementation.Cache, file : File ) : Failable[Unit] = {
-        def doStream( path : Path ) : Failable[Unit] = {
-          Try {
-            // now create the stream we mean to write to
-            val os = new BufferedOutputStream( Files.newOutputStream( path ), FileBufferSize );
-
-            // now write and deal with any problems
-            try {
-              implementation.streamDatasetAsDagFile( os, cache, implementation.getFullSizeForEpoch( epochNumber ) )
-            } catch {
-              case t : Throwable => { 
-                Files.delete( path );
-                throw t;
-              }
-            }finally {
-              os.close
-            }
-          }.toFailable
-        }
-
-        touchDagFile( file.toPath ).flatMap( doStream )
-      }
       protected def blockNumberFromHeader( header : EthBlock.Header ) : Long = {
         val proto = header.number.widen;
         if (! proto.isValidLong )
@@ -941,6 +866,7 @@ object Ethash23 {
       }
       def hashimoto( header : EthBlock.Header ) : Hashimoto = this.hashimoto( header, header.nonce );
     }
+    //i8n is short for implementation, we had some compiler trouble with the shadowed variable
     abstract class Light( i8n : Ethash23 ) extends Abstract( i8n ) {
       val holdsDataset = false;
 
@@ -950,6 +876,7 @@ object Ethash23 {
         implementation.hashimotoLight( header, epochRecord.cache, nonce );
       }
     }
+    //i8n is short for implementation, we had some compiler trouble with the shadowed variable
     abstract class Full( i8n : Ethash23 ) extends Abstract( i8n ) {
       val holdsDataset = true;
 
@@ -969,12 +896,6 @@ object Ethash23 {
   trait Manager {
     def hashimoto( header : EthBlock.Header )                     : Hashimoto;
     def hashimoto( header : EthBlock.Header, nonce : Unsigned64 ) : Hashimoto;
-
-    def streamDagFileForBlockNumber( epochNumber : Long ) : Failable[Unit];
-    def streamDagFileForEpochNumber( epochNumber : Long ) : Failable[Unit];
-
-    def streamDagFileForBlockNumber( epochNumber : Long, file : Option[File] ) : Failable[Unit];
-    def streamDagFileForEpochNumber( epochNumber : Long, file : Option[File] ) : Failable[Unit];
   }
 }
 trait Ethash23 {
@@ -1048,7 +969,9 @@ trait Ethash23 {
     descendToPrime( start )
   }
 
-  def calcDataset( cache : Cache, fullSize : Long ) : Dataset = calcDatasetSequential( cache, fullSize )
+  def calcDataset( cache : Cache, fullSize : Long ) : Dataset = doCalcDataset( cache, fullSize )
+
+  protected def doCalcDataset( cache : Cache, fullSize : Long ) : Dataset = calcDatasetSequential( cache, fullSize )
 
   // for memoization / caching to files
   def writeDagFile( os : OutputStream, dataset : Dataset ) : Unit = {
@@ -1071,6 +994,52 @@ trait Ethash23 {
     (0 until len).foreach( i => os.write( writeRow( calcDatasetRow( cache, i ) ) ) )
   }
 
+  def loadDagFile( seed : Array[Byte] ) : Failable[Dataset] = {
+    val file = DagFile.fileForSeed( seed );
+    if ( file.exists() && file.canRead() ) {
+      Try {
+        val is = new BufferedInputStream( new FileInputStream( file ), DagFile.BufferSize );
+        try this.readDagFile( is ) finally is.close
+      }.toFailable
+    } else {
+      fail( s"Failed to read DAG from ${file}; The file does not exist or is unreadble." );
+    }
+  }
+  def cacheDataset( seed : Array[Byte], dataset : Dataset ) : Failable[Unit] = {
+    val file = DagFile.fileForSeed( seed );
+    val path = file.toPath;
+
+    def writeFile : Failable[Unit] = {
+      Try {
+        val os = new BufferedOutputStream( Files.newOutputStream( path ), DagFile.BufferSize );
+        try { this.writeDagFile( os, dataset ); }
+        catch {
+          case t : Throwable => {
+            Files.delete( path );
+            throw t;
+          }
+        }
+        finally {
+          os.close
+        }
+      }.toFailable
+    }
+
+    ensureCacheDirectory.flatMap( _ => touchDagFile( path ).flatMap( _ => writeFile ) );
+  }
+
+  def streamDagFileForBlockNumber( blockNumber : Long ) : Failable[Unit] = streamDagFileForEpochNumber( epochFromBlock( blockNumber ) );
+  def streamDagFileForBlockNumber( blockNumber : Long, file : Option[File] ) : Failable[Unit] = streamDagFileForEpochNumber( epochFromBlock( blockNumber ), file );
+
+  def streamDagFileForEpochNumber( epochNumber : Long ) : Failable[Unit] = streamDagFileForEpochNumber( epochNumber, None )
+  def streamDagFileForEpochNumber( epochNumber : Long, file : Option[File] ) : Failable[Unit] = {
+    // this is intended to be callable for arbitary epochs, so we build a light record,
+    // which we don't use to update our member record
+    val seed      = Seed.getForEpoch( epochNumber );
+    val cache     = this.mkCacheForEpoch( epochNumber );
+    val failableFile = file.fold( dagFileReadyToWrite( seed ) )( succeed(_) )
+    failableFile.flatMap( f => streamDagFileForEpochNumber( epochNumber, cache, f ) )
+  }
   // protected utilities
   protected[pow] val isParallel = false;
 
@@ -1125,5 +1094,41 @@ trait Ethash23 {
     def probablePrime = BigInt(num).isProbablePrime( ProbablePrimeCertainty )
 
     probablePrime && naiveIsPrime
+  }
+
+  private def ensureCacheDirectory : Failable[File] = {
+    Try {
+      val dir = new File( DagFile.ConfiguredDirectory );
+      if (! dir.exists() ) {
+        dir.mkdirs();
+        if ( DagFile.isPosix ) {
+          Files.setPosixFilePermissions( dir.toPath, DagFile.PosixCacheDirPermissions )
+        }
+      }
+      dir
+    }.toFailable
+  }
+
+  private def dagFileReadyToWrite( seed : Array[Byte] ) : Failable[File] = ensureCacheDirectory.map( _ => DagFile.fileForSeed( seed ) )
+
+  private def touchDagFile( path : Path ) : Failable[Path] = {
+    Try {
+      Files.newOutputStream( path ).close();
+      Files.setPosixFilePermissions( path, DagFile.PosixCacheFilePermissions );
+      path
+    }.toFailable
+  }
+
+  private def streamDagFileForEpochNumber( epochNumber : Long, cache : Cache, file : File ) : Failable[Unit] = {
+    def doStream( path : Path ) : Failable[Unit] = {
+      Try {
+        val os = new BufferedOutputStream( Files.newOutputStream( path ), DagFile.BufferSize );
+        try        { streamDatasetAsDagFile( os, cache, this.getFullSizeForEpoch( epochNumber ) ) } 
+        catch      { case t : Throwable => { Files.delete( path ); throw t; } } // don't forget to rethrow into the Try!
+        finally    { os.close }
+      }.toFailable
+    }
+
+    touchDagFile( file.toPath ).flatMap( doStream )
   }
 }
