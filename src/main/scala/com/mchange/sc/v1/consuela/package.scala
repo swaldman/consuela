@@ -73,8 +73,26 @@ package object consuela {
     //other methods
     def flatten[U](implicit evidence: T <:< Failable[U]) : Failable[U] = {
       failable match {
-        case oops @ Left( _ ) => refail( oops );
-        case Right( t )   => evidence( t );
+        case oops @ Left( _ )  => refail( oops );
+        case        Right( t ) => evidence( t );
+      }
+    }
+    def recover[TT >: T]( f : Fail => TT ) : Failable[TT] = {
+      failable match {
+        case      Left( fail ) => succeed( f( fail ) )
+        case ok @ Right( _ )   => ok;
+      }
+    }
+    def fold[U]( f : Fail => U )( g : T => U ) : U = {
+      failable match {
+        case Left( fail ) => f( fail )
+        case Right( t )   => g( t );
+      }
+    }
+    def fold[U]( u : U )( g : T => U ) : U = {
+      failable match {
+        case Left( fail ) => u
+        case Right( t )   => g( t );
       }
     }
   }
