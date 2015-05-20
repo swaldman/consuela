@@ -33,7 +33,6 @@ import scala.reflect.ClassTag;
 import java.io.{BufferedInputStream,BufferedOutputStream,File,FileInputStream,InputStream,OutputStream,EOFException}
 
 import java.nio.file._
-import java.nio.file.attribute._
 
 // is Long math good enough? (looking at the magnitudes, i think it is, but i'm not certain)
 // we can put the whole class in terms of spire SafeLong easily enough if not...
@@ -45,103 +44,38 @@ package object ethash23 {
   // implementing REVISION 23 of Ethash spec, defined https://github.com/ethereum/wiki/wiki/Ethash
   private implicit lazy val logger = MLogger( this );
 
-  private final val WordBytes          = 1 << 2;  // 4
-  private final val DatasetBytesInit   = 1 << 30; // 2 ** 30
-  private final val DatasetBytesGrowth = 1 << 23; // 2 ** 23
-  private final val CacheBytesInit     = 1 << 24; // 2 ** 24
-  private final val CacheBytesGrowth   = 1 << 17; // 2 ** 17
-  private final val CacheMultiplier    = 1 << 10; // 1024
-  private final val EpochLength        = 30000;   // 30000
-  private final val MixBytes           = 1 << 7;  // 128
-  private final val HashBytes          = 1 << 6;  // 64
-  private final val DatasetParents     = 1 << 8;  // 256
-  private final val CacheRounds        = 3;       // 3
-  private final val Accesses           = 1 << 6;  // 64
+  private[ethash23] final val WordBytes          = 1 << 2;  // 4
+  private[ethash23] final val DatasetBytesInit   = 1 << 30; // 2 ** 30
+  private[ethash23] final val DatasetBytesGrowth = 1 << 23; // 2 ** 23
+  private[ethash23] final val CacheBytesInit     = 1 << 24; // 2 ** 24
+  private[ethash23] final val CacheBytesGrowth   = 1 << 17; // 2 ** 17
+  private[ethash23] final val CacheMultiplier    = 1 << 10; // 1024
+  private[ethash23] final val EpochLength        = 30000;   // 30000
+  private[ethash23] final val MixBytes           = 1 << 7;  // 128
+  private[ethash23] final val HashBytes          = 1 << 6;  // 64
+  private[ethash23] final val DatasetParents     = 1 << 8;  // 256
+  private[ethash23] final val CacheRounds        = 3;       // 3
+  private[ethash23] final val Accesses           = 1 << 6;  // 64
 
-  private final val DoubleHashBytes = 2 * HashBytes; //128
-  private final val DoubleMixBytes  = 2 * HashBytes; //256
+  private[ethash23] final val DoubleHashBytes = 2 * HashBytes; //128
+  private[ethash23] final val DoubleMixBytes  = 2 * HashBytes; //256
 
-  private final val HashBytesOverWordBytes = HashBytes / WordBytes; //16
-  private final val MixBytesOverWordBytes  = MixBytes / WordBytes;  //32
-  private final val MixBytesOverHashBytes  = MixBytes / HashBytes;  //2
+  private[ethash23] final val HashBytesOverWordBytes = HashBytes / WordBytes; //16
+  private[ethash23] final val MixBytesOverWordBytes  = MixBytes / WordBytes;  //32
+  private[ethash23] final val MixBytesOverHashBytes  = MixBytes / HashBytes;  //2
 
-  private final val Revision = 23; // the version of the Ethash spec we are implementing
+  private[ethash23] final val Revision = 23; // the version of the Ethash spec we are implementing
 
-  private final val FnvPrime = 0x01000193;
+  private[ethash23] final val FnvPrime = 0x01000193;
 
-  private final val ProbablePrimeCertainty : Int = 8; //arbitrary, tune for performance...
+  private[ethash23] final val ProbablePrimeCertainty : Int = 8; //arbitrary, tune for performance...
 
-  private final val RowWidth = 16; // four-byte Ints
+  private[ethash23] final val RowWidth = 16; // four-byte Ints
 
   implicit val SeedPrimer = Seed.Primer(
     Config.EthereumPowEthash23SeedPrimerEpochNumber,
     SHA3_256.withBytes(Config.EthereumPowEthash23SeedPrimerValue.decodeHex)
   );
-
-  // see https://github.com/ethereum/wiki/wiki/Ethash-DAG
-  final object DagFile {
-    val BufferSize = 16 * 1024 * 1024; // 16MB
-
-    val PosixCacheDirPermissions = {
-      val jhs = new java.util.HashSet[PosixFilePermission];
-      jhs.add( PosixFilePermission.OWNER_READ );
-      jhs.add( PosixFilePermission.OWNER_WRITE );
-      jhs.add( PosixFilePermission.OWNER_EXECUTE );
-      jhs
-    }
-    val PosixCacheFilePermissions = {
-      val jhs = new java.util.HashSet[PosixFilePermission];
-      jhs.add( PosixFilePermission.OWNER_READ );
-      jhs.add( PosixFilePermission.OWNER_WRITE );
-      jhs
-    }
-
-    private[ethash23] final val MagicNumber = 0xFEE1DEADBADDCAFEL
-    private[ethash23] final val MagicNumberLittleEndianBytes = {
-      val bytes = Array.ofDim[Byte](8);
-      LongUtils.longIntoByteArrayLittleEndian( MagicNumber, 0, bytes );
-      bytes
-    }
-
-    def nameForSeed( seed : Array[Byte] ) : String = s"full-R${Revision}-${seed.take(8).hex}"
-
-    def fileForSeed( seed : Array[Byte] ) : File = new File( ConfiguredDirectory, nameForSeed( seed ) );
-
-    lazy val ConfiguredDirectory = Config.EthereumPowEthash23DagFileDirectory
-
-    val IsWindows : Boolean = {
-      val osName = {
-        val tmp = System.getProperty( "os.name" );
-        if ( tmp == null ) {
-          WARNING.log("Could not find a value for System property 'os.name'. Will presume UNIX-like.");
-          ""
-        } else {
-          tmp.toLowerCase
-        }
-      }
-      osName.indexOf("win") >= 0;
-    }
-    val isPosix = !IsWindows;
-    val DefaultDirectory : String = {
-      def homeless( dflt : String ) : String = {
-        WARNING.log(s"Could not find a value for System property 'user.home'. Using default directory '${dflt}'.");
-        dflt
-      }
-      val homeDir = {
-        val userHome = System.getProperty( "user.home" );
-        ( IsWindows, userHome ) match {
-          case ( true, null )  => homeless("C:\\TEMP")
-          case ( false, null ) => homeless("/tmp")
-          case _               => userHome
-        }
-      }
-      def windowsDir = s"${homeDir}\\Appdata\\Ethash";
-      def unixDir = s"${homeDir}/.ethash";
-      if ( IsWindows ) windowsDir else unixDir;
-    }
-
-    class BadMagicNumberException private[ethash23] ( message : String, t : Throwable = null ) extends EthereumException( message, t );
-  }
 
   implicit final class PlusModInt( val i : Int ) extends AnyVal {
     def +%( other : Int ) = scala.math.abs( i % other )
