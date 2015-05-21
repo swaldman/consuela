@@ -17,6 +17,8 @@ import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq;
 import com.mchange.sc.v1.log.MLogger;
 import com.mchange.sc.v1.log.MLevel._;
 
+import com.mchange.sc.v1.consuela.ethereum.pow.ethash23; //so that we can refer to the package object explicitly
+
 //import spire.math.SafeLong;
 import spire.implicits._ //only used for sqrt at this point...
 
@@ -530,8 +532,8 @@ trait Implementation {
   protected def writeRow( row : Row ) : Array[Byte];
 
   // public utilities
-  def epochFromBlock( blockNumber : Long )         : Long = epochFromBlock( blockNumber );
-  def blocksRemainingInEpoch( blockNumber : Long ) : Long = blocksRemainingInEpoch( blockNumber );
+  def epochFromBlock( blockNumber : Long )         : Long = ethash23.epochFromBlock( blockNumber );
+  def blocksRemainingInEpoch( blockNumber : Long ) : Long = ethash23.blocksRemainingInEpoch( blockNumber );
 
   def mkCacheForBlock( blockNumber : Long ) : Cache = mkCacheForEpoch( epochFromBlock( blockNumber ) );
   def calcDatasetForBlock( blockNumber : Long ) : Dataset = calcDatasetForEpoch( epochFromBlock( blockNumber ) );
@@ -580,7 +582,19 @@ trait Implementation {
 
   def calcDataset( cache : Cache, fullSize : Long ) : Dataset = doCalcDataset( cache, fullSize )
 
-  protected def doCalcDataset( cache : Cache, fullSize : Long ) : Dataset = calcDatasetSequential( cache, fullSize )
+  /*
+   * omit the last two elements, 
+   * convert truncated header to RLP, 
+   * take SHA3_256 hash
+   */ 
+  def truncatedHeaderHash( header : EthBlock.Header ) : SHA3_256 = {
+    val headerElement = RLP.toElement[EthBlock.Header]( header );
+    val RLP.Element.Seq( fullSeq ) = headerElement;
+    val numToKeep = fullSeq.length - 2;
+    val truncSeq = fullSeq.take( numToKeep );
+    val truncHeaderRLP = RLP.Element.encode( RLP.Element.Seq( truncSeq ) )
+    SHA3_256.hash( truncHeaderRLP )
+  }
 
   // for memoization / caching to files
   def writeDagFile( os : OutputStream, dataset : Dataset ) : Unit = {
@@ -655,6 +669,8 @@ trait Implementation {
   protected[ethash23] def requireValidInt( l : Long )     : Int  = if (l.isValidInt) l.toInt else throw new IllegalArgumentException( s"${l} is not a valid Int, as required." );
   protected[ethash23] def requireValidLong( bi : BigInt ) : Long = if (bi.isValidLong) bi.toLong else throw new IllegalArgumentException( s"${bi} is not a valid Long, as required." );
 
+  protected[ethash23] def doCalcDataset( cache : Cache, fullSize : Long ) : Dataset = calcDatasetSequential( cache, fullSize )
+
   protected[ethash23] final def calcDatasetSequential( cache : Cache, fullSize : Long ) : Dataset = {
     val len = datasetLen( fullSize )
     val out = (0 until len).toArray.map( calcDatasetRow( cache, _ ) )
@@ -666,20 +682,6 @@ trait Implementation {
     toDataset( out )
   }
   protected[ethash23] final def datasetLen( fullSize : Long ) : Int = requireValidInt( fullSize / HashBytes );
-
-  /*
-   * omit the last two elements, 
-   * convert truncated header to RLP, 
-   * take SHA3_256 hash
-   */ 
-  protected[ethash23] def truncatedHeaderHash( header : EthBlock.Header ) : SHA3_256 = {
-    val headerElement = RLP.toElement[EthBlock.Header]( header );
-    val RLP.Element.Seq( fullSeq ) = headerElement;
-    val numToKeep = fullSeq.length - 2;
-    val truncSeq = fullSeq.take( numToKeep );
-    val truncHeaderRLP = RLP.Element.encode( RLP.Element.Seq( truncSeq ) )
-    SHA3_256.hash( truncHeaderRLP )
-  }
 
   // private utilities
   private def hashimotoLight( fullSize : Long, cache : Cache, truncatedHeaderHash : SHA3_256, nonce : Unsigned64 ) : Hashimoto = {

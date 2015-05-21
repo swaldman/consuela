@@ -19,9 +19,9 @@ import com.mchange.sc.v1.consuela.hash.SHA3_256;
  * 
  *   https://github.com/ethereum/tests/blob/develop/PoWTests/ethash_tests.json
  */ 
-object Ethash23Properties extends Properties("Ethash23") {
+object Ethash23Properties extends Properties("ethash23") {
 
-  val Implementation = Ethash23.Default;
+  val Implementation = ethash23.Implementation.Default;
 
   //MT : protected by its own lock
   private val cacheHashes = scala.collection.mutable.HashMap.empty[Long,Implementation.Cache];
@@ -30,7 +30,7 @@ object Ethash23Properties extends Properties("Ethash23") {
     cacheHashes.getOrElseUpdate( epochNumber, Implementation.mkCacheForEpoch( epochNumber ) ) 
   }
 
-  def getCacheForBlock( blockNumber : Long ) : Implementation.Cache = getCacheForEpoch( Ethash23.epochFromBlock( blockNumber ) );
+  def getCacheForBlock( blockNumber : Long ) : Implementation.Cache = getCacheForEpoch( ethash23.epochFromBlock( blockNumber ) );
 
   property("Zeroth Block (Zeroth Epoch) Cache Size")       = Prop( Implementation.getCacheSizeForBlock(0) == 16776896L );
   property("30000th Block (First Epoch) Cache Size")       = Prop( Implementation.getCacheSizeForBlock(30000) == 16907456L );
