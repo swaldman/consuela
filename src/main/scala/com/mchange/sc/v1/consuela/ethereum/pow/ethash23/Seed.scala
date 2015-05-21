@@ -1,10 +1,10 @@
 package com.mchange.sc.v1.consuela.ethereum.pow.ethash23;
 
-import com.mchange.sc.v1.consuela._;
-import com.mchange.sc.v1.consuela.hash.SHA3_256;
-
 import com.mchange.sc.v1.log.MLogger;
 import com.mchange.sc.v1.log.MLevel._;
+
+import com.mchange.sc.v1.consuela._;
+import com.mchange.sc.v1.consuela.hash.SHA3_256;
 
 object Seed {
   private implicit lazy val logger = MLogger( this );

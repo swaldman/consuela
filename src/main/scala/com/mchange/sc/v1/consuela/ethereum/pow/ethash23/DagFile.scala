@@ -5,10 +5,10 @@ import com.mchange.sc.v1.consuela.ethereum.{EthereumException};
 import com.mchange.sc.v1.consuela._
 import conf.Config;
 
+import com.mchange.lang.LongUtils;
+
 import com.mchange.sc.v1.log.MLogger;
 import com.mchange.sc.v1.log.MLevel._;
-
-import com.mchange.lang.LongUtils;
 
 import java.io.File;
 import java.nio.file.attribute.PosixFilePermission;
