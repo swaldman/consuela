@@ -5,11 +5,10 @@ import com.mchange.sc.v1.consuela.crypto.ForbiddenProviderException;
 
 import java.security.Security;
 
-import com.mchange.sc.v1.log._;
-import MLevel._;
+import com.mchange.sc.v1.log.MLevel._;
 
 object Provider{
-  implicit val logger = MLogger( this );
+  implicit lazy val logger = mlogger( this );
 
   val BouncyCastle = Provider("BC");
   val SpongyCastle = Provider("SC");

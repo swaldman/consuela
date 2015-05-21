@@ -8,11 +8,10 @@ import com.mchange.sc.v1.consuela.ethereum.pow.ethash23;
 
 import com.typesafe.config.{Config => TSConfig, ConfigFactory => TSConfigFactory};
 
-import com.mchange.sc.v1.log._;
-import MLevel._;
+import com.mchange.sc.v1.log.MLevel._;
 
 object Config {
-  implicit val logger = MLogger( this )
+  implicit lazy val logger = mlogger( this )
 
   val ConfigName = "consuela";
 

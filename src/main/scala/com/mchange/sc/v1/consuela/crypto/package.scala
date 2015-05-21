@@ -1,7 +1,6 @@
 package com.mchange.sc.v1.consuela;
 
-import com.mchange.sc.v1.log._;
-import MLevel._;
+import com.mchange.sc.v1.log.MLevel._;
 
 import javax.crypto._;
 import java.security._;
@@ -20,7 +19,7 @@ package object crypto {
   class InvalidSignatureException( message : String, t : Throwable = null ) extends ConsuelaException( message, t );
   class ForbiddenProviderException( message : String, t : Throwable = null ) extends ConsuelaException( message, t );
 
-  implicit val logger = MLogger( this );
+  implicit lazy val logger = mlogger( this );
 
   final object secp256k1 {
 
