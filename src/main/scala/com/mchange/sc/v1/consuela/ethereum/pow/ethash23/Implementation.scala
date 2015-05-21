@@ -23,6 +23,12 @@ import spire.implicits._ //only used for sqrt at this point...
 import java.nio.file.{Files,Path}
 import java.io.{BufferedInputStream,BufferedOutputStream,File,FileInputStream,InputStream,OutputStream,EOFException}
 
+// is Long math good enough? (looking at the magnitudes, i think it is, but i'm not certain)
+// we can put the whole class in terms of spire SafeLong easily enough if not...
+// but when the dataset gets bigger than ~8GB, we'll exceed int array indices, and have to encode
+// values into fully packed longs, rather than ints or longs representing unsigned ints as currently
+// implements. (the current implementation will fail fast when this limit is exceeded.)
+
 object Implementation {
   private implicit lazy val logger = MLogger( this );
 

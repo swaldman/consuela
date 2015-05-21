@@ -1,19 +1,10 @@
 package com.mchange.sc.v1.consuela.ethereum.pow;
 
-import com.mchange.sc.v1.consuela.hash.SHA3_256;
-
 import com.mchange.sc.v1.consuela._;
 import conf.Config;
-import ethereum.specification.Types.Unsigned256;
+import hash.SHA3_256;
 
-import scala.collection._;
 import scala.reflect.ClassTag;
-
-// is Long math good enough? (looking at the magnitudes, i think it is, but i'm not certain)
-// we can put the whole class in terms of spire SafeLong easily enough if not...
-// but when the dataset gets bigger than ~8GB, we'll exceed int array indices, and have to encode
-// values into fully packed longs, rather than ints or longs representing unsigned ints as currently
-// implements. (the current implementation will fail fast when this limit is exceeded.)
 
 /**
   * implementing REVISION 23 of Ethash spec, defined https://github.com/ethereum/wiki/wiki/Ethash
@@ -62,10 +53,6 @@ package object ethash23 {
 
   def epochFromBlock( blockNumber : Long ) : Long = ( blockNumber / EpochLength )
   def blocksRemainingInEpoch( blockNumber : Long ) : Long = EpochLength - ( blockNumber % EpochLength )
-
-  case class Hashimoto( val mixDigest : immutable.Seq[Byte], val result : Unsigned256 ) {
-    override def toString : String = s"Hashimote(mixDigest=${mixDigest.hex},result=${result.widen.unsignedBytes(32).hex})"
-  }
 
   // for reasons I don't quite understand, embedding these implicitlys in object initializers directly,
   // lazy or not, led to errors in initialization ( null pointer or stack overflow). by trial and error,
