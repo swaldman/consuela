@@ -11,6 +11,7 @@ object EthBlock {
   val Genesis : EthBlock = Details.GenesisBlock;
 
   final object Header {
+    val NumFields = 15; // is there some more dynamic way to set this, that would track changes to the case class?
     def isValidChildOfParent( putativeChild : Header, putativeParent : Header ) : Boolean = Details.Header.isValidChildOfParent( putativeChild, putativeParent );
   }
   final case class Header( 

@@ -95,6 +95,9 @@ package object consuela {
         case Right( t )   => g( t );
       }
     }
+    def isSuccess : Boolean = failable.isRight;
+    def isFail    : Boolean = !isSuccess;
+    def isFailure : Boolean = isFail;
   }
 
   def fail[S : FailSource]( source : S, includeStackTrace : Boolean = true ) : Failable[Nothing] = {
