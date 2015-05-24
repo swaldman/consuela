@@ -34,7 +34,7 @@ import java.io.{BufferedInputStream,BufferedOutputStream,File,FileInputStream,In
 object Implementation {
   private implicit lazy val logger = MLogger( this );
 
-  lazy val Default = LoggingParallelUInt32AsInt;
+  lazy val Default = ParallelUInt32AsInt;
 
   // learn something new every day! mark nested objects as final
   // http://stackoverflow.com/questions/30265070/whats-the-point-of-nonfinal-singleton-objects-in-scala  
@@ -43,28 +43,30 @@ object Implementation {
   final object LoggingSequentialUInt32AsInt extends UInt32AsInt with Logging;
   final object LoggingParallelUInt32AsInt extends UInt32AsInt with Parallel with Logging;
 
+  final object Monitor {
+    final object Factory {
+      implicit final object NoOp extends Factory {
+        def create : Monitor = Monitor.NoOp;
+      }
+    }
+    trait Factory {
+      def create : Monitor;
+    }
+    abstract class Abstract extends Monitor {
+      def start( rowCount : Long )      : Unit = {}
+      def rowHandled( rowIndex : Long ) : Unit = {};
+      def completed                     : Unit = {};
+    }
+    final object NoOp extends Abstract;
+  }
+  trait Monitor { // no no-op defaults to keep this a Java 7 compatible interface
+    def start( rowCount : Long )      : Unit;
+    def rowHandled( rowIndex : Long ) : Unit;
+    def completed                     : Unit;
+  }
+
   trait Parallel extends Implementation {
-    override def doCalcDataset( cache : Cache, fullSize : Long ) : Dataset = calcDatasetParallel( cache, fullSize )
-  }
-  object Monitored {
-    trait Monitor {
-      def newRowsPromised( count : Long );
-      def rowHandled;
-    }
-  }
-  trait Monitored extends Implementation {
-    val monitor : Monitored.Monitor;
-
-    override def calcDataset( cache : Cache, fullSize : Long ) : Dataset = {
-      monitor.newRowsPromised( datasetLen( fullSize ) );
-      super.calcDataset( cache, fullSize );
-    }
-
-    abstract override protected[ethash23] def calcDatasetRow( cache : Cache, i : Int ) : Row = {
-      val out = super.calcDatasetRow( cache : Cache, i : Int );
-      monitor.rowHandled;
-      out
-    }
+    override def doCalcDataset( cache : Cache, fullSize : Long )( mf : Monitor.Factory ) : Dataset = calcDatasetParallel( cache, fullSize )( mf )
   }
   trait Logging extends Implementation { 
     lazy val parModifier = if ( this.isInstanceOf[Parallel] ) "parallel" else "sequential";
@@ -81,16 +83,16 @@ object Implementation {
       out
     }
 
-    override def calcDataset( cache : Cache, fullSize : Long ) : Dataset = {
+    override def calcDataset( cache : Cache, fullSize : Long )( implicit mf : Monitor.Factory ) : Dataset = {
       val start = System.currentTimeMillis();
       INFO.log( s"Beginning ${parModifier} computation of dataset, fullSize=${fullSize}, rows=${datasetLen(fullSize)}" );
-      val out = super.calcDataset( cache, fullSize );
+      val out = super.calcDataset( cache, fullSize )( mf );
       val done = System.currentTimeMillis();
       val secs = ( done - start ) / 1000d
       INFO.log( s"Completed ${parModifier} computation of dataset in ${secs} seconds, fullSize=${fullSize}, rows=${datasetLen(fullSize)}" );
       out
     }
-    abstract override protected[ethash23] def calcDatasetRow( cache : Cache, i : Int ) : Row = {
+    abstract override protected[ethash23] def calcDatasetRow( cache : Cache, i : Int )  : Row = {
       val out = super.calcDatasetRow( cache : Cache, i : Int );
       INFO.log( s"Computed dataset row #${i}" )
       out
@@ -511,6 +513,7 @@ object Implementation {
   }
 }
 trait Implementation {
+  import Implementation.Monitor;
 
   //abstract members
   type Cache;
@@ -536,7 +539,7 @@ trait Implementation {
   def blocksRemainingInEpoch( blockNumber : Long ) : Long = ethash23.blocksRemainingInEpoch( blockNumber );
 
   def mkCacheForBlock( blockNumber : Long ) : Cache = mkCacheForEpoch( epochFromBlock( blockNumber ) );
-  def calcDatasetForBlock( blockNumber : Long ) : Dataset = calcDatasetForEpoch( epochFromBlock( blockNumber ) );
+  def calcDatasetForBlock( blockNumber : Long )( implicit mf : Monitor.Factory ) : Dataset = calcDatasetForEpoch( epochFromBlock( blockNumber ) )( mf );
 
   def mkCacheForEpoch( epochNumber : Long ) : Cache = {
     val cacheSize = getCacheSizeForEpoch( epochNumber );
@@ -544,10 +547,10 @@ trait Implementation {
     mkCache( cacheSize, seed );
   }
 
-  def calcDatasetForEpoch( epochNumber : Long ) : Dataset = {
+  def calcDatasetForEpoch( epochNumber : Long )( implicit mf : Monitor.Factory ) : Dataset = {
     val cache = mkCacheForEpoch( epochNumber );
     val fullSize = getFullSizeForEpoch( epochNumber );
-    calcDataset( cache, fullSize )
+    calcDataset( cache, fullSize )( mf )
   }
 
   def hashimotoLight( header : EthBlock.Header, cache : Cache, nonce : Unsigned64 ) : Hashimoto = {
@@ -580,7 +583,7 @@ trait Implementation {
     descendToPrime( start )
   }
 
-  def calcDataset( cache : Cache, fullSize : Long ) : Dataset = doCalcDataset( cache, fullSize )
+  def calcDataset( cache : Cache, fullSize : Long )( implicit mf : Monitor.Factory ) : Dataset = doCalcDataset( cache, fullSize )( mf )
 
   /*
    * omit the last two elements, 
@@ -611,10 +614,13 @@ trait Implementation {
     readDatasetBytes( is )
   }
 
-  def streamDatasetAsDagFile( os : OutputStream, cache : Cache, fullSize : Long ) : Unit = {
+  def streamDatasetAsDagFile( os : OutputStream, cache : Cache, fullSize : Long )( implicit mf : Monitor.Factory ) : Unit = {
+    val monitor = mf.create;
+    val len = datasetLen( fullSize );
+    monitor.start( len );
     os.write( DagFile.MagicNumberLittleEndianBytes );
-    val len = datasetLen( fullSize )
-      (0 until len).foreach( i => os.write( writeRow( calcDatasetRow( cache, i ) ) ) )
+    (0 until len).foreach( i => os.write( writeRow( monitoredCalcDatasetRow( cache, i )( monitor ) ) ) )
+    monitor.completed;
   }
 
   def loadDagFile( seed : Array[Byte] ) : Failable[Dataset] = {
@@ -651,17 +657,18 @@ trait Implementation {
     ensureCacheDirectory.flatMap( _ => touchDagFile( path ).flatMap( _ => writeFile ) );
   }
 
-  def streamDagFileForBlockNumber( blockNumber : Long ) : Failable[Unit] = streamDagFileForEpochNumber( epochFromBlock( blockNumber ) );
-  def streamDagFileForBlockNumber( blockNumber : Long, file : Option[File] ) : Failable[Unit] = streamDagFileForEpochNumber( epochFromBlock( blockNumber ), file );
-
-  def streamDagFileForEpochNumber( epochNumber : Long ) : Failable[Unit] = streamDagFileForEpochNumber( epochNumber, None )
-  def streamDagFileForEpochNumber( epochNumber : Long, file : Option[File] ) : Failable[Unit] = {
+  def streamDagFileForBlockNumber( blockNumber : Long )( implicit mf : Monitor.Factory ) : Failable[Unit] = streamDagFileForEpochNumber( epochFromBlock( blockNumber ) )( mf );
+  def streamDagFileForBlockNumber( blockNumber : Long, file : Option[File] )( implicit mf : Monitor.Factory ) : Failable[Unit] = {
+    streamDagFileForEpochNumber( epochFromBlock( blockNumber ), file )( mf );
+  }
+  def streamDagFileForEpochNumber( epochNumber : Long )( implicit mf : Monitor.Factory ) : Failable[Unit] = streamDagFileForEpochNumber( epochNumber, None )( mf )
+  def streamDagFileForEpochNumber( epochNumber : Long, file : Option[File] )( implicit mf : Monitor.Factory ) : Failable[Unit] = {
     // this is intended to be callable for arbitary epochs, so we build a light record,
     // which we don't use to update our member record
     val seed      = Seed.getForEpoch( epochNumber );
     val cache     = this.mkCacheForEpoch( epochNumber );
     val failableFile = file.fold( dagFileReadyToWrite( seed ) )( succeed(_) )
-    failableFile.flatMap( f => streamDagFileForEpochNumber( epochNumber, cache, f ) )
+    failableFile.flatMap( f => streamDagFileForEpochNumber( epochNumber, cache, f )( mf ) )
   }
   // protected utilities
   protected[ethash23] val isParallel = false;
@@ -669,21 +676,33 @@ trait Implementation {
   protected[ethash23] def requireValidInt( l : Long )     : Int  = if (l.isValidInt) l.toInt else throw new IllegalArgumentException( s"${l} is not a valid Int, as required." );
   protected[ethash23] def requireValidLong( bi : BigInt ) : Long = if (bi.isValidLong) bi.toLong else throw new IllegalArgumentException( s"${bi} is not a valid Long, as required." );
 
-  protected[ethash23] def doCalcDataset( cache : Cache, fullSize : Long ) : Dataset = calcDatasetSequential( cache, fullSize )
+  protected[ethash23] def doCalcDataset( cache : Cache, fullSize : Long )( mf : Monitor.Factory ) : Dataset = calcDatasetSequential( cache, fullSize )( mf )
 
-  protected[ethash23] final def calcDatasetSequential( cache : Cache, fullSize : Long ) : Dataset = {
+  protected[ethash23] final def calcDatasetSequential( cache : Cache, fullSize : Long )( mf : Monitor.Factory ) : Dataset = {
+    val monitor = mf.create;
     val len = datasetLen( fullSize )
-    val out = (0 until len).toArray.map( calcDatasetRow( cache, _ ) )
+    monitor.start( len );
+    val out = (0 until len).toArray.map( monitoredCalcDatasetRow( cache, _ )( monitor ) )
+    monitor.completed;
     toDataset( out )
   }
-  protected[ethash23] final def calcDatasetParallel( cache : Cache, fullSize : Long ) : Dataset = {
+  protected[ethash23] final def calcDatasetParallel( cache : Cache, fullSize : Long )( mf : Monitor.Factory ) : Dataset = {
+    val monitor = mf.create;
     val len = datasetLen( fullSize )
-    val out = (0 until len).toArray.par.map( calcDatasetRow( cache, _ ) ).toArray
+    monitor.start( len );
+    val out = (0 until len).toArray.par.map( monitoredCalcDatasetRow( cache, _ )( monitor ) ).toArray
+    monitor.completed;
     toDataset( out )
   }
   protected[ethash23] final def datasetLen( fullSize : Long ) : Int = requireValidInt( fullSize / HashBytes );
 
   // private utilities
+  private def monitoredCalcDatasetRow( cache : Cache, i : Int )( monitor : Monitor ) : Row = {
+    val out = calcDatasetRow( cache, i );
+    monitor.rowHandled( i );
+    out
+  }
+
   private def hashimotoLight( fullSize : Long, cache : Cache, truncatedHeaderHash : SHA3_256, nonce : Unsigned64 ) : Hashimoto = {
     hashimoto( truncatedHeaderHash, nonce, fullSize, (i : Int) => calcDatasetRow( cache, i ) )
   }
@@ -730,11 +749,11 @@ trait Implementation {
     }.toFailable
   }
 
-  private def streamDagFileForEpochNumber( epochNumber : Long, cache : Cache, file : File ) : Failable[Unit] = {
+  private def streamDagFileForEpochNumber( epochNumber : Long, cache : Cache, file : File )( mf : Monitor.Factory ) : Failable[Unit] = {
     def doStream( path : Path ) : Failable[Unit] = {
       Try {
         val os = new BufferedOutputStream( Files.newOutputStream( path ), DagFile.BufferSize );
-        try        { streamDatasetAsDagFile( os, cache, this.getFullSizeForEpoch( epochNumber ) ) }
+        try        { streamDatasetAsDagFile( os, cache, this.getFullSizeForEpoch( epochNumber ) )( mf ) }
         catch      { case t : Throwable => { Files.delete( path ); throw t; } } // don't forget to rethrow into the Try!
         finally    { os.close }
       }.toFailable
