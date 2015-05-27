@@ -657,6 +657,15 @@ trait Implementation {
     ensureCacheDirectory.flatMap( _ => touchDagFile( path ).flatMap( _ => writeFile ) );
   }
 
+  def precomputeCacheDatasetForBlockNumber( blockNumber : Long )( implicit mf : Monitor.Factory ) : Failable[Unit] = {
+    precomputeCacheDatasetForEpochNumber( epochFromBlock( blockNumber ) )( mf );
+  }
+  def precomputeCacheDatasetForEpochNumber( epochNumber : Long )( implicit mf : Monitor.Factory ) : Failable[Unit] = {
+    val seed = Seed.getForEpoch( epochNumber );
+    val dataset = calcDatasetForEpoch( epochNumber )( mf );
+    cacheDataset( seed, dataset )
+  }
+
   def streamDagFileForBlockNumber( blockNumber : Long )( implicit mf : Monitor.Factory ) : Failable[Unit] = streamDagFileForEpochNumber( epochFromBlock( blockNumber ) )( mf );
   def streamDagFileForBlockNumber( blockNumber : Long, file : Option[File] )( implicit mf : Monitor.Factory ) : Failable[Unit] = {
     streamDagFileForEpochNumber( epochFromBlock( blockNumber ), file )( mf );

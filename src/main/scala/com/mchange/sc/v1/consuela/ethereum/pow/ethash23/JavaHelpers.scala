@@ -13,6 +13,8 @@ object JavaHelpers {
   private def asHash( bytes : Array[Byte] ) : EthHash = EthHash.withBytes( bytes );
   private def asUnsigned256( bytes : Array[Byte] ) = Unsigned256( BigInt( 1, bytes ) );
 
+  private val impl = Implementation.ParallelUInt32AsInt;
+
   def buildHeader( 
     parentHash      : Array[Byte], 
     ommersHash      : Array[Byte], 
@@ -63,8 +65,14 @@ object JavaHelpers {
   def streamDagFileForBlockNumber( blockNumber : Long, mf : Monitor.Factory ) : Boolean = {
     implicit val fact = if ( mf == null ) Monitor.Factory.NoOp else mf;
 
-    Implementation.Default.streamDagFileForBlockNumber( blockNumber ).isSuccess;
+    impl.streamDagFileForBlockNumber( blockNumber ).isSuccess;
   }
+  def precomputeCacheDatasetForBlockNumber( blockNumber : Long, mf : Monitor.Factory ) : Boolean = {
+    implicit val fact = if ( mf == null ) Monitor.Factory.NoOp else mf;
+
+    impl.precomputeCacheDatasetForBlockNumber( blockNumber ).isSuccess;
+  }
+  def getFullSizeForBlock( blockNumber : Long ) : Long = impl.getFullSizeForBlock( blockNumber );
 
   def noOpMonitorFactory : Implementation.Monitor.Factory = Monitor.Factory.NoOp;
 }
