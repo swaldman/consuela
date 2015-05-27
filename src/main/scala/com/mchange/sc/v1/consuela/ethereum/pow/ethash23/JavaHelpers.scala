@@ -3,6 +3,7 @@ package com.mchange.sc.v1.consuela.ethereum.pow.ethash23;
 import com.mchange.sc.v1.consuela._
 import com.mchange.sc.v1.consuela.ethereum._
 import encoding.RLP;
+import hash.SHA3_256;
 import specification.Types._
 
 import Implementation.Monitor
@@ -13,7 +14,9 @@ object JavaHelpers {
   private def asHash( bytes : Array[Byte] ) : EthHash = EthHash.withBytes( bytes );
   private def asUnsigned256( bytes : Array[Byte] ) = Unsigned256( BigInt( 1, bytes ) );
 
-  private val impl = Implementation.ParallelUInt32AsInt;
+  private val impl         = Implementation.ParallelUInt32AsInt;
+  private val lightManager = new Manager.Light( impl ) {};
+  private val fullManager  = new Manager.Full( impl ) with Manager.StochasticNextCaching; // won't acquire a Dataset unless used
 
   def buildHeader( 
     parentHash      : Array[Byte], 
@@ -60,6 +63,34 @@ object JavaHelpers {
       }
       case _ => throw new IllegalArgumentException( s"truncRLP must be the RLP of a sequence. truncRLP -> ${truncRLP.hex}" );
     }
+  }
+
+  def verifyLight( 
+    blockNumber : Long, 
+    mixDigest : Array[Byte], 
+    threshold : java.math.BigInteger, 
+    truncatedHeaderHash : Array[Byte], 
+    nonce : java.math.BigInteger 
+  ) : Boolean = verify( false, blockNumber, mixDigest, threshold, truncatedHeaderHash, nonce ) 
+
+  def verifyFull( 
+    blockNumber : Long, 
+    mixDigest : Array[Byte], 
+    threshold : java.math.BigInteger, 
+    truncatedHeaderHash : Array[Byte], 
+    nonce : java.math.BigInteger 
+  ) : Boolean = verify( true, blockNumber, mixDigest, threshold, truncatedHeaderHash, nonce ) 
+
+  private def verify( 
+    full : Boolean, 
+    blockNumber : Long, 
+    mixDigest : Array[Byte], 
+    threshold : java.math.BigInteger, 
+    truncatedHeaderHash : Array[Byte], 
+    nonce : java.math.BigInteger 
+  ) : Boolean = {
+    val hashimoto = ( if ( full ) fullManager else lightManager ).hashimoto( SHA3_256.withBytes( truncatedHeaderHash ), blockNumber, Unsigned64( nonce ) );
+    hashimoto.result.widen < threshold && mixDigest.toSeq == hashimoto.mixDigest
   }
 
   def streamDagFileForBlockNumber( blockNumber : Long, mf : Monitor.Factory ) : Boolean = {

@@ -74,8 +74,8 @@ object Implementation {
     override def mkCacheForEpoch( epochNumber : Long ) : Cache = {
       val startBlock = epochNumber * EpochLength;
       val lastBlock  = startBlock + EpochLength - 1;
-      val start = System.currentTimeMillis();
       INFO.log( s"Beginning computation of cache for epoch ${epochNumber} (blocks ${startBlock} thru ${lastBlock})" );
+      val start = System.currentTimeMillis();
       val out = super.mkCacheForEpoch( epochNumber );
       val done = System.currentTimeMillis();
       val secs = ( done - start ) / 1000d
@@ -83,9 +83,19 @@ object Implementation {
       out
     }
 
-    override def calcDataset( cache : Cache, fullSize : Long )( implicit mf : Monitor.Factory ) : Dataset = {
+    override def mkCache( cacheSize : Long, seed : Array[Byte] ) : Cache = {
+      INFO.log( s"Beginning computation of cache of size  ${cacheSize} with seed ${seed.hex}" );
       val start = System.currentTimeMillis();
+      val out = super.mkCache( cacheSize, seed );
+      val done = System.currentTimeMillis();
+      val secs = ( done - start ) / 1000d
+      INFO.log( s"Completed computation of cache of size  ${cacheSize} with seed ${seed.hex} in ${secs} seconds" );
+      out
+    }
+
+    override def calcDataset( cache : Cache, fullSize : Long )( implicit mf : Monitor.Factory ) : Dataset = {
       INFO.log( s"Beginning ${parModifier} computation of dataset, fullSize=${fullSize}, rows=${datasetLen(fullSize)}" );
+      val start = System.currentTimeMillis();
       val out = super.calcDataset( cache, fullSize )( mf );
       val done = System.currentTimeMillis();
       val secs = ( done - start ) / 1000d
@@ -146,7 +156,7 @@ object Implementation {
     }
 
     // this seems very arcane...
-    protected def mkCache( cacheSize : Long, seed : Array[Byte] ) : Cache = {
+    def doMkCache( cacheSize : Long, seed : Array[Byte] ) : Cache = {
       val n = requireValidInt( cacheSize / HashBytes );
       val o = Array.iterate( sha3_512_readRow( seed ), n )( last => sha3_512_readRow( writeRow( last ) ) )
       for (_ <- 0L until CacheRounds; i <- 0 until n ) {
@@ -357,7 +367,7 @@ object Implementation {
     private def sha3_512_readRow( stuff : Array[Byte] ) : Row = readRow( SHA3_512.rawHash( stuff ) )
 
     // this seems very arcane...
-    protected def mkCache( cacheSize : Long, seed : Array[Byte] ) : Cache = {
+    def doMkCache( cacheSize : Long, seed : Array[Byte] ) : Cache = {
       val n = requireValidInt( cacheSize / HashBytes );
       val o = Array.iterate( sha3_512_readRow( seed ), n )( lastLongs => sha3_512_readRow( writeRow( lastLongs ) ) )
       for (_ <- 0L until CacheRounds; i <- 0 until n ) {
@@ -522,7 +532,8 @@ trait Implementation {
 
   protected implicit val rowClassTag : ClassTag[Row];
 
-  protected def mkCache( cacheSize : Long, seed : Array[Byte] ) : Cache;
+  protected def doMkCache( cacheSize : Long, seed : Array[Byte] ) : Cache;
+
   protected def calcDatasetRow( cache : Cache, i : Int )        : Row;
   protected def toDataset( array : Array[Row] )                 : Dataset;
   protected def extractDatasetRow( dataset : Dataset, i : Int ) : Row;
@@ -544,8 +555,10 @@ trait Implementation {
   def mkCacheForEpoch( epochNumber : Long ) : Cache = {
     val cacheSize = getCacheSizeForEpoch( epochNumber );
     val seed      = Seed.getForEpoch( epochNumber );
-    mkCache( cacheSize, seed );
+    doMkCache( cacheSize, seed );
   }
+
+  def mkCache( cacheSize : Long, seed : Array[Byte] ) : Cache = doMkCache( cacheSize, seed );
 
   def calcDatasetForEpoch( epochNumber : Long )( implicit mf : Monitor.Factory ) : Dataset = {
     val cache = mkCacheForEpoch( epochNumber );
@@ -557,10 +570,15 @@ trait Implementation {
     val blockNumber = requireValidLong( header.number.widen );
     hashimotoLight( getFullSizeForBlock( blockNumber ), cache, truncatedHeaderHash( header ), nonce )
   }
-
   def hashimotoFull( header : EthBlock.Header, dataset : Dataset, nonce : Unsigned64 ) : Hashimoto = {
     val blockNumber = requireValidLong( header.number.widen );
     hashimotoFull( getFullSizeForBlock( blockNumber ), dataset, truncatedHeaderHash( header ), nonce )
+  }
+  def hashimotoLight( fullSize : Long, cache : Cache, truncatedHeaderHash : SHA3_256, nonce : Unsigned64 ) : Hashimoto = {
+    hashimoto( truncatedHeaderHash, nonce, fullSize, (i : Int) => calcDatasetRow( cache, i ) )
+  }
+  def hashimotoFull( fullSize : Long, dataset : Dataset, truncatedHeaderHash : SHA3_256, nonce : Unsigned64 ) : Hashimoto = {
+    hashimoto( truncatedHeaderHash, nonce, fullSize, (i : Int) => extractDatasetRow( dataset, i ) )
   }
 
   def getCacheSizeForBlock( blockNumber : Long ) : Long = getCacheSizeForEpoch( epochFromBlock( blockNumber ) );
@@ -712,12 +730,6 @@ trait Implementation {
     out
   }
 
-  private def hashimotoLight( fullSize : Long, cache : Cache, truncatedHeaderHash : SHA3_256, nonce : Unsigned64 ) : Hashimoto = {
-    hashimoto( truncatedHeaderHash, nonce, fullSize, (i : Int) => calcDatasetRow( cache, i ) )
-  }
-  private def hashimotoFull( fullSize : Long, dataset : Dataset, truncatedHeaderHash : SHA3_256, nonce : Unsigned64 ) : Hashimoto = {
-    hashimoto( truncatedHeaderHash, nonce, fullSize, (i : Int) => extractDatasetRow( dataset, i ) )
-  }
   private def hashimoto(truncatedHeaderHash : SHA3_256, nonce : Unsigned64 , fullSize : Long, datasetAccessor : Int => Row ) : Hashimoto = {
     hashimoto( ( truncatedHeaderHash.bytes ++ nonce.widen.unsignedBytes(8).reverse ).toArray, fullSize, datasetAccessor )
   }

@@ -4,6 +4,7 @@ import com.mchange.sc.v1.consuela._;
 import conf.Config;
 import ethereum._;
 import ethereum.specification.Types.Unsigned64;
+import hash.SHA3_256;
 
 import com.mchange.sc.v1.log.MLogger;
 import com.mchange.sc.v1.log.MLevel._;
@@ -83,7 +84,14 @@ object Manager {
   }
 
   abstract class Abstract( val implementation : Implementation ) extends Manager {
-    protected final class EpochRecord( val epochNumber : Long, val seed : Array[Byte], val cache : implementation.Cache, val mbDataset : Option[implementation.Dataset] )
+    protected final class EpochRecord( 
+      val epochNumber : Long, 
+      val seed : Array[Byte], 
+      val cacheSize : Long, 
+      val cache : implementation.Cache, 
+      val fullSize : Long,
+      val mbDataset : Option[implementation.Dataset] 
+    )
 
     //MT: protected by this' lock
     private[this] var preparing  : Option[Long]        = None;
@@ -175,15 +183,16 @@ object Manager {
 
     protected def buildEpochRecord( epochNumber : Long, includeDataset : Boolean ) : EpochRecord = {
       val seed      = Seed.getForEpoch( epochNumber );
-      val cache     = implementation.mkCacheForEpoch( epochNumber );
-      val mbDataset = if ( includeDataset ) Some( acquireDataset( epochNumber, seed, cache ) ) else None;
-      new EpochRecord( epochNumber, seed, cache, mbDataset )
+      val cacheSize = implementation.getCacheSizeForEpoch( epochNumber );
+      val cache     = implementation.mkCache( cacheSize, seed );
+      val fullSize = implementation.getFullSizeForEpoch( epochNumber );
+      val mbDataset = if ( includeDataset ) Some( acquireDataset( epochNumber, seed, cache, fullSize ) ) else None;
+      new EpochRecord( epochNumber, seed, cacheSize, cache, fullSize, mbDataset )
     }
 
-    private def acquireDataset( epochNumber : Long, seed : Array[Byte], cache : implementation.Cache ) : implementation.Dataset = {
+    private def acquireDataset( epochNumber : Long, seed : Array[Byte], cache : implementation.Cache, fullSize : Long ) : implementation.Dataset = {
       val persistedDataset = implementation.loadDagFile( seed );
       persistedDataset.warn("Failed to load DAG file. Will create.").getOrElse {
-        val fullSize = implementation.getFullSizeForEpoch( epochNumber );
         implementation.calcDataset( cache, fullSize )
       }
     }
@@ -210,6 +219,10 @@ object Manager {
       val epochRecord = prepareForBlock( blockNumber );
       implementation.hashimotoLight( header, epochRecord.cache, nonce );
     }
+    def hashimoto( truncatedHeaderHash : SHA3_256, blockNumber : Long, nonce : Unsigned64 ) : Hashimoto = {
+      val epochRecord = prepareForBlock( blockNumber );
+      implementation.hashimotoLight( epochRecord.fullSize, epochRecord.cache, truncatedHeaderHash, nonce )
+    }
   }
   //i8n is short for implementation, we had some compiler trouble with the shadowed variable
   abstract class Full( i8n : Implementation ) extends Abstract( i8n ) {
@@ -218,7 +231,11 @@ object Manager {
     def hashimoto( header : EthBlock.Header, nonce : Unsigned64 ) : Hashimoto = {
       val blockNumber = blockNumberFromHeader( header );
       val epochRecord = prepareForBlock( blockNumber );
-      implementation.hashimotoFull( header, epochRecord.mbDataset.get, nonce );
+      implementation.hashimotoFull( header, epochRecord.mbDataset.get, nonce ); //for the Full, we assert that the dataset is present
+    }
+    def hashimoto( truncatedHeaderHash : SHA3_256, blockNumber : Long, nonce : Unsigned64 ) : Hashimoto = {
+      val epochRecord = prepareForBlock( blockNumber );
+      implementation.hashimotoFull( epochRecord.fullSize, epochRecord.mbDataset.get, truncatedHeaderHash, nonce ); //for the Full, we assert that the dataset is present
     }
   }
 
@@ -231,5 +248,7 @@ object Manager {
 trait Manager {
   def hashimoto( header : EthBlock.Header )                     : Hashimoto;
   def hashimoto( header : EthBlock.Header, nonce : Unsigned64 ) : Hashimoto;
+
+  def hashimoto( truncatedHeaderHash : SHA3_256, blockNumber : Long, nonce : Unsigned64 ) : Hashimoto;
 }
 
