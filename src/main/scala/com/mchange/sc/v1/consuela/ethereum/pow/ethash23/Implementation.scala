@@ -74,8 +74,8 @@ object Implementation {
     override def mkCacheForEpoch( epochNumber : Long ) : Cache = {
       val startBlock = epochNumber * EpochLength;
       val lastBlock  = startBlock + EpochLength - 1;
-      val start = System.currentTimeMillis();
       INFO.log( s"Beginning computation of cache for epoch ${epochNumber} (blocks ${startBlock} thru ${lastBlock})" );
+      val start = System.currentTimeMillis();
       val out = super.mkCacheForEpoch( epochNumber );
       val done = System.currentTimeMillis();
       val secs = ( done - start ) / 1000d
@@ -84,8 +84,8 @@ object Implementation {
     }
 
     override def calcDataset( cache : Cache, fullSize : Long )( implicit mf : Monitor.Factory ) : Dataset = {
-      val start = System.currentTimeMillis();
       INFO.log( s"Beginning ${parModifier} computation of dataset, fullSize=${fullSize}, rows=${datasetLen(fullSize)}" );
+      val start = System.currentTimeMillis();
       val out = super.calcDataset( cache, fullSize )( mf );
       val done = System.currentTimeMillis();
       val secs = ( done - start ) / 1000d

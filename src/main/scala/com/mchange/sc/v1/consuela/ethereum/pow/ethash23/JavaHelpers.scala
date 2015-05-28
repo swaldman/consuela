@@ -14,6 +14,8 @@ object JavaHelpers {
   private def asUnsigned256( bytes : Array[Byte] ) = Unsigned256( BigInt( 1, bytes ) );
 
   private val impl = Implementation.ParallelUInt32AsInt;
+  private val managerFull  = new Manager.Full( impl ) with Manager.StochasticNextCaching; // won't hold or cache anything if untouched
+  private val managerLight = new Manager.Light( impl ){}
 
   def buildHeader( 
     parentHash      : Array[Byte], 
@@ -75,5 +77,18 @@ object JavaHelpers {
   def getFullSizeForBlock( blockNumber : Long ) : Long = impl.getFullSizeForBlock( blockNumber );
 
   def noOpMonitorFactory : Implementation.Monitor.Factory = Monitor.Factory.NoOp;
+
+  def jhashimoto( full : Boolean, truncHeaderRLP : Array[Byte], nonce : java.math.BigInteger ) : JHashimoto = {
+    val truncHeader = headerFromTruncatedRLP( truncHeaderRLP );
+    val hashimoto = (if (full) managerFull else managerLight).hashimoto( truncHeader, Unsigned64( nonce ) )
+    new JHashimoto( hashimoto )
+  }
+  def jhashimotoFull( truncHeaderRLP : Array[Byte], nonce : java.math.BigInteger ) = jhashimoto( true, truncHeaderRLP, nonce );
+  def jhashimotoLight( truncHeaderRLP : Array[Byte], nonce : java.math.BigInteger ) = jhashimoto( false, truncHeaderRLP, nonce );
 }
 final class JavaHelpers private () {} // just a placeholder for static forwarders
+
+final class JHashimoto( val mixBytes : Array[Byte], val result : java.math.BigInteger ) {
+  def this( hashimoto : Hashimoto ) = this( hashimoto.mixDigest.toArray, hashimoto.result.widen.bigInteger )
+}
+
