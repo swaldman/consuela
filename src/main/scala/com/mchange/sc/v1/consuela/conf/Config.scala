@@ -34,7 +34,7 @@ object Config {
     val CryptoJceProviderClassNames        = StringListItem( "crypto.jce.providerClassNames", List( "org.bouncycastle.jce.provider.BouncyCastleProvider" ) );
     val CryptoJceForbidUseOfOtherProviders = BooleanItem("crypto.jce.forbidUseOfOtherProviders", false);
 
-    val EthereumPowFull                          = BooleanItem( "ethereum.pow.full", true );
+    val EthereumPowFull                          = BooleanItem( "ethereum.pow.full", false );
     val EthereumPowEthash23SeedPrimerEpochNumber = LongItem( "ethereum.pow.ethash23.seed.primer.epochNumber", 0L );
     val EthereumPowEthash23SeedPrimerValue       = StringItem( "ethereum.pow.ethash23.seed.primer.value", "0x0000000000000000000000000000000000000000000000000000000000000000" );
     val EthereumPowEthash23DagFileDirectory      = StringItem( "ethereum.pow.ethash23.dagfile.directory",  ethash23.DagFile.DefaultDirectory );
