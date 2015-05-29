@@ -5,7 +5,6 @@ import conf.Config;
 import ethereum._;
 import ethereum.specification.Types.Unsigned64;
 
-import com.mchange.sc.v1.log.MLogger;
 import com.mchange.sc.v1.log.MLevel._;
 
 import scala.concurrent.Future;
@@ -16,13 +15,16 @@ import scala.util.{Success,Failure}
 import scala.annotation.tailrec;
 
 object Manager {
-  private implicit lazy val logger = MLogger( this );
+  private implicit lazy val logger = mlogger( this );
 
   final object Light                 extends Light( Implementation.Default );
   final object FullManualCaching     extends Full ( Implementation.Default );
   final object FullStochasticCaching extends Full ( Implementation.Default ) with StochasticNextCaching;
 
-  val DoubleDag = Config.EthereumPowEthash23ManagerDoubleDag;
+  val DoubleDag      = Config.EthereumPowEthash23ManagerDoubleDag;
+  val InMemGenFactor = Config.EthereumPowEthash23DagInMemGenFactor;
+
+  val AvailableMemory = Runtime.getRuntime.totalMemory;
 
   object StochasticNextCaching {
     val ExpectedEnsureNextCacheChecksPerEpoch  = 10;
@@ -59,23 +61,31 @@ object Manager {
       }
     }
 
-    override protected def buildDataset( epochNumber : Long, seed : Array[Byte], cache : implementation.Cache, fullSize : Long ) : implementation.Dataset = {
-      val out = super.buildDataset( epochNumber, seed, cache, fullSize );
-      midpersistEpochs.synchronized {
-        val midpersist = midpersistEpochs( epochNumber );
-        if (! midpersist ) {
-          midpersistEpochs += epochNumber;
-          Future[Unit] {
-            try {
-              implementation.cacheDataset( seed, out )
-                .warn( s"Failed to cache in-memory dataset for epoch number ${epochNumber} to ethash DAG file." )
-            } finally {
-              unmidpersistEpoch( epochNumber )
+    override protected def buildDataset( epochNumber : Long, seed : Array[Byte], cache : implementation.Cache, fullSize : Long ) : BuiltDataset = {
+      val bd = super.buildDataset( epochNumber, seed, cache, fullSize );
+      if (! bd.cached ) {
+        midpersistEpochs.synchronized {
+          val midpersist = midpersistEpochs( epochNumber );
+          if (! midpersist ) {
+            midpersistEpochs += epochNumber;
+            val t = new Thread {
+              this.setDaemon( false );
+
+              override def run : Unit = {
+                try {
+                  implementation.cacheDataset( seed, bd.dataset ).warn( s"Tried but failed to cache in-memory dataset for epoch number ${epochNumber} to ethash DAG file." )
+                } finally {
+                  unmidpersistEpoch( epochNumber )
+                }
+              }
             }
+            t.start
           }
         }
+        new BuiltDataset( bd.dataset, true );
+      } else {
+        bd
       }
-      out
     }
     private[this] def cacheEpoch( epochNumber : Long ) : Unit = {
       implementation.streamDagFileForEpochNumber( epochNumber ).warn(s"Failed to stream and cache ethash DAG file for epoch number ${epochNumber}.");
@@ -84,6 +94,8 @@ object Manager {
 
   abstract class Abstract( val implementation : Implementation ) extends Manager {
     protected final class EpochRecord( val epochNumber : Long, val seed : Array[Byte], val cache : implementation.Cache, val mbDataset : Option[implementation.Dataset] )
+    protected final class BuiltDataset( val dataset : implementation.Dataset, val cached : Boolean )
+
 
     //MT: protected by this' lock
     private[this] var preparing  : Option[Long]        = None;
@@ -184,13 +196,21 @@ object Manager {
       val persistedDataset = implementation.loadDagFile( seed );
       persistedDataset.warn("Failed to load DAG file. Will create.").getOrElse {
         val fullSize = implementation.getFullSizeForEpoch( epochNumber );
-        implementation.calcDataset( cache, fullSize )
+        buildDataset( epochNumber, seed, cache, fullSize ).dataset
       }
     }
 
     // extra arguments for use by mixins
-    protected def buildDataset( epochNumber : Long, seed : Array[Byte], cache : implementation.Cache, fullSize : Long ) : implementation.Dataset = {
-      implementation.calcDataset( cache, fullSize )
+    protected def buildDataset( epochNumber : Long, seed : Array[Byte], cache : implementation.Cache, fullSize : Long ) : BuiltDataset = {
+      //WARNING.log( s"fullSize: ${fullSize}, AvailableMemory: ${AvailableMemory}, (fullSize * InMemGenFactor) < AvailableMemory ): ${(fullSize * InMemGenFactor) < AvailableMemory}" );
+      if ( (fullSize * InMemGenFactor) < AvailableMemory ) {
+        val ds = implementation.calcDataset( cache, fullSize )
+        new BuiltDataset( dataset=ds, cached=false )
+      } else {
+        val failableUnit = implementation.streamDagFileForEpochNumber( epochNumber, Some( seed ), Some( cache ), None );
+        failableUnit.get; // will throw an Exception if failed
+        new BuiltDataset( dataset=implementation.loadDagFile(seed).get , cached=true )
+      }
     }
 
     protected def blockNumberFromHeader( header : EthBlock.Header ) : Long = {

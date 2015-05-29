@@ -162,8 +162,9 @@ object Implementation {
 
     // this is ugly, but since these files are gigantic, i'm avoiding abstractions that
     // might require preloading or carry much overhead per byte or row
-    def readDatasetBytes( is : InputStream ) : Dataset = {
-      val bufferLen = RowWidth * 4;
+    def readDatasetBytes( is : InputStream, mbDatasetLen : Option[Long] ) : Dataset = {
+      val rowLen = RowWidth * 4;
+      val bufferLen = rowLen;
       val buffer = Array.ofDim[Byte]( bufferLen );
 
       def handleRow : Array[Int] = {
@@ -180,7 +181,7 @@ object Implementation {
               done = true;
             } else {
               b = is.read();
-              if (b < 0) throw new EOFException("Unexpected EOF reading byte ${i} of Dataset row! (should be ${bufferLen} bytes)");
+              if (b < 0) throw new EOFException( s"Unexpected EOF reading byte ${i} of Dataset row! (should be ${bufferLen} bytes)" );
             }
           }
           // ok, we've filled the buffer, now we just have to interpret
@@ -188,11 +189,17 @@ object Implementation {
         }
       }
 
-      val arrays = scala.collection.mutable.ArrayBuffer.empty[Array[Int]];
+      val initRows = requireValidInt( mbDatasetLen.fold( DefaultDatasetLen )( identity ) / rowLen );
+      val arrays = new scala.collection.mutable.ArrayBuffer[Row]( initRows );
       var row = handleRow;
-      while ( row != null ) arrays += row;
+      while ( row != null ) {
+        arrays += row;
+        row = handleRow;
+      }
       arrays.toArray
     }
+
+    private val DefaultDatasetLen = 2L * 1024 * 1024 * 1024;
 
     // unsigned promote
     private def UP( i : Int ) : Long = i & 0xFFFFFFFFL
@@ -455,8 +462,10 @@ object Implementation {
 
     // this is ugly, but since these files are gigantic, i'm avoiding abstractions that
     // might require preloading or carry much overhead per byte or row
-    protected def readDatasetBytes( is : InputStream ) : Dataset = {
-      val bufferLen = RowWidth * 4;
+    protected def readDatasetBytes( is : InputStream, mbDatasetLen : Option[Long] ) : Dataset = {
+
+      val rowLen = RowWidth * 4;
+      val bufferLen = rowLen;
       val buffer = Array.ofDim[Byte]( bufferLen );
 
       def handleRow : Array[Long] = {
@@ -481,11 +490,17 @@ object Implementation {
         }
       }
 
-      val arrays = scala.collection.mutable.ArrayBuffer.empty[Array[Long]];
+      val initRows = requireValidInt( mbDatasetLen.fold( DefaultDatasetLen )( identity ) / rowLen );
+      val arrays = new scala.collection.mutable.ArrayBuffer[Row]( initRows );
       var row = handleRow;
-      while ( row != null ) arrays += row;
+      while ( row != null ) {
+        arrays += row;
+        row = handleRow;
+      }
       arrays.toArray
     }
+
+    private val DefaultDatasetLen = 2L * 1024 * 1024 * 1024;
 
     // using Tuple2.zipped.map causes serious memory stress, so this
     private def zipWithXor( ls : Array[Long], rs : Array[Long] ) : Array[Long] = {
@@ -530,7 +545,7 @@ trait Implementation {
   protected def hashimoto( seedBytes : Array[Byte], fullSize : Long, datasetAccessor : Int => Row ) : Hashimoto;
 
   protected def dumpDatasetBytes( os : OutputStream, dataset : Dataset ) : Unit;
-  protected def readDatasetBytes( is : InputStream ) : Dataset;
+  protected def readDatasetBytes( is : InputStream, mbInitSize : Option[Long] ) : Dataset;
 
   protected def writeRow( row : Row ) : Array[Byte];
 
@@ -605,13 +620,13 @@ trait Implementation {
     dumpDatasetBytes( os, dataset );
   }
 
-  def readDagFile( is : InputStream ) : Dataset = {
+  def readDagFile( is : InputStream, mbFileLength : Option[Long] ) : Dataset = {
     val checkBytes = Array.ofDim[Byte](DagFile.MagicNumberLittleEndianBytes.length);
     (0 until 8).foreach( i => checkBytes(i) = is.read.toByte );
     val startsWithMagicNumber = DagFile.MagicNumberLittleEndianBytes.zip( checkBytes ).forall( tup => tup._1 == tup._2 );
     if (! startsWithMagicNumber ) throw new DagFile.BadMagicNumberException( s"Found 0x${checkBytes.hex}, should be 0x${DagFile.MagicNumberLittleEndianBytes.hex}" );
 
-    readDatasetBytes( is )
+    readDatasetBytes( is, mbFileLength.map( len => len - DagFile.MagicNumberLittleEndianBytes.length ) )
   }
 
   def streamDatasetAsDagFile( os : OutputStream, cache : Cache, fullSize : Long )( implicit mf : Monitor.Factory ) : Unit = {
@@ -628,7 +643,7 @@ trait Implementation {
     if ( file.exists() && file.canRead() ) {
       Try {
         val is = new BufferedInputStream( new FileInputStream( file ), DagFile.BufferSize );
-        try this.readDagFile( is ) finally is.close
+        try this.readDagFile( is, Some( file.length ) ) finally is.close
       }.toFailable
     } else {
       fail( s"Failed to read DAG from ${file}; The file does not exist or is unreadble." );
@@ -671,14 +686,23 @@ trait Implementation {
     streamDagFileForEpochNumber( epochFromBlock( blockNumber ), file )( mf );
   }
   def streamDagFileForEpochNumber( epochNumber : Long )( implicit mf : Monitor.Factory ) : Failable[Unit] = streamDagFileForEpochNumber( epochNumber, None )( mf )
-  def streamDagFileForEpochNumber( epochNumber : Long, file : Option[File] )( implicit mf : Monitor.Factory ) : Failable[Unit] = {
+  def streamDagFileForEpochNumber( epochNumber : Long, mbFile : Option[File] )( implicit mf : Monitor.Factory ) : Failable[Unit] = {
+    streamDagFileForEpochNumber( epochNumber, None, None, mbFile )( mf )
+  }
+  def streamDagFileForEpochNumber( 
+    epochNumber : Long, 
+    mbSeed : Option[Array[Byte]],
+    mbCache : Option[Cache], 
+    mbFile : Option[File] 
+  )( implicit mf : Monitor.Factory ) : Failable[Unit] = {
     // this is intended to be callable for arbitary epochs, so we build a light record,
     // which we don't use to update our member record
-    val seed      = Seed.getForEpoch( epochNumber );
-    val cache     = this.mkCacheForEpoch( epochNumber );
-    val failableFile = file.fold( dagFileReadyToWrite( seed ) )( succeed(_) )
+    val seed      = mbSeed.getOrElse( Seed.getForEpoch( epochNumber ) );
+    val cache     = mbCache.getOrElse( this.mkCacheForEpoch( epochNumber ) );
+    val failableFile = mbFile.fold( dagFileReadyToWrite( seed ) )( succeed(_) )
     failableFile.flatMap( f => streamDagFileForEpochNumber( epochNumber, cache, f )( mf ) )
   }
+
   // protected utilities
   protected[ethash23] val isParallel = false;
 

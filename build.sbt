@@ -45,4 +45,4 @@ libraryDependencies ++= Seq(
 
 fork in (Test, run) := true
 
-javaOptions := Seq("-d64", "-Xms4g",  "-Xmx4g", "-verbose:gc", "-XX:+UnlockCommercialFeatures", "-XX:+FlightRecorder" )
+javaOptions := Seq("-d64", "-Xms2g",  "-Xmx2g", "-verbose:gc", "-XX:+UnlockCommercialFeatures", "-XX:+FlightRecorder" )

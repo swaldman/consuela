@@ -59,4 +59,14 @@ package object ethash23 {
   // this lazy computation in the parent object resolves the problem
   lazy val IntArrayClassTag  = implicitly[ClassTag[Array[Int]]];
   lazy val LongArrayClassTag = implicitly[ClassTag[Array[Long]]];
+
+  /*
+  // a debug utility
+  implicit class PrintEval[T]( val t : T ) extends AnyVal {
+    def printEval : T = {
+      println( t );
+      t
+    }
+  }
+  */ 
 }

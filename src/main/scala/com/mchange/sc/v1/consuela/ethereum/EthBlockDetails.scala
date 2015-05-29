@@ -3,6 +3,8 @@ package com.mchange.sc.v1.consuela.ethereum;
 import encoding.{RLP, RLPSerializable}
 import specification.Types.{Unsigned64,Unsigned256,Unsigned2048,ByteSeqMax1024};
 
+import pow.ProofOfWork;
+
 import scala.collection.immutable.Seq;
 
 object EthBlockDetails {
@@ -41,7 +43,7 @@ object EthBlockDetails {
       def legalGasLimit      = _legalGasLimit( putativeChild.gasLimit.widen, putativeParent.gasLimit.widen );
       def difficultyMatches  = childDifficulty( putativeChild.timestamp, putativeParent ) == putativeParent.difficulty;
       def hashMatches        = EthHash.hash( RLP.encode( putativeParent ) ) == putativeChild.parentHash;
-      def proofOfWorkMatches = validateProofOfWork( putativeChild );
+      def proofOfWorkMatches = ProofOfWork.validate( putativeChild );
 
       // we check easiest first, to avoid hitting the hard stuff if we can
       numberMatches && validTimestamp && legalGasLimit && difficultyMatches && hashMatches && proofOfWorkMatches
@@ -82,17 +84,5 @@ object EthBlockDetails {
     }
 
     private val _GenesisDifficulty = GenesisDifficulty.widen;
-
-    final object ProofOfWork {
-      private[Header] val ThresholdNumerator : BigInt = BigInt(1) << 256;
-    }
-    final case class ProofOfWork( m : EthHash, n : Unsigned256 );
-
-    def proofOfWork( putativeNonce : Unsigned64, ignoreMixNonceHeader : EthBlock.Header ) : ProofOfWork = ???
-
-    def validateProofOfWork( finalized : EthBlock.Header ) : Boolean = {
-      val pow = proofOfWork( finalized.nonce, finalized );
-      pow.m == finalized.mixHash && pow.n.widen <= (ProofOfWork.ThresholdNumerator / pow.n.widen)
-    }
   }
 }

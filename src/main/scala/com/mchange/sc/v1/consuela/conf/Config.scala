@@ -21,20 +21,25 @@ object Config {
   val CryptoJceProviderClassNames         = Item.CryptoJceProviderClassNames.get;           // Note: For android include "org.spongycastle.jce.provider.BouncyCastleProvider"
   val CryptoJceForbidUseOfOtherProviders  = Item.CryptoJceForbidUseOfOtherProviders.get;    //       and ensure the spongycastle jce prov lib is bundled, it's not a consuela dependency!
 
+  val EthereumPowFull = Item.EthereumPowFull.get;
+
   val EthereumPowEthash23SeedPrimerEpochNumber = Item.EthereumPowEthash23SeedPrimerEpochNumber.get;
   val EthereumPowEthash23SeedPrimerValue       = Item.EthereumPowEthash23SeedPrimerValue.get;
   val EthereumPowEthash23DagFileDirectory      = Item.EthereumPowEthash23DagFileDirectory.get;
   val EthereumPowEthash23ManagerDoubleDag      = Item.EthereumPowEthash23ManagerDoubleDag.get;
+  val EthereumPowEthash23DagInMemGenFactor     = Item.EthereumPowEthash23DagInMemGenFactor.get;
 
   private[this] final object Item {
     val CryptoJceProviderName              = StringItem( "crypto.jce.providerName", "BC" ); //bouncycastle
     val CryptoJceProviderClassNames        = StringListItem( "crypto.jce.providerClassNames", List( "org.bouncycastle.jce.provider.BouncyCastleProvider" ) );
     val CryptoJceForbidUseOfOtherProviders = BooleanItem("crypto.jce.forbidUseOfOtherProviders", false);
 
+    val EthereumPowFull                          = BooleanItem( "ethereum.pow.full", true );
     val EthereumPowEthash23SeedPrimerEpochNumber = LongItem( "ethereum.pow.ethash23.seed.primer.epochNumber", 0L );
     val EthereumPowEthash23SeedPrimerValue       = StringItem( "ethereum.pow.ethash23.seed.primer.value", "0x0000000000000000000000000000000000000000000000000000000000000000" );
     val EthereumPowEthash23DagFileDirectory      = StringItem( "ethereum.pow.ethash23.dagfile.directory",  ethash23.DagFile.DefaultDirectory );
     val EthereumPowEthash23ManagerDoubleDag      = BooleanItem( "ethereum.pow.ethash23.manager.doubleDag",  false );
+    val EthereumPowEthash23DagInMemGenFactor     = DoubleItem( "ethereum.pow.ethash23.dag.inMemGenFactor",  2.5d );
   }
   private[this] trait Item[T] {
     def path : String;
@@ -53,5 +58,8 @@ object Config {
   }
   private[this] final case class LongItem( path : String, dflt : Long ) extends Item[Long] {
     def get : Long = TRACE.attempt( _inner.getLong( path ) ).getOrElse( dflt );
+  }
+  private[this] final case class DoubleItem( path : String, dflt : Double ) extends Item[Double] {
+    def get : Double = TRACE.attempt( _inner.getDouble( path ) ).getOrElse( dflt );
   }
 }
