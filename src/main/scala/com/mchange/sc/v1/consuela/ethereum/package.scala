@@ -9,6 +9,8 @@ import ethereum.specification.Types.{SignatureV, SignatureR, SignatureS, ByteSeq
 import com.mchange.sc.v1.consuela.hash.SHA3_256;
 import com.mchange.sc.v1.consuela.bloom.BitSetBloom;
 
+import com.mchange.sc.v2.failable._;
+
 import scala.collection._;
 
 import scala.util.Try;

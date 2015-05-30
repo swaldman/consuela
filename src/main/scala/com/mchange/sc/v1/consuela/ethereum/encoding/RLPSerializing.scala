@@ -3,6 +3,8 @@ package com.mchange.sc.v1.consuela.ethereum.encoding;
 import com.mchange.sc.v1.consuela._;
 import com.mchange.sc.v1.consuela.util;
 
+import com.mchange.sc.v2.failable._;
+
 import scala.collection._;
 
 import scala.util.Try;
@@ -18,7 +20,7 @@ object RLPSerializing {
   trait Wrapper[T] {
     val serializer : RLPSerializing[T];
 
-    def toRLPElement( rlpSerializable : T )               : RLP.Element = serializer.toElement( rlpSerializable );
+    def toRLPElement( rlpSerializable : T )           : RLP.Element = serializer.toElement( rlpSerializable );
     def fromRLPElement( element : RLP.Element.Basic ) : Failable[T]   = serializer.fromElement( element );
 
     def decodeRLP( bytes : Seq[Byte] )         : ( Failable[T], Seq[Byte] ) = serializer.decode( bytes );
@@ -29,11 +31,11 @@ object RLPSerializing {
     val serializer : RLPSerializing[T] = implicitly[RLPSerializing[T]];
   }
   class ByteArrayValue[T <: util.ByteArrayValue]( factory : immutable.Seq[Byte] => T ) extends RLPSerializing[T] {
-    def toElement( t : T )                             : RLP.Element = RLP.Element.ByteSeq( t.bytes );
+    def toElement( t : T )                         : RLP.Element = RLP.Element.ByteSeq( t.bytes );
     def fromElement( element : RLP.Element.Basic ) : Failable[T] = {
       element match {
         case RLP.Element.ByteSeq( bytes ) => Try( factory( bytes ) ).toFailable;
-        case _                              => failNotLeaf( element );
+        case _                            => failNotLeaf( element );
       }
     }
   }

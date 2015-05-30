@@ -5,6 +5,8 @@ import com.mchange.sc.v1.consuela.ethereum.encoding._;
 
 import com.mchange.sc.v2.restrict._;
 
+import com.mchange.sc.v2.failable._;
+
 import scala.collection._
 
 package object specification {

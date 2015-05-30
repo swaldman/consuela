@@ -14,6 +14,8 @@ import ethereum.specification.Types.{Unsigned64,Unsigned256};
 import com.mchange.lang.{LongUtils,IntegerUtils};
 import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq;
 
+import com.mchange.sc.v2.failable._;
+
 import com.mchange.sc.v1.log.MLogger;
 import com.mchange.sc.v1.log.MLevel._;
 

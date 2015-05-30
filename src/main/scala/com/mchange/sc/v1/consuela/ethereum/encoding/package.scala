@@ -2,6 +2,8 @@ package com.mchange.sc.v1.consuela.ethereum;
 
 import com.mchange.sc.v1.consuela._;
 
+import com.mchange.sc.v2.failable._;
+
 import scala.collection._;
 
 package object encoding {
