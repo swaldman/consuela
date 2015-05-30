@@ -88,7 +88,7 @@ object JavaHelpers {
 }
 final class JavaHelpers private () {} // just a placeholder for static forwarders
 
-final class JHashimoto( val mixBytes : Array[Byte], val result : java.math.BigInteger ) {
+final class JHashimoto( val mixHash : Array[Byte], val result : java.math.BigInteger ) {
   def this( hashimoto : Hashimoto ) = this( hashimoto.mixDigest.toArray, hashimoto.result.widen.bigInteger )
 }
 

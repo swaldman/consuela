@@ -12,6 +12,8 @@ object VerifyBlockEthash23 {
 
     val block = RLP.decodeComplete[EthBlock]( blockRLP ).get;
 
+    //println( s"header RLP: ${RLP.encode(block.header).hex}" );
+
     println( s"ProofOfWork.validate( block.header ): ${ProofOfWork.validate( block.header )}" );
   }
 }
