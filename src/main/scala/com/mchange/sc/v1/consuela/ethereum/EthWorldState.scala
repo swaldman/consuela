@@ -72,6 +72,21 @@ object EthWorldState {
 
     def isAgent    : Boolean = codeHash == EmptyTrieHash;
     def isContract : Boolean = !this.isAgent;
+
+    def copy( 
+      nonce       : Unsigned256 = this.nonce,
+      balance     : Unsigned256 = this.balance,
+      storageRoot : EthHash     = this.storageRoot,
+      codeHash    : EthHash     = this.codeHash
+    ) : EthWorldState.Account = {
+      this match {
+        case agent : Account.Agent => {
+          require( codeHash == EmptyTrieHash, "An Agent's codeHash can only be EmptyTrieHash" );
+          Account.Agent( nonce, balance, storageRoot )
+        }
+        case contract : Account.Contract => Account.Contract( nonce, balance, storageRoot, codeHash )
+      }
+    }
   }
 }
 final class EthWorldState( private val trie : SimpleEthTrie ) {
