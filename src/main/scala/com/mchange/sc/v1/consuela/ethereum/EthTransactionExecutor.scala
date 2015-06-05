@@ -37,13 +37,127 @@ package com.mchange.sc.v1.consuela.ethereum;
 
 import specification.Fees.BigInt.G;
 
+import EthWorldState.Account;
+
 object EthTransactionExecutor {
 
   val Zero = BigInt(0);
 
-  def execute( worldState : EthWorldState, signedTransaction : EthTransaction.Signed ) : EthWorldState = ???
+  sealed trait ExecutionStatus;
 
-  // yellow paper, sec 6.2
+  final object Aborted {
+    final object NoAccount extends Aborted;
+    final case class MismatchedNonces( acctNonce : Unsigned256, transactionNonce : Unsigned256 ) extends Aborted;
+    final case class InsufficientIntrinsicGas( intrinsicGasRequired : Unsigned256, transactionGasLimit : Unsigned256 ) extends Aborted;
+    final case class TransactionCostMayExceedAccountBalance( possibleTransactionCost : Unsigned256, accountBalance : Unsigned256 ) extends Aborted;
+    final case class TransactionMayExceedBlockGasLimit( transactionGasLimit : Unsigned256, priorTransactionGasUsed : Unsigned256, blockGasLimit : Unsigned256 ) extends Aborted; 
+  }
+  sealed trait Aborted extends ExecutionStatus;
+  object Completed extends ExecutionStatus;
+
+  final case class StateUpdate( finalState : EthWorldState, totalGasUsed : Unsigned256, logEntries : immutable.IndexedSeq[EthLogEntry] );
+
+  private final case class Substate( suicides : Set[EthAddress], logEntries : immutable.IndexedSeq[EthLogEntry], accruedRefund : BigInt );
+  private final case class PostExec( provisional : EthWorldState, remainingGas : BigInt, substate : Substate );
+
+  private val OK = Right( () );
+
+  private def execute( 
+    worldState : EthWorldState, 
+    signedTransaction : EthTransaction.Signed, 
+    blockPriorTransactionGasUsed : BigInt, 
+    blockGasLimit : BigInt,
+    blockCoinbase : EthAddress,
+    originalTransactor : Option[EthAddress] = None // set if different from the signer/sender
+  ) : (ExecutionStatus, StateUpdate) = {
+    def findAccount : Either[ExecutionStatus, Account] = worldState( signedTransaction.sender ).fold( Left[NoAccount] )( Right( _ ) );
+    def findGoodNonce( acct : Account ) : Either[ExecutionStatus, BigInt] = {
+      if (acct.nonce == signedTransaction.nonce) {
+        Right( acct.nonce.widen ) 
+      } else {
+        Left( MismatchedNonces( acct.nonce, signedTransaction.nonce ) )
+      }
+    }
+    def checkIntrinsicGas : Either[ExecutionStatus, BigInt] = {
+      val intrinsicGasRequired = g0( signedTransaction );
+      if ( intrinsicGasRequired > signedTransaction.gasLimit.widen ) {
+        Left( InsufficientIntrinsicGas( Unsigned256( intrinsicGasRequired ), signedTransaction.gasLimit ) )
+      } else {
+        intrinsicGasRequired
+      }
+    }
+    def checkPotentialTransactionCost( acct : Account ) : Either[ExecutionStatus, Unit] = { 
+      val potentialTransactionCost = v0( signedTransaction );
+      if ( potentialTransactionCost > acct.balance ) {
+        Left( TransactionCostMayExceedAccountBalance( potentialTransactionCost, acct.balance ) )
+      } else {
+        OK
+      }
+    }
+    def checkBlockLimit : Either[ExecutionStatus, Unit] = {
+      if (blockPriorTransactionGasUsed + signedTransaction.gasLimit > blockGasLimit ) {
+        Left( TransactionMayExceedBlockGasLimit( signedTransaction.gasLimit, blockPriorTransactionGasUsed, blockGasLimit ) )
+      } else {
+        OK
+      }
+    }
+    def acctNonceIntrinsic : Either[ExecutionStatus,Tuple3[Account, BigInt, BigInt]] = {
+      for {
+        acct                 <- findAccount;
+        goodNonce            <- findGoodNince;
+        intrinsicGasRequired <- checkIntrinsicGas;
+        _ <- checkPotentialTransactionCost( acct );
+        _ <- checkBlockLimit
+      } yield {
+        ( acct, goodNonce, intrinsicGasRequired )
+      }
+    }
+    def checkpointState( acctNonceIntrinsic : (Account, BigInt, BigInt) ) : Either[ExecutionStatus,EthWorldState] = {
+      val (acct, oldNonce ) = acctNonce;
+      val newNonce   = Unsigned256(acctNonce._2 + 1);
+      val newBalance = Unsigned256( signedTransaction.gasLimit.widen * signedTransaction.gasPrice.widen );
+      val newAccount = acct.copy( nonce = newNonce, balance = newBalance );
+      Right( worldState.including( signedTransaction.sender, newAccount ) )
+    }
+    def doExec( checkpoint : EthWorldState, intrinsicGasRequired : BigInt ) : Either[ExecutionStatis, PostExec] = { // all other args available from signedTransaction + originalTransactor
+      val g = signedTransaction.gasLimit.widen - intrinsicGasRequired;
+      ???
+    }
+    def refundableGas( postExec : PostExec ) : Either[ExecutionState, BigInt] = {
+      val remaining      = postExec.remainingGas;
+      val extraRefundCap = (signedTransaction.gasLimit - remaining) / 2;
+      val extraRefund    = math.min( extraRefundCap, postExec.substate.refundable )
+      Right( remaining + extraRefund );
+    }
+    def preFinalState( provisionalState : EthWorldState, refund : BigInt ) : Either[ExecutionState,EthWorldState] = {
+      val provisionalSenderAccount = provisionalState( signedTransaction.sender ).get;
+      val newSenderBalance = Unsigned256( provisionalSenderAccount.balance.widen + refund );
+      val prefinalSenderAccount = provisionalSenderAccount.copy( balance=newSenderBalance );
+
+      val provisionalCoinbaseAccount = provisionalState( blockCoinbase ).getOrElse( Account.Agent.fresh );
+      val newCoinbaseBalance = Unsigned256( provisionalCoinbaseAccount.balance.widen + ( (signedTransaction.gasLimit.widen - refund) * signedTransaction.gasPrice ) );
+      val prefinalCoinbaseAccount = provisionalCoinbaseAccount.copy( balance=newCoinbaseBalance );
+
+      Right( provisionalState ++ List( ( signedTransaction.sender, prefinalSenderAccount ), ( blockCoinbase, prefinalCoinbaseAccount ) ) )
+    }
+    def finalState( prefinalState : EthWorldState, suicides : Set[EthAddress] ) : Either[ExecutionContext, EthWorldState] = {
+      Right( prefinalState -- suicides )
+    }
+
+  /*
+  private def prevalidate( worldState : EthWorldState, signedTransaction : EthTransaction.Signed ) : Boolean = {
+    for {
+      acct <- worldState( signedTransaction.sender );
+      goodNonce <- if (acct.nonce == signedTransaction.nonce) Some( acct.nonce ) else None;
+
+  }
+
+  private def senderKnownWithValidNonce( worldState : EthWorldSate, signedTransaction : EthTransaction.Signed ) : Boolean = {
+    worldState( signedTransaction.sender ).fold( false )( acct => acct.nonce == signedTransaction.nonce )
+  }
+  */ 
+
+  // "intrinsic gas", see yellow paper, sec 6.2
   private def g0( transaction : EthTransaction ) : BigInt  = {
     val bytes = transaction match {
       case msg : EthTransaction.Message          => msg.data;
@@ -54,4 +168,7 @@ object EthTransactionExecutor {
 
     variableCost + fixedCost
   }
+
+  // "up-front cost", see yellow paper, sec 6.2
+  private def v0( txn : EthTransaction ) : BigInt = (txn.gasPrice * txn.gasLimit) + txn.value
 }

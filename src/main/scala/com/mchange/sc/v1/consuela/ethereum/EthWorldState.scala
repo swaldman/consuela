@@ -45,6 +45,8 @@ import scala.collection.Traversable;
 import specification.Types.Unsigned256;
 
 object EthWorldState {
+  val Zero256 = Unsigned256(0);
+
   final object Account {
     def apply( nonce : Unsigned256, balance : Unsigned256, storageRoot : EthHash, codeHash : EthHash ) : EthWorldState.Account = {
       codeHash match {
@@ -54,6 +56,9 @@ object EthWorldState {
     }
     final case class Contract( nonce : Unsigned256, balance : Unsigned256, storageRoot : EthHash, codeHash : EthHash ) extends Account {
       require( codeHash != EmptyTrieHash );
+    }
+    final object Agent {
+      val fresh : Agent = Agent( Zero256, Zero256, EmptyTrieHash );
     }
     final case class Agent( nonce : Unsigned256, balance : Unsigned256, storageRoot : EthHash ) extends Account {
       def codeHash = EmptyTrieHash;
