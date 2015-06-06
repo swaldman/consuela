@@ -42,6 +42,8 @@ import EthWorldState.Account;
 
 import scala.collection._;
 
+import com.mchange.sc.v2.util.EitherAsMonad.RightBiased._;
+
 object EthTransactionExecutor {
 
   val Zero    = BigInt(0);
@@ -110,11 +112,11 @@ object EthTransactionExecutor {
       }
 
       for {
-        acct                 <- findAccount.right;
-        goodNonce            <- findGoodNonce( acct ).right;
-        intrinsicGasRequired <- findGoodIntrinsicGasRequired.right;
-        _ <- checkPotentialTransactionCost( acct ).right;
-        _ <- checkBlockLimit.right
+        acct                 <- findAccount;
+        goodNonce            <- findGoodNonce( acct );
+        intrinsicGasRequired <- findGoodIntrinsicGasRequired;
+        _ <- checkPotentialTransactionCost( acct );
+        _ <- checkBlockLimit
       } yield {
         ( acct, goodNonce, intrinsicGasRequired )
       }
@@ -150,32 +152,16 @@ object EthTransactionExecutor {
       Right( prefinalState -- suicides )
     }
 
-    // expected just a non-nested for comprehension here, with 
-    //
-    //   ( acct, nonce, intrinsicGasRequired ) <- goodAcctNonceIntrinsicGas.right
-    //
-    // as its first line.
-    //
-    // not sure why i had to use this more explicit, convoluted logic.
-    //
     val check : Either[ExecutionStatus, StateUpdate] = {
-      val ani : Either[ExecutionStatus,Tuple3[Account, BigInt, BigInt]] = goodAcctNonceIntrinsicGas;
-      ani match {
-        case Left( estatus ) => Left[ExecutionStatus,StateUpdate]( estatus )
-        case Right( tup ) => {
-          val acct = tup._1;
-          val nonce = tup._2;
-          val intrinsicGasRequired = tup._3;
-          for {
-            checkpoint                            <- checkpointState( acct, nonce ).right;
-            postExec                              <- doExec( checkpoint, intrinsicGasRequired ).right;
-            refund                                <- refundableGas( postExec ).right;
-            prefinal                              <- preFinalState( postExec.provisional, refund ).right;
-            fin                                   <- finalState( prefinal, postExec.substate.suicides ).right
-          } yield {
-            StateUpdate( fin, Unsigned256( stxn.gasLimit.widen - postExec.remainingGas ), postExec.substate.logEntries );
-          }
-        }
+      for {
+        ( acct, nonce, intrinsicGasRequired ) <- goodAcctNonceIntrinsicGas;
+        checkpoint                            <- checkpointState( acct, nonce );
+        postExec                              <- doExec( checkpoint, intrinsicGasRequired );
+        refund                                <- refundableGas( postExec );
+        prefinal                              <- preFinalState( postExec.provisional, refund );
+        fin                                   <- finalState( prefinal, postExec.substate.suicides )
+      } yield {
+        StateUpdate( fin, Unsigned256( stxn.gasLimit.widen - postExec.remainingGas ), postExec.substate.logEntries );
       }
     }
 
