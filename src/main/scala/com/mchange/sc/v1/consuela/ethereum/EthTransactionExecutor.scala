@@ -78,47 +78,35 @@ object EthTransactionExecutor {
   ) : (ExecutionStatus, StateUpdate) = {
     val sender = stxn.sender;
 
-    def goodAcctNonceIntrinsicGas : Either[ExecutionStatus,Tuple3[Account, BigInt, BigInt]] = {
-      def findAccount : Either[ExecutionStatus, Account] = worldState( sender ).fold[Either[ExecutionStatus,Account]]( Left(Aborted.NoAccount) )( Right( _ ) );
-      def findGoodNonce( acct : Account ) : Either[ExecutionStatus, BigInt] = {
-        if (acct.nonce == stxn.nonce) {
-          Right( acct.nonce.widen )
-        } else {
-          Left( Aborted.MismatchedNonces( acct.nonce, stxn.nonce ) )
-        }
+    def findAccount : Either[ExecutionStatus, Account] = worldState( sender ).fold[Either[ExecutionStatus,Account]]( Left(Aborted.NoAccount) )( Right( _ ) );
+    def findGoodNonce( acct : Account ) : Either[ExecutionStatus, BigInt] = {
+      if (acct.nonce == stxn.nonce) {
+        Right( acct.nonce.widen )
+      } else {
+        Left( Aborted.MismatchedNonces( acct.nonce, stxn.nonce ) )
       }
-      def findGoodIntrinsicGasRequired : Either[ExecutionStatus, BigInt] = {
-        val intrinsicGasRequired = g0( stxn );
-        if ( intrinsicGasRequired > stxn.gasLimit.widen ) {
-          Left( Aborted.InsufficientIntrinsicGas( Unsigned256( intrinsicGasRequired ), stxn.gasLimit ) )
-        } else {
-          Right( intrinsicGasRequired )
-        }
+    }
+    def findGoodIntrinsicGasRequired : Either[ExecutionStatus, BigInt] = {
+      val intrinsicGasRequired = g0( stxn );
+      if ( intrinsicGasRequired > stxn.gasLimit.widen ) {
+        Left( Aborted.InsufficientIntrinsicGas( Unsigned256( intrinsicGasRequired ), stxn.gasLimit ) )
+      } else {
+        Right( intrinsicGasRequired )
       }
-      def checkPotentialTransactionCost( acct : Account ) : Either[ExecutionStatus, Unit] = {
-        val potentialTransactionCost = v0( stxn );
-        if ( potentialTransactionCost > acct.balance.widen ) {
-          Left( Aborted.TransactionCostMayExceedAccountBalance( Unsigned256( potentialTransactionCost ), acct.balance ) )
-        } else {
-          OK
-        }
+    }
+    def checkPotentialTransactionCost( acct : Account ) : Either[ExecutionStatus, Unit] = {
+      val potentialTransactionCost = v0( stxn );
+      if ( potentialTransactionCost > acct.balance.widen ) {
+        Left( Aborted.TransactionCostMayExceedAccountBalance( Unsigned256( potentialTransactionCost ), acct.balance ) )
+      } else {
+        OK
       }
-      def checkBlockLimit : Either[ExecutionStatus, Unit] = {
-        if (blockPriorTransactionGasUsed + stxn.gasLimit.widen > blockGasLimit ) {
-          Left( Aborted.TransactionMayExceedBlockGasLimit( stxn.gasLimit, Unsigned256( blockPriorTransactionGasUsed ), Unsigned256( blockGasLimit ) ) )
-        } else {
-          OK
-        }
-      }
-
-      for {
-        acct                 <- findAccount;
-        goodNonce            <- findGoodNonce( acct );
-        intrinsicGasRequired <- findGoodIntrinsicGasRequired;
-        _ <- checkPotentialTransactionCost( acct );
-        _ <- checkBlockLimit
-      } yield {
-        ( acct, goodNonce, intrinsicGasRequired )
+    }
+    def checkBlockLimit : Either[ExecutionStatus, Unit] = {
+      if (blockPriorTransactionGasUsed + stxn.gasLimit.widen > blockGasLimit ) {
+        Left( Aborted.TransactionMayExceedBlockGasLimit( stxn.gasLimit, Unsigned256( blockPriorTransactionGasUsed ), Unsigned256( blockGasLimit ) ) )
+      } else {
+        OK
       }
     }
     def checkpointState( acct : Account, nonce : BigInt ) : Either[ExecutionStatus,EthWorldState] = {
@@ -154,12 +142,16 @@ object EthTransactionExecutor {
 
     val check : Either[ExecutionStatus, StateUpdate] = {
       for {
-        ( acct, nonce, intrinsicGasRequired ) <- goodAcctNonceIntrinsicGas;
-        checkpoint                            <- checkpointState( acct, nonce );
-        postExec                              <- doExec( checkpoint, intrinsicGasRequired );
-        refund                                <- refundableGas( postExec );
-        prefinal                              <- preFinalState( postExec.provisional, refund );
-        fin                                   <- finalState( prefinal, postExec.substate.suicides )
+        acct                 <- findAccount;
+        nonce                <- findGoodNonce( acct );
+        intrinsicGasRequired <- findGoodIntrinsicGasRequired;
+        _                    <- checkPotentialTransactionCost( acct );
+        _                    <- checkBlockLimit
+        checkpoint           <- checkpointState( acct, nonce );
+        postExec             <- doExec( checkpoint, intrinsicGasRequired );
+        refund               <- refundableGas( postExec );
+        prefinal             <- preFinalState( postExec.provisional, refund );
+        fin                  <- finalState( prefinal, postExec.substate.suicides )
       } yield {
         StateUpdate( fin, Unsigned256( stxn.gasLimit.widen - postExec.remainingGas ), postExec.substate.logEntries );
       }
