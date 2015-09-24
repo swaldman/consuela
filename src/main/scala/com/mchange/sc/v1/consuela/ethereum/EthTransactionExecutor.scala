@@ -42,7 +42,7 @@ import EthWorldState.Account;
 
 import scala.collection._;
 
-import com.mchange.sc.v2.util.EitherAsMonad.RightBiased._;
+import com.mchange.sc.v2.util.EitherAsMonad.RightBias._;
 
 object EthTransactionExecutor {
 
