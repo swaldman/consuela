@@ -38,6 +38,8 @@ package com.mchange.sc.v1.consuela.ethereum;
 import com.mchange.sc.v1.consuela._;
 import com.mchange.sc.v1.consuela.crypto;
 
+import com.mchange.sc.v1.consuela.ethereum.specification.Types.ByteSeqExact64;
+
 import com.mchange.sc.v1.consuela.util.ByteArrayValue;
 
 import java.util.Arrays;
@@ -59,6 +61,8 @@ final class EthPublicKey private ( protected val _bytes : Array[Byte] ) extends 
   lazy val y = BigInt( new java.math.BigInteger( 1, _yBytes ) );
 
   lazy val toAddress = EthAddress( this );
+
+  lazy val toByteSeqExact64 = ByteSeqExact64( this.bytes );
 
   def matches( priv : EthPrivateKey ) : Boolean = Arrays.equals( _bytes, EthPublicKey.computeBytes( priv ) );
 

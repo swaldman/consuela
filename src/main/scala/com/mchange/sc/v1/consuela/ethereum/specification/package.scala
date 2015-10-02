@@ -100,6 +100,7 @@ package object specification {
 
   implicit final object UnsignedBigInt_RLPSerializing extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.UnsignedBigInt]( Types.UnsignedBigInt );
   implicit final object Unsigned8_RLPSerializing      extends RestrictedTypeRLPSerializing.UnsignedShort[Types.Unsigned8]      ( Types.Unsigned8      );
+  implicit final object Unsigned16_RLPSerializing     extends RestrictedTypeRLPSerializing.UnsignedInt[Types.Unsigned16]       ( Types.Unsigned16     );
   implicit final object Unsigned64_RLPSerializing     extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.Unsigned64]    ( Types.Unsigned64     );
   implicit final object Unsigned256_RLPSerializing    extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.Unsigned256]   ( Types.Unsigned256    );
   implicit final object Unsigned2048_RLPSerializing   extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.Unsigned2048]  ( Types.Unsigned2048   );
@@ -110,8 +111,10 @@ package object specification {
 
   implicit final object ByteSeqExact4_RLPSerializing   extends RestrictedTypeRLPSerializing.ByteSeq[Types.ByteSeqExact4]  ( Types.ByteSeqExact4  );
   implicit final object ByteSeqExact8_RLPSerializing   extends RestrictedTypeRLPSerializing.ByteSeq[Types.ByteSeqExact8]  ( Types.ByteSeqExact8  );
+  implicit final object ByteSeqExact16_RLPSerializing  extends RestrictedTypeRLPSerializing.ByteSeq[Types.ByteSeqExact16] ( Types.ByteSeqExact16 );
   implicit final object ByteSeqExact20_RLPSerializing  extends RestrictedTypeRLPSerializing.ByteSeq[Types.ByteSeqExact20] ( Types.ByteSeqExact20 );
   implicit final object ByteSeqExact32_RLPSerializing  extends RestrictedTypeRLPSerializing.ByteSeq[Types.ByteSeqExact32] ( Types.ByteSeqExact32 );
+  implicit final object ByteSeqExact64_RLPSerializing  extends RestrictedTypeRLPSerializing.ByteSeq[Types.ByteSeqExact64] ( Types.ByteSeqExact64 );
   implicit final object ByteSeqExact256_RLPSerializing extends RestrictedTypeRLPSerializing.ByteSeq[Types.ByteSeqExact256]( Types.ByteSeqExact256 );
   implicit final object ByteSeqMax1024_RLPSerializing  extends RestrictedTypeRLPSerializing.ByteSeq[Types.ByteSeqMax1024] ( Types.ByteSeqMax1024 );
 }

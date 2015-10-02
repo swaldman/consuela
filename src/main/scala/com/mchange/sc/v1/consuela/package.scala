@@ -40,6 +40,8 @@ import com.mchange.lang.ByteUtils;
 import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq;
 import scala.language.implicitConversions;
 
+import scala.collection.immutable;
+
 import java.math.BigInteger;
 import javax.xml.bind.DatatypeConverter;
 
@@ -48,7 +50,7 @@ package object consuela {
 
   implicit val MainProvider : crypto.jce.Provider = crypto.jce.Provider.ConfiguredProvider;
 
-  implicit class RichString( val string : String ) extends AnyVal {
+  implicit final class RichString( val string : String ) extends AnyVal {
     def decodeHex : Array[Byte] = {
       val hexstring = if ( string.startsWith( "0x" ) ) string.substring(2) else string;
       ByteUtils.fromHexAscii( hexstring ); // should we switch to the DatatypeConverter implementation of hex encoding/decoding?
@@ -58,20 +60,23 @@ package object consuela {
   }
   trait RichBytes { // if we accept code duplication, we can inline this stuff and let the subclasses extend AnyVal. Hmmm....
     protected val _bytes     : Array[Byte];
-    def base64               : String     = DatatypeConverter.printBase64Binary( _bytes )
-    def hex                  : String     = ByteUtils.toLowercaseHexAscii( _bytes ); // should we switch to the DatatypeConverter implementation of hex encoding/decoding?
-    def toBigInteger         : BigInteger = new BigInteger( _bytes );
-    def toUnsignedBigInteger : BigInteger = new BigInteger( 1, _bytes );
-    def toBigInt             : BigInt     = BigInt( this.toBigInteger );
-    def toUnsignedBigInt     : BigInt     = BigInt( this.toUnsignedBigInteger );
+    def toImmutableSeq       : immutable.Seq[Byte];
+    def base64               : String              = DatatypeConverter.printBase64Binary( _bytes )
+    def hex                  : String              = ByteUtils.toLowercaseHexAscii( _bytes ); // should we switch to the DatatypeConverter implementation of hex encoding/decoding?
+    def toBigInteger         : BigInteger          = new BigInteger( _bytes );
+    def toUnsignedBigInteger : BigInteger          = new BigInteger( 1, _bytes );
+    def toBigInt             : BigInt              = BigInt( this.toBigInteger );
+    def toUnsignedBigInt     : BigInt              = BigInt( this.toUnsignedBigInteger );
   }
-  implicit class RichByteSeq( bytes : Seq[Byte] ) extends RichBytes {
+  implicit final class RichByteSeq( bytes : Seq[Byte] ) extends RichBytes {
     protected val _bytes = bytes.toArray;
+    def toImmutableSeq : immutable.Seq[Byte] = ImmutableArraySeq.createNoCopy( _bytes )
   }
-  implicit class RichByteArray( bytes : Array[Byte] ) extends RichBytes {
+  implicit final class RichByteArray( bytes : Array[Byte] ) extends RichBytes {
     protected val _bytes = bytes;
+    def toImmutableSeq : immutable.Seq[Byte] = ImmutableArraySeq( _bytes )
   }
-  implicit class RichBigInt( val bi : BigInt ) extends AnyVal {
+  implicit final class RichBigInt( val bi : BigInt ) extends AnyVal {
     /**
      * Ignores sign and converts the byte representation
      * of the BigInt to the desired len by removing or padding
