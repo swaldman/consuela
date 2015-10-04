@@ -105,7 +105,7 @@ object RLPSerializing {
   //not implicit, use this explicitly
   def asElements[U : RLPSerializing]( seq : immutable.Seq[U] ) : immutable.Seq[RLP.Element] = seq.map( u => asElement( u ) )
 }
-abstract class RLPSerializing[T] {
+trait RLPSerializing[T] {
   // extend and override these two methods. that's it!
   def toElement( rlpSerializable : T )               : RLP.Element;
 
