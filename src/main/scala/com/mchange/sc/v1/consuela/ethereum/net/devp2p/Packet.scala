@@ -5,6 +5,8 @@ import com.mchange.sc.v1.consuela.ethereum.encoding.RLP;
 import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq;
 import com.mchange.lang.IntegerUtils;
 
+import com.mchange.sc.v2.failable._
+
 object Packet {
   val SyncToken              = 0x22400891
   private val SyncTokenArray = IntegerUtils.byteArrayFromInt( SyncToken );
@@ -26,10 +28,14 @@ object Packet {
     out
   }
   def encodeAsArray( payload : Array[Byte] ) : Array[Byte] = encodeAsArray( ImmutableArraySeq.Byte( payload ) )
-  def encodeAsArray[T <: Payload[T]  : PayloadSerializing]( payload : T ) : Array[Byte] = encodeAsArray( RLP.encode( payload ) )
+  def encodeAsArray( payload : Payload )( implicit session : Session ) : Failable[Array[Byte]] = {
+    try session.infoByTypeCode( payload.typeCode ).pickle( payload ).map( encodeAsArray ) catch Poop
+  }
 
   def encode( payload : Seq[Byte] )   : immutable.Seq[Byte] = ImmutableArraySeq.Byte( encodeAsArray( payload ) )
   def encode( payload : Array[Byte] ) : immutable.Seq[Byte] = encode( ImmutableArraySeq.Byte( payload ) )
-  def encode[T <: Payload[T] : PayloadSerializing]( payload : T ) : immutable.Seq[Byte] = this.encode( RLP.encode( payload ) )
+  def encode( payload : Payload )( implicit session : Session ) : Failable[immutable.Seq[Byte]] = {
+    try session.infoByTypeCode( payload.typeCode ).pickle( payload ).map( encode ) catch Poop
+  }
 }
 
