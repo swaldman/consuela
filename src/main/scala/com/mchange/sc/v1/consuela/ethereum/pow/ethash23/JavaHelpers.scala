@@ -102,12 +102,12 @@ object JavaHelpers {
   def streamDagFileForBlockNumber( blockNumber : Long, mf : Monitor.Factory ) : Boolean = {
     implicit val fact = if ( mf == null ) Monitor.Factory.NoOp else mf;
 
-    impl.streamDagFileForBlockNumber( blockNumber ).isSuccess;
+    impl.streamDagFileForBlockNumber( blockNumber ).isSucceeded;
   }
   def precomputeCacheDatasetForBlockNumber( blockNumber : Long, mf : Monitor.Factory ) : Boolean = {
     implicit val fact = if ( mf == null ) Monitor.Factory.NoOp else mf;
 
-    impl.precomputeCacheDatasetForBlockNumber( blockNumber ).isSuccess;
+    impl.precomputeCacheDatasetForBlockNumber( blockNumber ).isSucceeded;
   }
   def getFullSizeForBlock( blockNumber : Long ) : Long = impl.getFullSizeForBlock( blockNumber );
 
