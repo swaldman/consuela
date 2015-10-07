@@ -31,7 +31,7 @@ publishTo <<= version {
 
 libraryDependencies ++= Seq(
   "com.mchange" %% "mlog-scala" % "0.3.7",
-  "com.mchange" %% "restricted-type" % "0.0.1",
+  "com.mchange" %% "restricted-type" % "0.0.2-SNAPSHOT" changing(),
   "com.mchange" %% "mchange-commons-scala" % "0.4.1-SNAPSHOT" changing(),
   "com.typesafe" % "config" % "1.2.1",
   "org.spire-math" %% "spire" % "0.9.1",
