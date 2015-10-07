@@ -71,4 +71,50 @@ package object devp2p {
       }
     }
   }
+  implicit final object Subprotocol_Base_Disconnect extends RLPSerializing[Subprotocol.Base.Disconnect] {
+    def toElement( disconnect : Subprotocol.Base.Disconnect ) : RLP.Element = RLP.Element.Seq.of( disconnect.typeCode, disconnect.reason );
+    def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.Base.Disconnect] = {
+      element match {
+        case RLP.Element.Seq.of( typeCodeE, reasonE ) => {
+          for {
+            typeCode <- RLP.fromElement[Unsigned16]( typeCodeE.simplify )
+            reason   <- RLP.fromElement[Unsigned16]( reasonE.simplify )
+          } yield {
+            Subprotocol.Base.Disconnect( typeCode, reason )
+          }
+        }
+        case other => fail( "Unexpected element for Subprotocol.Base.Disconnect: ${other}" );
+      }
+    }
+  }
+  implicit final object Subprotocol_Base_Ping extends RLPSerializing[Subprotocol.Base.Ping] {
+    def toElement( disconnect : Subprotocol.Base.Ping ) : RLP.Element = RLP.Element.Seq.of( disconnect.typeCode );
+    def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.Base.Ping] = {
+      element match {
+        case RLP.Element.Seq.of( typeCodeE ) => {
+          for {
+            typeCode <- RLP.fromElement[Unsigned16]( typeCodeE.simplify )
+          } yield {
+            Subprotocol.Base.Ping( typeCode )
+          }
+        }
+        case other => fail( "Unexpected element for Subprotocol.Base.Ping: ${other}" );
+      }
+    }
+  }
+  implicit final object Subprotocol_Base_Pong extends RLPSerializing[Subprotocol.Base.Pong] {
+    def toElement( disconnect : Subprotocol.Base.Pong ) : RLP.Element = RLP.Element.Seq.of( disconnect.typeCode );
+    def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.Base.Pong] = {
+      element match {
+        case RLP.Element.Seq.of( typeCodeE ) => {
+          for {
+            typeCode <- RLP.fromElement[Unsigned16]( typeCodeE.simplify )
+          } yield {
+            Subprotocol.Base.Pong( typeCode )
+          }
+        }
+        case other => fail( "Unexpected element for Subprotocol.Base.Pong: ${other}" );
+      }
+    }
+  }
 }
