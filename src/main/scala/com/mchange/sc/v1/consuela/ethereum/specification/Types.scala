@@ -39,6 +39,7 @@ import com.mchange.sc.v1.consuela._;
 import com.mchange.sc.v2.restrict._;
 
 import java.math.BigInteger
+import java.nio.charset.StandardCharsets
 
 import scala.collection._;
 
@@ -77,6 +78,10 @@ object Types {
   final object ByteSeqExact256 extends RestrictedByteSeq.ExactLength[ByteSeqExact256]( 256 )   { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact256( value ); }
   final object ByteSeqMax1024  extends RestrictedByteSeq.LimitedLength[ByteSeqMax1024]( 1024 ) { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqMax1024( value ); }
 
+  final object StringUTF8 extends RestrictedString.NamedRestriction[StringUTF8]( StandardCharsets.UTF_8 ) { override protected def create( value : String ) = new StringUTF8( value ); }
+  final object StringASCII_Exact3 extends RestrictedString.ExactLength[StringASCII_Exact3]( 3, StandardCharsets.US_ASCII ) 
+  { override protected def create( value : String ) = new StringASCII_Exact3( value ); }
+
   /*
    * 
    * Value classes implementing types
@@ -101,5 +106,8 @@ object Types {
   final class ByteSeqExact64  private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
   final class ByteSeqExact256 private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
   final class ByteSeqMax1024  private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
+
+  final class StringUTF8         private ( val widen : String ) extends AnyVal with RestrictedType.Element[String];
+  final class StringASCII_Exact3 private ( val widen : String ) extends AnyVal with RestrictedType.Element[String];
 }
 

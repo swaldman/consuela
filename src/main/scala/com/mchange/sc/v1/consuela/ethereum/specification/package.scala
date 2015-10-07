@@ -44,6 +44,8 @@ import com.mchange.sc.v2.failable._;
 
 import scala.collection._
 
+import java.nio.charset.{Charset,StandardCharsets};
+
 package object specification {
   private type ShieldType[BELLY] = AnyVal with RestrictedType.Element[BELLY];
 
@@ -87,6 +89,11 @@ package object specification {
       bytes => bytes,
       factory 
     );
+    abstract class String[SHIELD <: ShieldType[java.lang.String]]( factory : RestrictedType[_, java.lang.String, SHIELD], charset : Charset ) extends LeafElement[java.lang.String, SHIELD]( 
+      belly => RLP.Element.ByteSeq( belly.getBytes( charset ) ),
+      bytes => new java.lang.String( bytes.toArray, charset ),
+      factory 
+    )
   }
   abstract class RestrictedTypeRLPSerializing[BELLY, SHIELD <: ShieldType[BELLY]]( factory : RestrictedType[_, BELLY, SHIELD] ) extends RLPSerializing[SHIELD] {
     def toElement( shield : SHIELD )               : RLP.Element      = elementFromBelly( shield.unwrap ); // boxes then unboxes, but that's okay.
@@ -117,4 +124,8 @@ package object specification {
   implicit final object ByteSeqExact64_RLPSerializing  extends RestrictedTypeRLPSerializing.ByteSeq[Types.ByteSeqExact64] ( Types.ByteSeqExact64 );
   implicit final object ByteSeqExact256_RLPSerializing extends RestrictedTypeRLPSerializing.ByteSeq[Types.ByteSeqExact256]( Types.ByteSeqExact256 );
   implicit final object ByteSeqMax1024_RLPSerializing  extends RestrictedTypeRLPSerializing.ByteSeq[Types.ByteSeqMax1024] ( Types.ByteSeqMax1024 );
+
+  implicit final object StringUTF8_RLPSerializing         extends RestrictedTypeRLPSerializing.String[Types.StringUTF8]         ( Types.StringUTF8, StandardCharsets.UTF_8 );
+  implicit final object StringASCII_Exact3_RLPSerializing extends RestrictedTypeRLPSerializing.String[Types.StringASCII_Exact3] ( Types.StringASCII_Exact3, StandardCharsets.US_ASCII );
+
 }
