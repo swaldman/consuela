@@ -137,6 +137,7 @@ object Subprotocol {
 
     final object NewBlock extends Payload.Factory.Base[NewBlock]( this );
     final case class NewBlock (
+      typeCode        : Unsigned16,
       block           : EthBlock,
       totalDifficulty : Unsigned256
     ) extends Payload.Base[NewBlock]( NewBlock )

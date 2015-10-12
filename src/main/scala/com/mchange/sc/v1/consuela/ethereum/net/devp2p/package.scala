@@ -69,7 +69,7 @@ package object devp2p {
             Subprotocol.Core.Hello( typeCode, p2pVersion, clientId, capabilities, listenPort, nodeId )
           }
         }
-        case other => fail( "Unexpected element for Subprotocol.Core.Hello: ${other}" );
+        case other => fail( s"Unexpected element for Subprotocol.Core.Hello: ${other}" );
       }
     }
   }
@@ -85,7 +85,7 @@ package object devp2p {
             Subprotocol.Core.Disconnect( typeCode, reason )
           }
         }
-        case other => fail( "Unexpected element for Subprotocol.Core.Disconnect: ${other}" );
+        case other => fail( s"Unexpected element for Subprotocol.Core.Disconnect: ${other}" );
       }
     }
   }
@@ -100,7 +100,7 @@ package object devp2p {
             Subprotocol.Core.Ping( typeCode )
           }
         }
-        case other => fail( "Unexpected element for Subprotocol.Core.Ping: ${other}" );
+        case other => fail( s"Unexpected element for Subprotocol.Core.Ping: ${other}" );
       }
     }
   }
@@ -115,7 +115,7 @@ package object devp2p {
             Subprotocol.Core.Pong( typeCode )
           }
         }
-        case other => fail( "Unexpected element for Subprotocol.Core.Pong: ${other}" );
+        case other => fail( s"Unexpected element for Subprotocol.Core.Pong: ${other}" );
       }
     }
   }
@@ -140,26 +140,94 @@ package object devp2p {
             Subprotocol.Eth60.Status( typeCode, protocolVersion, networkId, totalDifficulty, bestHash, genesisHash  )
           }
         }
-        case other => fail( "Unexpected element for Subprotocol.Eth60.Status: ${other}" );
+        case other => fail( s"Unexpected element for Subprotocol.Eth60.Status: ${other}" );
       }
     }
   }
   implicit final object Subprotocol_Eth60_NewBlockHashes extends RLPSerializing[Subprotocol.Eth60.NewBlockHashes] {
-    def toElement( nbh : Subprotocol.Eth60.NewBlockHashes ) : RLP.Element = {
-      RLP.Element.Seq( RLP.toElement( nbh.typeCode ) +: nbh.hashes.map( RLP.toElement( _ ) ) )
-    }
+    def toElement( nbh : Subprotocol.Eth60.NewBlockHashes ) : RLP.Element = toTypeCodeSeqElement( nbh.typeCode, nbh.hashes );
     def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.Eth60.NewBlockHashes] = {
+      fromTypeCodeSeqElement[EthHash]( element, "Subprotocol.Eth60.NewBlockHashes" ).map( pair => Subprotocol.Eth60.NewBlockHashes( pair._1, pair._2 ) )
+    }
+  }
+  implicit final object Subprotocol_Eth60_Transactions extends RLPSerializing[Subprotocol.Eth60.Transactions] {
+    def toElement( txns : Subprotocol.Eth60.Transactions ) : RLP.Element = toTypeCodeSeqElement( txns.typeCode, txns.transactions );
+    def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.Eth60.Transactions] = {
+      fromTypeCodeSeqElement[EthTransaction]( element, "Subprotocol.Eth60.Transactions" ).map( pair => Subprotocol.Eth60.Transactions( pair._1, pair._2 ) )
+    }
+  }
+  implicit final object Subprotocol_Eth60_GetBlockHashes extends RLPSerializing[Subprotocol.Eth60.GetBlockHashes] {
+    def toElement( gbh : Subprotocol.Eth60.GetBlockHashes ) : RLP.Element = {
+      import gbh._
+      RLP.Element.Seq.of( typeCode, hash, maxBlocks )
+    }
+    def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.Eth60.GetBlockHashes] = {
       element match {
-        case RLP.Element.Seq.of( typeCodeE, hashEs @ _* ) => {
-          RLP.fromElement[Unsigned16]( typeCodeE.simplify ).flatMap{ typeCode =>
-            val failables = hashEs.map( hashE => RLP.fromElement[EthHash]( hashE.simplify ) );
-            val mbFirstFailure = failables.find( _.isFailed )
-            val failableSeq = mbFirstFailure.fold( succeed( failables.map( _.get ) ) )( failable => refail( failable.asFailed ) )
-            failableSeq.map( seq => Subprotocol.Eth60.NewBlockHashes( typeCode, immutable.IndexedSeq( seq : _* ) ) )
+        case RLP.Element.Seq.of( typeCodeE, hashE, maxBlocksE ) => {
+          for {
+            typeCode  <- RLP.fromElement[Unsigned16]  ( typeCodeE.simplify )
+            hash      <- RLP.fromElement[EthHash]     ( hashE.simplify )
+            maxBlocks <- RLP.fromElement[Unsigned256] ( maxBlocksE.simplify )
+          } yield {
+            Subprotocol.Eth60.GetBlockHashes( typeCode, hash, maxBlocks )
           }
         }
-        case other => fail( "Unexpected element for Subprotocol.Eth60.NewBlockHashes: ${other}" );
+        case other => fail( s"Unexpected element for Subprotocol.Eth60.GetBlockHashes: ${other}" );
       }
+    }
+  }
+  implicit final object Subprotocol_Eth60_BlockHashes extends RLPSerializing[Subprotocol.Eth60.BlockHashes] {
+    def toElement( bh : Subprotocol.Eth60.BlockHashes ) : RLP.Element = toTypeCodeSeqElement( bh.typeCode, bh.hashes );
+    def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.Eth60.BlockHashes] = {
+      fromTypeCodeSeqElement[EthHash]( element, "Subprotocol.Eth60.BlockHashes" ).map( pair => Subprotocol.Eth60.BlockHashes( pair._1, pair._2 ) )
+    }
+  }
+  implicit final object Subprotocol_Eth60_GetBlocks extends RLPSerializing[Subprotocol.Eth60.GetBlocks] {
+    def toElement( gb : Subprotocol.Eth60.GetBlocks ) : RLP.Element = toTypeCodeSeqElement( gb.typeCode, gb.hashes );
+    def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.Eth60.GetBlocks] = {
+      fromTypeCodeSeqElement[EthHash]( element, "Subprotocol.Eth60.GetBlocks" ).map( pair => Subprotocol.Eth60.GetBlocks( pair._1, pair._2 ) )
+    }
+  }
+  implicit final object Subprotocol_Eth60_Blocks extends RLPSerializing[Subprotocol.Eth60.Blocks] {
+    def toElement( bs : Subprotocol.Eth60.Blocks ) : RLP.Element = toTypeCodeSeqElement( bs.typeCode, bs.blocks );
+    def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.Eth60.Blocks] = {
+      fromTypeCodeSeqElement[EthBlock]( element, "Subprotocol.Eth60.Blocks" ).map( pair => Subprotocol.Eth60.Blocks( pair._1, pair._2 ) )
+    }
+  }
+  implicit final object Subprotocol_Eth60_NewBlock extends RLPSerializing[Subprotocol.Eth60.NewBlock] {
+    def toElement( nb : Subprotocol.Eth60.NewBlock ) : RLP.Element = RLP.Element.Seq.of( nb.typeCode, nb.block, nb.totalDifficulty )
+    def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.Eth60.NewBlock] = {
+      element match {
+        case RLP.Element.Seq.of( typeCodeE, blockE, totalDifficultyE ) => {
+          for {
+            typeCode        <- RLP.fromElement[Unsigned16]  ( typeCodeE.simplify )
+            block           <- RLP.fromElement[EthBlock]    ( blockE.simplify )
+            totalDifficulty <- RLP.fromElement[Unsigned256] ( totalDifficultyE.simplify )
+          } yield {
+            Subprotocol.Eth60.NewBlock( typeCode, block, totalDifficulty )
+          }
+        }
+        case other => fail( s"Unexpected element for Subprotocol.Eth60.NewBlock: ${other}" );
+      }
+    }
+  }
+
+  // utilities
+
+  private def toTypeCodeSeqElement[T : RLPSerializing]( typeCode : Unsigned16, ts : Seq[T] ) : RLP.Element = {
+    RLP.Element.Seq( RLP.toElement( typeCode ) +: ts.map( RLP.toElement( _ ) ) )
+  }
+  private def fromTypeCodeSeqElement[T : RLPSerializing]( element : RLP.Element.Basic, className : String ) : Failable[ (Unsigned16, immutable.IndexedSeq[T]) ] = {
+    element match {
+      case RLP.Element.Seq.of( typeCodeE, hashEs @ _* ) => {
+        RLP.fromElement[Unsigned16]( typeCodeE.simplify ).flatMap{ typeCode =>
+          val failables = hashEs.map( hashE => RLP.fromElement[T]( hashE.simplify ) );
+          val mbFirstFailure = failables.find( _.isFailed )
+          val failableSeq = mbFirstFailure.fold( succeed( failables.map( _.get ) ) )( failable => refail( failable.asFailed ) )
+          failableSeq.map( seq => ( typeCode, immutable.IndexedSeq( seq : _* ) ) )
+        }
+      }
+      case other => fail( s"Unexpected element for ${className}: ${other}" );
     }
   }
 }
