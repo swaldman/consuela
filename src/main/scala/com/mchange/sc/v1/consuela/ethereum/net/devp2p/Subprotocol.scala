@@ -2,6 +2,8 @@ package com.mchange.sc.v1.consuela.ethereum.net.devp2p;
 
 import scala.collection.immutable
 import com.mchange.sc.v2.failable._
+
+import com.mchange.sc.v1.consuela.ethereum._
 import com.mchange.sc.v1.consuela.ethereum.specification.Types._
 
 object Subprotocol {
@@ -13,20 +15,21 @@ object Subprotocol {
   }
   */ 
 
-  val All : immutable.IndexedSeq[Subprotocol] = immutable.IndexedSeq( Core );
+  val All : immutable.IndexedSeq[Subprotocol] = immutable.IndexedSeq( Core, Eth60 );
 
   val byIdentifier : immutable.Map[ (String, Int), Subprotocol ] = immutable.Map( All.map( sp => sp.Identifier -> sp ) : _* )
 
   abstract class Base( val Name : String, val Version : Unsigned16 ) extends Subprotocol {
-
-    val PayloadFactories : immutable.IndexedSeq[Payload.Factory[_]]; // we can't just put this in the constructor, alas, because we need to refer to PayloadFactories our subclass will contain
+    // we can't just put this in the constructor, alas, because 
+    // we need to refer to PayloadFactories our subclass will contain
+    val PayloadFactories : immutable.IndexedSeq[Payload.Factory[_]]; 
   }
 
   // note the exclamation point so that Core's name comes first when names are ordered with the default string ordering
   // there is no standard name for the core subprotocol, so this hack is fine
   object Core extends Subprotocol.Base( "!core", Unsigned16(0) ) {
     final object Hello extends Payload.Factory.Base[Hello]( this ){
-      case class Capabilities( elements : immutable.Set[(StringASCII_Exact3, Unsigned16)] );
+      final case class Capabilities( elements : immutable.Set[(StringASCII_Exact3, Unsigned16)] );
     }
     final case class Hello(
       typeCode     : Unsigned16, 
@@ -74,8 +77,7 @@ object Subprotocol {
       override lazy val offset : Unsigned16 = throw new RuntimeException("Core.NoFactory represents no valid offset.")
     }
 
-
-    //NOTE: This sequence defined the offsets within the subprotocol!
+    //NOTE: This sequence defines the offsets within the subprotocol!
     lazy val PayloadFactories : immutable.IndexedSeq[Payload.Factory[_]] = {
       val defined = immutable.IndexedSeq( Core.Hello, Core.Disconnect, Core.Ping, Core.Pong ).lift;
 
@@ -85,9 +87,71 @@ object Subprotocol {
     }
   }
 
-//  object Eth {
-//  }
-  
+  final object Eth60 extends Subprotocol.Base( "eth", Unsigned16(60) ) {
+    final object Status extends Payload.Factory.Base[Status]( this );
+    final case class Status (
+      typeCode        : Unsigned16, 
+      protocolVersion : Unsigned16,
+      networkId       : Unsigned1,
+      totalDifficulty : Unsigned256,
+      bestHash        : EthHash,
+      genesisHash     : EthHash
+    ) extends Payload.Base[Status]( Status )
+
+    final object NewBlockHashes extends Payload.Factory.Base[NewBlockHashes]( this );
+    final case class NewBlockHashes ( 
+      typeCode        : Unsigned16,
+      hashes          : immutable.IndexedSeq[EthHash]
+    ) extends Payload.Base[NewBlockHashes]( NewBlockHashes )
+
+    final object Transactions extends Payload.Factory.Base[Transactions]( this );
+    final case class Transactions (
+      typeCode        : Unsigned16,
+      transactions    : immutable.IndexedSeq[EthTransaction]
+    ) extends Payload.Base[Transactions]( Transactions )
+
+    final object GetBlockHashes extends Payload.Factory.Base[GetBlockHashes]( this );
+    final case class GetBlockHashes (
+      typeCode        : Unsigned16,
+      hash            : EthHash,
+      maxBlocks       : Unsigned256
+    ) extends Payload.Base[GetBlockHashes]( GetBlockHashes )
+
+    final object BlockHashes extends Payload.Factory.Base[BlockHashes]( this );
+    final case class BlockHashes (
+      typeCode        : Unsigned16,
+      hashes          : immutable.IndexedSeq[EthHash]
+    ) extends Payload.Base[BlockHashes]( BlockHashes )
+
+    final object GetBlocks extends Payload.Factory.Base[GetBlocks]( this );
+    final case class GetBlocks (
+      typeCode        : Unsigned16,
+      hashes          : immutable.IndexedSeq[EthHash]
+    ) extends Payload.Base[GetBlocks]( GetBlocks )
+
+    final object Blocks extends Payload.Factory.Base[Blocks]( this );
+    final case class Blocks (
+      typeCode        : Unsigned16,
+      blocks          : immutable.IndexedSeq[EthBlock]
+    ) extends Payload.Base[Blocks]( Blocks )
+
+    final object NewBlock extends Payload.Factory.Base[NewBlock]( this );
+    final case class NewBlock (
+      block           : EthBlock,
+      totalDifficulty : Unsigned256
+    ) extends Payload.Base[NewBlock]( NewBlock )
+
+    lazy val PayloadFactories : immutable.IndexedSeq[Payload.Factory[_]] =  immutable.IndexedSeq(
+      Status,           // 0x00
+      NewBlockHashes,   // 0x01
+      Transactions,     // 0x02
+      GetBlockHashes,   // 0x03
+      BlockHashes,      // 0x04
+      GetBlocks,        // 0x05
+      Blocks,           // 0x06
+      NewBlock          // 0x07
+    )
+  }
 }
 trait Subprotocol {
   def Name : String;

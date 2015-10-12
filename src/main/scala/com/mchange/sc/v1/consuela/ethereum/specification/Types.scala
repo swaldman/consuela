@@ -59,6 +59,7 @@ object Types {
    * 
    */ 
   final object UnsignedBigInt extends RestrictedBigInt.Unsigned[UnsignedBigInt]                    { override protected def create( value : BigInt ) = new UnsignedBigInt( value ); }
+  final object Unsigned1      extends RestrictedByte.UnsignedWithBitLength[Unsigned1]( 1 )         { override protected def create( value : Byte  )  = new Unsigned1( value ); }
   final object Unsigned8      extends RestrictedShort.UnsignedWithBitLength[Unsigned8]( 8 )        { override protected def create( value : Short  ) = new Unsigned8( value ); }
   final object Unsigned16     extends RestrictedInt.UnsignedWithBitLength[Unsigned16]( 16 )        { override protected def create( value : Int    ) = new Unsigned16( value ); }
   final object Unsigned64     extends RestrictedBigInt.UnsignedWithBitLength[Unsigned64]( 64 )     { override protected def create( value : BigInt ) = new Unsigned64( value ); }
@@ -88,6 +89,7 @@ object Types {
    * 
    */ 
   final class UnsignedBigInt private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];
+  final class Unsigned1      private ( val widen : Byte  )  extends AnyVal with RestrictedType.Element[Byte];
   final class Unsigned8      private ( val widen : Short  ) extends AnyVal with RestrictedType.Element[Short];
   final class Unsigned16     private ( val widen : Int    ) extends AnyVal with RestrictedType.Element[Int];
   final class Unsigned64     private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];
