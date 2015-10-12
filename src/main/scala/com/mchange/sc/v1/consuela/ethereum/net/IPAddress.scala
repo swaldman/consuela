@@ -34,9 +34,9 @@ object IPAddress{
   }
 }
 sealed trait IPAddress;
-case class IPv4Address( bytes : ByteSeqExact4 ) extends IPAddress {
+final case class IPv4Address( bytes : ByteSeqExact4 ) extends IPAddress {
   override lazy val toString : String = bytes.widen.map( _ & 0xFF ).mkString(".")
 }
-case class IPv6Address( bytes : ByteSeqExact16 ) extends IPAddress {
+final case class IPv6Address( bytes : ByteSeqExact16 ) extends IPAddress {
   override lazy val toString : String = bytes.widen.grouped(2).map( seq => (seq(0) << 8 | seq(1)).toHexString ).mkString(":")
 }

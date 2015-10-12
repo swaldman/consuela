@@ -28,14 +28,14 @@ object Packet {
     out
   }
   def encodeAsArray( payload : Array[Byte] ) : Array[Byte] = encodeAsArray( ImmutableArraySeq.Byte( payload ) )
-  def encodeAsArray( payload : Payload )( implicit session : Session ) : Failable[Array[Byte]] = {
-    try session.infoByTypeCode( payload.typeCode.widen ).pickle( payload ).map( encodeAsArray ) catch Poop
+  def encodeAsArray( payload : Payload[_] )( implicit session : Session ) : Failable[Array[Byte]] = {
+    try session.payloadFactory( payload.typeCode.widen ).attemptPickle( payload ).map( encodeAsArray ) catch Poop
   }
 
   def encode( payload : Seq[Byte] )   : immutable.Seq[Byte] = ImmutableArraySeq.Byte( encodeAsArray( payload ) )
   def encode( payload : Array[Byte] ) : immutable.Seq[Byte] = encode( ImmutableArraySeq.Byte( payload ) )
-  def encode( payload : Payload )( implicit session : Session ) : Failable[immutable.Seq[Byte]] = {
-    try session.infoByTypeCode( payload.typeCode.widen ).pickle( payload ).map( encode ) catch Poop
+  def encode( payload : Payload[_] )( implicit session : Session ) : Failable[immutable.Seq[Byte]] = {
+    try session.payloadFactory( payload.typeCode.widen ).attemptPickle( payload ).map( encode ) catch Poop
   }
 }
 

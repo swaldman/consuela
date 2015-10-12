@@ -4,9 +4,9 @@ import scala.collection.immutable;
 
 object Session {
 
-  val Bootstrap = Session( Subprotocol.Known( (Subprotocol.Name.Base, 0) ) );
+  val Bootstrap = Session( immutable.IndexedSeq( Subprotocol.Core ) );
 
-  def compute( counterpartyTuples : Set[(String,Int)] ) : Session = symmetricCompute( Subprotocol.Known.keySet, counterpartyTuples )
+  def compute( counterpartyTuples : Set[(String,Int)] ) : Session = symmetricCompute( Subprotocol.All.map( _.Identifier ).toSet, counterpartyTuples )
 
   private def symmetricCompute( a : Set[(String,Int)], b : Set[(String,Int)] ) : Session = {
     val orderedBestShared : Set[(String,Int)] = {
@@ -16,17 +16,16 @@ object Session {
       val unordered : Map[String,Int] = ma.filterKeys( mb.contains( _ ) ).map( pair => Tuple2[String,Int]( pair._1, (ma( pair._1 ) intersect mb( pair._1 )).max ) )
       immutable.TreeSet( unordered.toSeq : _* )
     }
-    val basedBestShared = orderedBestShared + Subprotocol.BaseTuple
-    Session( basedBestShared.foldLeft( immutable.IndexedSeq.empty[Subprotocol.Info] )( ( seq, tuple ) => seq ++ Subprotocol.Known( tuple ) ) )
+    val basedBestShared = orderedBestShared + Subprotocol.Core.Identifier
+    Session( basedBestShared.foldLeft( immutable.IndexedSeq.empty[Subprotocol] )( ( seq, tuple ) => seq :+ Subprotocol.byIdentifier( tuple ) ) )
   }
 }
-case class Session( infoByTypeCode : immutable.IndexedSeq[Subprotocol.Info] ) {
-  def infoByNameAndOffset( name : String, offset : Int ) : Subprotocol.Info = {
-    infoByTypeCode.find( info => info.name == name && info.offset == offset ).get //throw Exception if we are looking up a nonexistent type
-  }
+case class Session( orderedSubprotocols : immutable.IndexedSeq[Subprotocol] ) {
 
-  def typeCodeByNameAndOffset( name : String, offset : Int ) : Int = {
-    infoByTypeCode.indexOf( infoByNameAndOffset( name, offset ) )
-  }
+  lazy val payloadFactory : IndexedSeq[Payload.Factory[_]] = orderedSubprotocols.flatMap( _.PayloadFactories )
+
+  private lazy val startIndices : Map[ String, Int ] = payloadFactory.zipWithIndex.groupBy( _._1.subprotocol.Name ).mapValues( seq => seq.map( _._2 ).sorted.head )
+
+  def typeCodeByNameAndOffset( name : String, offset : Int ) : Int = startIndices( name ) + offset
 }
 
