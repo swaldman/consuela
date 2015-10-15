@@ -8,20 +8,15 @@ import scala.collection.immutable;
 
 object Payload {
   final object Factory {
-    abstract class Base[P <: Payload[_]]( val subprotocol : Subprotocol )( implicit rlp : RLPSerializing[P] )  extends Payload.Factory[P] {
-      def pickle( payload : P )         : immutable.Seq[Byte] = RLP.encode[P]( payload )
-      def unpickle( bytes : Seq[Byte] ) : Failable[P]         = RLP.decodeComplete[P]( bytes );
-    }
+    abstract class Base[P <: Payload[P]]( val subprotocol : Subprotocol )( implicit val rlp : RLPSerializing[P] ) extends Payload.Factory[P];
   }
-  trait Factory[P <: Payload[_]] {
-    def subprotocol                   : Subprotocol;
+  trait Factory[P <: Payload[P]] {
+    def subprotocol : Subprotocol;
+    def rlp         : RLPSerializing[P];  
 
-    def pickle( payload : P )         : immutable.Seq[Byte];
-    def unpickle( bytes : Seq[Byte] ) : Failable[P];
-
-    def attemptPickle( payload : Payload[_] ) : Failable[immutable.Seq[Byte]] = {
+    def validate( payload : Payload[_] ) : Failable[P] = {
       if (payload.factory == this) {
-        succeed( pickle( payload.asInstanceOf[P] ) ) 
+        succeed( payload.asInstanceOf[P] )
       } else {
         fail( s"Cannot pickle, payload ${payload} is inappropriate for factory ${this}." )
       }

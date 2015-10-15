@@ -12,6 +12,7 @@ import scala.collection.immutable;
 import RLPSerializing.asElement;
 
 package object devp2p {
+  //type AnyPayload = P forSome { type P <: Payload[P] }
 
   // Core protocol RLP
   implicit final object Subprotocol_Core_Hello_Capabilities extends RLPSerializing[Subprotocol.Core.Hello.Capabilities] {

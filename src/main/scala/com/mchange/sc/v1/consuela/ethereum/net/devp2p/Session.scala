@@ -22,9 +22,9 @@ object Session {
 }
 case class Session( orderedSubprotocols : immutable.IndexedSeq[Subprotocol] ) {
 
-  lazy val payloadFactory : IndexedSeq[Payload.Factory[_]] = orderedSubprotocols.flatMap( _.PayloadFactories )
+  lazy val payloadFactories : IndexedSeq[ Payload.Factory[_] ] = orderedSubprotocols.flatMap( _.PayloadFactories )
 
-  private lazy val startIndices : Map[ String, Int ] = payloadFactory.zipWithIndex.groupBy( _._1.subprotocol.Name ).mapValues( seq => seq.map( _._2 ).sorted.head )
+  private lazy val startIndices : Map[ String, Int ] = payloadFactories.zipWithIndex.groupBy( _._1.subprotocol.Name ).mapValues( seq => seq.map( _._2 ).sorted.head )
 
   def typeCodeByNameAndOffset( name : String, offset : Int ) : Int = startIndices( name ) + offset
 }

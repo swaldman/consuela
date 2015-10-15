@@ -5,6 +5,7 @@ import com.mchange.sc.v2.failable._
 
 import com.mchange.sc.v1.consuela.ethereum._
 import com.mchange.sc.v1.consuela.ethereum.specification.Types._
+import com.mchange.sc.v1.consuela.ethereum.encoding.RLPSerializing;
 
 object Subprotocol {
   /*
@@ -71,8 +72,7 @@ object Subprotocol {
     final object NoFactory extends Payload.Factory[Nothing] {
       def subprotocol                   : Subprotocol = Core
 
-      def pickle( payload : Nothing )   : immutable.Seq[Byte] = throw new RuntimeException("It should be impossible even to provoke this Exception")
-      def unpickle( bytes : Seq[Byte] ) : Failable[Nothing] = fail("Tried to unpickle a payload with a bad typecode.")
+      def rlp : RLPSerializing[Nothing] = throw new RuntimeException("NoFactory can't serialize/deserialize anything.")
 
       override lazy val offset : Unsigned16 = throw new RuntimeException("Core.NoFactory represents no valid offset.")
     }
