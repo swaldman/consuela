@@ -14,15 +14,15 @@ import RLPSerializing.asElement;
 package object devp2p {
   //type AnyPayload = P forSome { type P <: Payload[P] }
 
-  // Core protocol RLP
-  implicit final object Subprotocol_Core_Hello_Capabilities extends RLPSerializing[Subprotocol.Core.Hello.Capabilities] {
-    def toElement( rlpSerializable : Subprotocol.Core.Hello.Capabilities ) : RLP.Element = {
+  // P2P4 protocol RLP
+  implicit final object Subprotocol_P2P4_Hello_Capabilities extends RLPSerializing[Subprotocol.P2P4.Hello.Capabilities] {
+    def toElement( rlpSerializable : Subprotocol.P2P4.Hello.Capabilities ) : RLP.Element = {
       RLP.Element.Seq( rlpSerializable.elements.toSeq.map( pair => RLP.Element.Seq.of( RLP.toElement(pair._1), RLP.toElement(pair._2) ) ) )
     }
-    def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.Core.Hello.Capabilities] = {
+    def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.P2P4.Hello.Capabilities] = {
       element match {
-        case RLP.Element.Seq( seq ) => decodeTuples( seq ).map( tupleSeq => Subprotocol.Core.Hello.Capabilities( immutable.Set( tupleSeq : _* ) ) )
-        case other                  => fail( s"Subprotocol.Core.Hello.Capabilities should be a sequence, found ${other}" )
+        case RLP.Element.Seq( seq ) => decodeTuples( seq ).map( tupleSeq => Subprotocol.P2P4.Hello.Capabilities( immutable.Set( tupleSeq : _* ) ) )
+        case other                  => fail( s"Subprotocol.P2P4.Hello.Capabilities should be a sequence, found ${other}" )
       }
     }
     private def decodeTuples( seq : immutable.Seq[RLP.Element] ) : Failable[Seq[(StringASCII_Exact3, Unsigned16)]] = {
@@ -36,7 +36,7 @@ package object devp2p {
               ( capName, capVersion )
             }
           }
-          case other => fail( s"Individual elements of Subprotocol.Core.Hello.Capabilities should be a pair encoded as a sequence, found ${other}" )
+          case other => fail( s"Individual elements of Subprotocol.P2P4.Hello.Capabilities should be a pair encoded as a sequence, found ${other}" )
         }
       }
       val failables    : immutable.Seq[Failable[(StringASCII_Exact3, Unsigned16)]] = seq.map( decodeTuple );
@@ -44,8 +44,8 @@ package object devp2p {
       firstFailure.fold( succeed( failables.map( _.get ) ) )( failed => refail( failed ) )
     }
   }
-  implicit final object Subprotocol_Core_Hello_RLPSerialzing extends RLPSerializing[Subprotocol.Core.Hello] {
-    def toElement( rlpSerializable : Subprotocol.Core.Hello ) : RLP.Element = {
+  implicit final object Subprotocol_P2P4_Hello_RLPSerialzing extends RLPSerializing[Subprotocol.P2P4.Hello] {
+    def toElement( rlpSerializable : Subprotocol.P2P4.Hello ) : RLP.Element = {
       import rlpSerializable._
       RLP.Element.Seq.of(
         typeCode,
@@ -56,67 +56,67 @@ package object devp2p {
         nodeId
       )
     }
-    def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.Core.Hello] = {
+    def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.P2P4.Hello] = {
       element match {
         case RLP.Element.Seq.of( typeCodeE, p2pVersionE, clientIdE, capabilitiesE, listenPortE, nodeIdE ) => {
           for {
             typeCode     <- RLP.fromElement[Unsigned16]( typeCodeE.simplify )
             p2pVersion   <- RLP.fromElement[Unsigned16]( p2pVersionE.simplify )
             clientId     <- RLP.fromElement[StringUTF8]( clientIdE.simplify )
-            capabilities <- RLP.fromElement[Subprotocol.Core.Hello.Capabilities]( capabilitiesE.simplify )
+            capabilities <- RLP.fromElement[Subprotocol.P2P4.Hello.Capabilities]( capabilitiesE.simplify )
             listenPort   <- RLP.fromElement[Unsigned16]( listenPortE.simplify )
             nodeId       <- RLP.fromElement[ByteSeqExact64]( nodeIdE.simplify )
           } yield {
-            Subprotocol.Core.Hello( typeCode, p2pVersion, clientId, capabilities, listenPort, nodeId )
+            Subprotocol.P2P4.Hello( typeCode, p2pVersion, clientId, capabilities, listenPort, nodeId )
           }
         }
-        case other => fail( s"Unexpected element for Subprotocol.Core.Hello: ${other}" );
+        case other => fail( s"Unexpected element for Subprotocol.P2P4.Hello: ${other}" );
       }
     }
   }
-  implicit final object Subprotocol_Core_Disconnect extends RLPSerializing[Subprotocol.Core.Disconnect] {
-    def toElement( disconnect : Subprotocol.Core.Disconnect ) : RLP.Element = RLP.Element.Seq.of( disconnect.typeCode, disconnect.reason );
-    def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.Core.Disconnect] = {
+  implicit final object Subprotocol_P2P4_Disconnect extends RLPSerializing[Subprotocol.P2P4.Disconnect] {
+    def toElement( disconnect : Subprotocol.P2P4.Disconnect ) : RLP.Element = RLP.Element.Seq.of( disconnect.typeCode, disconnect.reason );
+    def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.P2P4.Disconnect] = {
       element match {
         case RLP.Element.Seq.of( typeCodeE, reasonE ) => {
           for {
             typeCode <- RLP.fromElement[Unsigned16]( typeCodeE.simplify )
             reason   <- RLP.fromElement[Unsigned16]( reasonE.simplify )
           } yield {
-            Subprotocol.Core.Disconnect( typeCode, reason )
+            Subprotocol.P2P4.Disconnect( typeCode, reason )
           }
         }
-        case other => fail( s"Unexpected element for Subprotocol.Core.Disconnect: ${other}" );
+        case other => fail( s"Unexpected element for Subprotocol.P2P4.Disconnect: ${other}" );
       }
     }
   }
-  implicit final object Subprotocol_Core_Ping extends RLPSerializing[Subprotocol.Core.Ping] {
-    def toElement( disconnect : Subprotocol.Core.Ping ) : RLP.Element = RLP.Element.Seq.of( disconnect.typeCode );
-    def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.Core.Ping] = {
+  implicit final object Subprotocol_P2P4_Ping extends RLPSerializing[Subprotocol.P2P4.Ping] {
+    def toElement( disconnect : Subprotocol.P2P4.Ping ) : RLP.Element = RLP.Element.Seq.of( disconnect.typeCode );
+    def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.P2P4.Ping] = {
       element match {
         case RLP.Element.Seq.of( typeCodeE ) => {
           for {
             typeCode <- RLP.fromElement[Unsigned16]( typeCodeE.simplify )
           } yield {
-            Subprotocol.Core.Ping( typeCode )
+            Subprotocol.P2P4.Ping( typeCode )
           }
         }
-        case other => fail( s"Unexpected element for Subprotocol.Core.Ping: ${other}" );
+        case other => fail( s"Unexpected element for Subprotocol.P2P4.Ping: ${other}" );
       }
     }
   }
-  implicit final object Subprotocol_Core_Pong extends RLPSerializing[Subprotocol.Core.Pong] {
-    def toElement( disconnect : Subprotocol.Core.Pong ) : RLP.Element = RLP.Element.Seq.of( disconnect.typeCode );
-    def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.Core.Pong] = {
+  implicit final object Subprotocol_P2P4_Pong extends RLPSerializing[Subprotocol.P2P4.Pong] {
+    def toElement( disconnect : Subprotocol.P2P4.Pong ) : RLP.Element = RLP.Element.Seq.of( disconnect.typeCode );
+    def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.P2P4.Pong] = {
       element match {
         case RLP.Element.Seq.of( typeCodeE ) => {
           for {
             typeCode <- RLP.fromElement[Unsigned16]( typeCodeE.simplify )
           } yield {
-            Subprotocol.Core.Pong( typeCode )
+            Subprotocol.P2P4.Pong( typeCode )
           }
         }
-        case other => fail( s"Unexpected element for Subprotocol.Core.Pong: ${other}" );
+        case other => fail( s"Unexpected element for Subprotocol.P2P4.Pong: ${other}" );
       }
     }
   }

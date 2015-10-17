@@ -16,21 +16,19 @@ object Subprotocol {
   }
   */ 
 
-  val All : immutable.IndexedSeq[Subprotocol] = immutable.IndexedSeq( Core, Eth60 );
+  val All : immutable.IndexedSeq[Subprotocol] = immutable.IndexedSeq( P2P4, Eth60 );
 
-  val byIdentifier : immutable.Map[ (String, Int), Subprotocol ] = immutable.Map( All.map( sp => sp.Identifier -> sp ) : _* )
+  val byIdentifier : immutable.Map[ (StringASCII_Exact3, Unsigned16), Subprotocol ] = immutable.Map( All.map( sp => sp.Identifier -> sp ) : _* )
 
-  abstract class Base( val Name : String, val Version : Unsigned16 ) extends Subprotocol {
+  abstract class Base( val Name : StringASCII_Exact3, val Version : Unsigned16 ) extends Subprotocol {
     // we can't just put this in the constructor, alas, because 
     // we need to refer to PayloadFactories our subclass will contain
     val PayloadFactories : immutable.IndexedSeq[Payload.Factory[_]]; 
   }
 
-  // note the exclamation point so that Core's name comes first when names are ordered with the default string ordering
-  // there is no standard name for the core subprotocol, so this hack is fine
-  object Core extends Subprotocol.Base( "!core", Unsigned16(0) ) {
+  object P2P4 extends Subprotocol.Base( StringASCII_Exact3("p2p"), Unsigned16(4) ) {
     final object Hello extends Payload.Factory.Base[Hello]( this ){
-      final case class Capabilities( elements : immutable.Set[(StringASCII_Exact3, Unsigned16)] );
+      final case class Capabilities( elements : immutable.Set[(StringASCII_Exact3, Unsigned16)] )
     }
     final case class Hello(
       typeCode     : Unsigned16, 
@@ -70,24 +68,24 @@ object Subprotocol {
 
     // touching this suggests an error has occurred
     final object NoFactory extends Payload.Factory[Nothing] {
-      def subprotocol                   : Subprotocol = Core
+      def subprotocol                   : Subprotocol = P2P4
 
       def rlp : RLPSerializing[Nothing] = throw new RuntimeException("NoFactory can't serialize/deserialize anything.")
 
-      override lazy val offset : Unsigned16 = throw new RuntimeException("Core.NoFactory represents no valid offset.")
+      override lazy val offset : Unsigned16 = throw new RuntimeException("P2P4.NoFactory represents no valid offset.")
     }
 
     //NOTE: This sequence defines the offsets within the subprotocol!
     lazy val PayloadFactories : immutable.IndexedSeq[Payload.Factory[_]] = {
-      val defined = immutable.IndexedSeq( Core.Hello, Core.Disconnect, Core.Ping, Core.Pong ).lift;
+      val defined = immutable.IndexedSeq( P2P4.Hello, P2P4.Disconnect, P2P4.Ping, P2P4.Pong ).lift;
 
-      def factoryForIndex( i : Int ) : Payload.Factory[_] = defined( i ).getOrElse( Core.NoFactory )
+      def factoryForIndex( i : Int ) : Payload.Factory[_] = defined( i ).getOrElse( P2P4.NoFactory )
 
       (0x00 until 0x10).map( factoryForIndex )
     }
   }
 
-  final object Eth60 extends Subprotocol.Base( "eth", Unsigned16(60) ) {
+  final object Eth60 extends Subprotocol.Base( StringASCII_Exact3("eth"), Unsigned16(60) ) {
     final object Status extends Payload.Factory.Base[Status]( this );
     final case class Status (
       typeCode        : Unsigned16, 
@@ -155,9 +153,10 @@ object Subprotocol {
   }
 }
 trait Subprotocol {
-  def Name : String;
+  def Name : StringASCII_Exact3;
   def Version : Unsigned16;
   def PayloadFactories : immutable.IndexedSeq[Payload.Factory[_]];
 
-  lazy val Identifier : ( String, Int ) = ( Name, Version.widen )
+  lazy val Identifier : ( StringASCII_Exact3, Unsigned16 ) = ( Name, Version )
+  def WideIdentifier : ( String, Int ) = ( Name.widen, Version.widen )
 }
