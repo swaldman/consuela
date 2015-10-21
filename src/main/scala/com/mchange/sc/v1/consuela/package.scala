@@ -67,14 +67,22 @@ package object consuela {
     def toUnsignedBigInteger : BigInteger          = new BigInteger( 1, _bytes );
     def toBigInt             : BigInt              = BigInt( this.toBigInteger );
     def toUnsignedBigInt     : BigInt              = BigInt( this.toUnsignedBigInteger );
+
+    protected def xor( other : Array[Byte] ) : Array[Byte] = {
+      require( _bytes.length == other.length, s"We can only xor sequences or arrays of the same length. [_bytes.length: ${_bytes.length}, other.length: ${other.length}]" )
+      (0 until _bytes.length).map( i => (_bytes(i) ^ other(i)).toByte ).toArray
+    }
+    def ^( other : Seq[Byte] ) : immutable.Seq[Byte] = ImmutableArraySeq.createNoCopy( _bytes ^ other.toArray )
   }
   implicit final class RichByteSeq( bytes : Seq[Byte] ) extends RichBytes {
     protected val _bytes = bytes.toArray;
-    def toImmutableSeq : immutable.Seq[Byte] = ImmutableArraySeq.createNoCopy( _bytes )
+    def toImmutableSeq : immutable.Seq[Byte]           = ImmutableArraySeq.createNoCopy( _bytes )
+    def ^( other : Array[Byte] ) : immutable.Seq[Byte] = ImmutableArraySeq.createNoCopy( xor( other ) )
   }
   implicit final class RichByteArray( bytes : Array[Byte] ) extends RichBytes {
     protected val _bytes = bytes;
     def toImmutableSeq : immutable.Seq[Byte] = ImmutableArraySeq( _bytes )
+    def ^( other : Array[Byte] ) : Array[Byte] = xor( other )
   }
   implicit final class RichBigInt( val bi : BigInt ) extends AnyVal {
     /**
