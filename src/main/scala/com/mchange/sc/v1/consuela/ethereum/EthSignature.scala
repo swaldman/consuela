@@ -39,7 +39,7 @@ import com.mchange.sc.v1.consuela._;
 
 import scala.collection._;
 
-import specification.Types.{SignatureV, SignatureR, SignatureS};
+import specification.Types.{SignatureV, SignatureR, SignatureS, SignatureRecId};
 
 final case class EthSignature( val v : SignatureV, val r : SignatureR, val s : SignatureS ) {
 
@@ -53,5 +53,8 @@ final case class EthSignature( val v : SignatureV, val r : SignatureR, val s : S
   // default
   def wasSigned( document : Array[Byte] ) : Option[EthPublicKey] = this.ethHashWasSigned( document );
 
-  lazy val exportByteSeq = v.widen +: Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) : _* ); 
+  // this isn't unversally the right format
+  //lazy val exportByteSeq = v.widen +: Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) : _* );
+
+  val recId : SignatureRecId = SignatureRecId( crypto.secp256k1.recIdFromV( v.widen ) )
 }

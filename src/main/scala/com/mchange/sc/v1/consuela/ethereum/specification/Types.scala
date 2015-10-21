@@ -48,9 +48,10 @@ object Types {
     val SignatureV : Byte = 27;
   }
   final object Limit { // exclusive maxima
-    val SignatureR : BigInt = BigInt("115792089237316195423570985008687907852837564279074904382605163141518161494337", 10);
-    val SignatureS : BigInt = { val TWO = BigInt(2); (TWO.pow(256)) - (TWO.pow(32)) - BigInt(977) }
-    val SignatureV : Byte   = 29;
+    val SignatureR     : BigInt = BigInt("115792089237316195423570985008687907852837564279074904382605163141518161494337", 10);
+    val SignatureS     : BigInt = { val TWO = BigInt(2); (TWO.pow(256)) - (TWO.pow(32)) - BigInt(977) }
+    val SignatureV     : Byte   = 29; // we expect only vals 27 or 28
+    val SignatureRecId : Byte   =  2; // we expect only vals 0 or 1
   }
 
   /*
@@ -66,9 +67,10 @@ object Types {
   final object Unsigned256    extends RestrictedBigInt.UnsignedWithBitLength[Unsigned256]( 256 )   { override protected def create( value : BigInt ) = new Unsigned256( value ); }
   final object Unsigned2048   extends RestrictedBigInt.UnsignedWithBitLength[Unsigned2048]( 2048 ) { override protected def create( value : BigInt ) = new Unsigned2048( value ); }
 
-  final object SignatureR    extends RestrictedBigInt.ZeroUntil[SignatureR]( Limit.SignatureR )              { override protected def create( value : BigInt ) = new SignatureR( value ); }
-  final object SignatureS    extends RestrictedBigInt.ZeroUntil[SignatureS]( Limit.SignatureS )              { override protected def create( value : BigInt ) = new SignatureS( value ); }
-  final object SignatureV    extends RestrictedByte.MinUntil[SignatureV]( Min.SignatureV, Limit.SignatureV ) { override protected def create( value : Byte   ) = new SignatureV( value ); }
+  final object SignatureR     extends RestrictedBigInt.ZeroUntil[SignatureR]( Limit.SignatureR )              { override protected def create( value : BigInt ) = new SignatureR( value ); }
+  final object SignatureS     extends RestrictedBigInt.ZeroUntil[SignatureS]( Limit.SignatureS )              { override protected def create( value : BigInt ) = new SignatureS( value ); }
+  final object SignatureV     extends RestrictedByte.MinUntil[SignatureV]( Min.SignatureV, Limit.SignatureV ) { override protected def create( value : Byte   ) = new SignatureV( value ); }
+  final object SignatureRecId extends RestrictedByte.ZeroUntil[SignatureRecId]( Limit.SignatureRecId )        { override protected def create( value : Byte   ) = new SignatureRecId( value ); }
 
   final object ByteSeqExact4   extends RestrictedByteSeq.ExactLength[ByteSeqExact4]( 4 )       { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact4( value ); }
   final object ByteSeqExact8   extends RestrictedByteSeq.ExactLength[ByteSeqExact8]( 8 )       { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact8( value ); }
@@ -76,6 +78,7 @@ object Types {
   final object ByteSeqExact20  extends RestrictedByteSeq.ExactLength[ByteSeqExact20]( 20 )     { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact20( value ); }
   final object ByteSeqExact32  extends RestrictedByteSeq.ExactLength[ByteSeqExact32]( 32 )     { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact32( value ); }
   final object ByteSeqExact64  extends RestrictedByteSeq.ExactLength[ByteSeqExact64]( 64 )     { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact64( value ); }
+  final object ByteSeqExact65  extends RestrictedByteSeq.ExactLength[ByteSeqExact65]( 65 )     { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact65( value ); }
   final object ByteSeqExact256 extends RestrictedByteSeq.ExactLength[ByteSeqExact256]( 256 )   { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact256( value ); }
   final object ByteSeqMax1024  extends RestrictedByteSeq.LimitedLength[ByteSeqMax1024]( 1024 ) { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqMax1024( value ); }
 
@@ -96,9 +99,10 @@ object Types {
   final class Unsigned256    private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];
   final class Unsigned2048   private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];
 
-  final class SignatureR   private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];
-  final class SignatureS   private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];
-  final class SignatureV   private ( val widen : Byte   ) extends AnyVal with RestrictedType.Element[Byte];
+  final class SignatureR     private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];
+  final class SignatureS     private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];
+  final class SignatureV     private ( val widen : Byte   ) extends AnyVal with RestrictedType.Element[Byte];
+  final class SignatureRecId private ( val widen : Byte   ) extends AnyVal with RestrictedType.Element[Byte];
 
   final class ByteSeqExact4   private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
   final class ByteSeqExact8   private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
@@ -106,6 +110,7 @@ object Types {
   final class ByteSeqExact20  private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
   final class ByteSeqExact32  private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
   final class ByteSeqExact64  private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
+  final class ByteSeqExact65  private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
   final class ByteSeqExact256 private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
   final class ByteSeqMax1024  private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
 

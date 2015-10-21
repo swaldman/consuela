@@ -38,7 +38,7 @@ package com.mchange.sc.v1.consuela.ethereum;
 import com.mchange.sc.v1.consuela._;
 import com.mchange.sc.v1.consuela.crypto;
 
-import com.mchange.sc.v1.consuela.ethereum.specification.Types.ByteSeqExact64;
+import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact64,ByteSeqExact65}
 
 import com.mchange.sc.v1.consuela.util.ByteArrayValue;
 
@@ -63,6 +63,7 @@ final class EthPublicKey private ( protected val _bytes : Array[Byte] ) extends 
   lazy val toAddress = EthAddress( this );
 
   lazy val toByteSeqExact64 = ByteSeqExact64( this.bytes );
+  lazy val toByteSeqExact65 = ByteSeqExact65( toByteSeqExact64.widen :+ 0x04.toByte ); // with ECIES uncompressed marker, 0x04
 
   def matches( priv : EthPrivateKey ) : Boolean = Arrays.equals( _bytes, EthPublicKey.computeBytes( priv ) );
 
