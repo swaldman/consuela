@@ -79,6 +79,8 @@ object Types {
   final object ByteSeqExact32  extends RestrictedByteSeq.ExactLength[ByteSeqExact32]( 32 )     { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact32( value ); }
   final object ByteSeqExact64  extends RestrictedByteSeq.ExactLength[ByteSeqExact64]( 64 )     { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact64( value ); }
   final object ByteSeqExact65  extends RestrictedByteSeq.ExactLength[ByteSeqExact65]( 65 )     { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact65( value ); }
+  final object ByteSeqExact97  extends RestrictedByteSeq.ExactLength[ByteSeqExact97]( 97 )     { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact97( value ); }
+  final object ByteSeqExact194 extends RestrictedByteSeq.ExactLength[ByteSeqExact194]( 194 )   { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact194( value ); }
   final object ByteSeqExact256 extends RestrictedByteSeq.ExactLength[ByteSeqExact256]( 256 )   { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact256( value ); }
   final object ByteSeqMax1024  extends RestrictedByteSeq.LimitedLength[ByteSeqMax1024]( 1024 ) { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqMax1024( value ); }
 
@@ -111,6 +113,8 @@ object Types {
   final class ByteSeqExact32  private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
   final class ByteSeqExact64  private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
   final class ByteSeqExact65  private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
+  final class ByteSeqExact97  private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
+  final class ByteSeqExact194 private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
   final class ByteSeqExact256 private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
   final class ByteSeqMax1024  private ( val widen : immutable.Seq[Byte] ) extends AnyVal with RestrictedType.Element[immutable.Seq[Byte]];
 
