@@ -46,24 +46,13 @@ import java.util.Arrays;
 
 object EthPublicKey {
   val ByteLength = 2 * crypto.secp256k1.ValueByteLength;
-  val ExportByteLength = ByteLength + 1
 
-  val UncompressedMarker = 0x04.toByte
-
-  def apply( bytes : Array[Byte], offset : Int, len : Int ) : EthPublicKey = {
-    val realOffset = len match {
-      case ByteLength       => offset
-      case ExportByteLength => {
-        require( bytes(offset) == UncompressedMarker, s"EthPublicKeys may be represented as ${ExportByteLength}-byte sequences only of the first byte is uncompressed marker 0x04" )
-        offset+1
-      }
-      case _ => throw new IllegalArgumentException( s"Only sequences of ${ByteLength} or ${ExportByteLength} bytes can be interpreted as EthPublicKeys. [len: ${len}]" )
-    }
+  def apply( bytes : Array[Byte], offset : Int ) : EthPublicKey = {
     val tmp = Array.ofDim[Byte]( ByteLength )
-    Array.copy( bytes, realOffset, tmp, 0, ByteLength )
+    Array.copy( bytes, offset, tmp, 0, ByteLength )
     new EthPublicKey( tmp );
   }
-  def apply( bytes : Array[Byte] ) : EthPublicKey = EthPublicKey( bytes, 0, bytes.length )
+  def apply( bytes : Array[Byte] ) : EthPublicKey = EthPublicKey( bytes, 0 )
   def apply( bytes : Seq[Byte] ) : EthPublicKey = EthPublicKey( bytes.toArray );
 
   def apply( priv  : EthPrivateKey ) : EthPublicKey = new EthPublicKey( this.computeBytes( priv ) );
@@ -80,8 +69,6 @@ final class EthPublicKey private ( protected val _bytes : Array[Byte] ) extends 
   lazy val toAddress = EthAddress( this );
 
   lazy val toByteSeqExact64 = ByteSeqExact64( this.bytes );
-
-  lazy val exportWithUncompressedMarker = ByteSeqExact65( EthPublicKey.UncompressedMarker +: toByteSeqExact64.widen ); // with ECIES uncompressed marker, 0x04
 
   def matches( priv : EthPrivateKey ) : Boolean = Arrays.equals( _bytes, EthPublicKey.computeBytes( priv ) );
 
