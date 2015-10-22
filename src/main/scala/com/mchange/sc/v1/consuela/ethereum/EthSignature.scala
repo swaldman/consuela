@@ -41,6 +41,42 @@ import scala.collection._;
 
 import specification.Types.{ByteSeqExact65, SignatureV, SignatureR, SignatureS, SignatureRecId};
 
+// what should I name 32 so that I don't keep retyping 32?
+object EthSignature {
+  def fromBytesVRS( arr : Array[Byte], offset : Int ) : EthSignature = {
+    val v = SignatureV( arr( offset ) )
+    val r = {
+      val tmp = Array.ofDim[Byte](32)
+      Array.copy( arr, offset+1, tmp, 0, 32 )
+      SignatureR( BigInt(1, tmp) )
+    }
+    val s = {
+      val tmp = Array.ofDim[Byte](32);
+      Array.copy( arr, offset+33, tmp, 0, 32 );
+      SignatureS( BigInt(1, tmp) )
+    }
+    EthSignature( v, r, s )
+  }
+  def fromBytesVRS( arr : Array[Byte] ) : EthSignature = fromBytesVRS( arr, 0 )
+  def fromBytesVRS( seq : Seq[Byte] )   : EthSignature = fromBytesVRS( seq.toArray )
+  def fromBytesRSV( arr : Array[Byte], offset : Int ) : EthSignature = {
+    val r = {
+      val tmp = Array.ofDim[Byte](32)
+      Array.copy( arr, offset, tmp, 0, 32 )
+      SignatureR( BigInt(1, tmp) )
+    }
+    val s = {
+      val tmp = Array.ofDim[Byte](32);
+      Array.copy( arr, offset+32, tmp, 0, 32 );
+      SignatureS( BigInt(1, tmp) )
+    }
+    val v = SignatureV( arr( offset+64 ) )
+    EthSignature( v, r, s )
+  }
+  def fromBytesRSV( arr : Array[Byte] ) : EthSignature = fromBytesRSV( arr, 0 )
+  def fromBytesRSV( seq : Seq[Byte] )   : EthSignature = fromBytesRSV( seq.toArray )
+}
+
 final case class EthSignature( val v : SignatureV, val r : SignatureR, val s : SignatureS ) {
 
   private def rawBytesWereSigned( bytes : Array[Byte] ) : Option[EthPublicKey] = {
