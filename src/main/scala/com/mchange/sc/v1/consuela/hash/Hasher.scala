@@ -45,6 +45,10 @@ object Hasher {
 
     private lazy val Ensurer : T => Boolean = _.length == HashLength
 
+    override def withBytes( bytes : Array[Byte], offset : Int, len : Int ) : T = {
+      require( len == HashLength, s"A ${AlgoName} hash must have a fixed length of ${HashLength} bytes, cannot create with specified length ${len}." )
+      super.withBytes( bytes, offset, len )
+    }
     override def withBytes( bytes : Array[Byte] ) : T = {
       require( bytes.length == HashLength, badLenMessage( bytes ) )
       super.withBytes( bytes )
@@ -53,6 +57,8 @@ object Hasher {
       require( bytes.length == HashLength, badLenMessage( bytes ) )
       super.withBytes( bytes )
     }
+    def withBytes( bytes : Array[Byte], offset : Int ) : T = super.withBytes( bytes, offset, HashLength )
+
     override def hash( bytes : Array[Byte] ) : T = super.hash( bytes ) ensuring( Ensurer, badLenMessage( bytes ) );
     override def hash( bytes : Seq[Byte] ) : T   = super.hash( bytes ) ensuring( Ensurer, badLenMessage( bytes ) );
 
@@ -62,6 +68,11 @@ object Hasher {
     val AlgoName : String;
     protected def instantiate( bytes : Array[Byte] ) : T;
 
+    def withBytes( bytes : Array[Byte], offset : Int, len : Int ) : T = {
+      val tmp : Array[Byte] = Array.ofDim[Byte]( len );
+      Array.copy( bytes, offset, tmp, 0, len )
+      withBytes( tmp )
+    }
     def withBytes( bytes : Array[Byte] ) : T = instantiate( bytes.clone() );
     def withBytes( bytes : Seq[Byte] ) : T   = instantiate( bytes.toArray );
     def hash( bytes : Array[Byte] ) : T      = instantiate( doHash(AlgoName, bytes) );
