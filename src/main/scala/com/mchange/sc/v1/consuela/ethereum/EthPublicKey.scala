@@ -63,7 +63,7 @@ final class EthPublicKey private ( protected val _bytes : Array[Byte] ) extends 
   lazy val toAddress = EthAddress( this );
 
   lazy val toByteSeqExact64 = ByteSeqExact64( this.bytes );
-  lazy val toByteSeqExact65 = ByteSeqExact65( toByteSeqExact64.widen :+ 0x04.toByte ); // with ECIES uncompressed marker, 0x04
+  lazy val toByteSeqExact65 = ByteSeqExact65( 0x04.toByte +: toByteSeqExact64.widen ); // with ECIES uncompressed marker, 0x04
 
   def matches( priv : EthPrivateKey ) : Boolean = Arrays.equals( _bytes, EthPublicKey.computeBytes( priv ) );
 
