@@ -42,6 +42,8 @@ import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact64,B
 
 import com.mchange.sc.v1.consuela.util.ByteArrayValue;
 
+import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq;
+
 import java.util.Arrays;
 
 object EthPublicKey {
@@ -60,7 +62,9 @@ object EthPublicKey {
   def computeBytes( priv : EthPrivateKey ) : Array[Byte] = crypto.secp256k1.computePublicKeyBytes( priv.toBigInteger )
 }
 final class EthPublicKey private ( protected val _bytes : Array[Byte] ) extends ByteArrayValue {
-  require( _bytes.length == EthPublicKey.ByteLength );
+  import EthPublicKey.ByteLength
+
+  require( _bytes.length == ByteLength );
 
   private lazy val (_xBytes, _yBytes) = _bytes.splitAt( crypto.secp256k1.ValueByteLength );
   lazy val x = BigInt( new java.math.BigInteger( 1, _xBytes ) );
@@ -69,6 +73,13 @@ final class EthPublicKey private ( protected val _bytes : Array[Byte] ) extends 
   lazy val toAddress = EthAddress( this );
 
   lazy val toByteSeqExact64 = ByteSeqExact64( this.bytes );
+
+  lazy val bytesWithUncompressedHeader : ByteSeqExact65 = {
+    val arr = Array.ofDim[Byte](ByteLength + 1)
+    arr(0) = 0x04.toByte; // uncompressed header
+    Array.copy( _bytes, 0, arr, 1, ByteLength )
+    ByteSeqExact65( ImmutableArraySeq.Byte( arr ) )
+  }
 
   def matches( priv : EthPrivateKey ) : Boolean = Arrays.equals( _bytes, EthPublicKey.computeBytes( priv ) );
 

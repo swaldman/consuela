@@ -35,7 +35,7 @@
 
 package com.mchange.sc.v1;
 
-import com.mchange.lang.ByteUtils;
+import com.mchange.lang.{ByteUtils,IntegerUtils,LongUtils};
 
 import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq;
 import scala.language.implicitConversions;
@@ -95,4 +95,9 @@ package object consuela {
     }
   }
   implicit def toRichBigInt( bi : BigInteger ) = new RichBigInt( bi );
+
+  implicit final class RichInt( val i : Int ) extends AnyVal {
+    def toByteArrayBigEndian : Array[Byte] = IntegerUtils.byteArrayFromInt( i )
+    def fillBigEndian( bytes : Array[Byte], offset : Int = 0 ) = IntegerUtils.intIntoByteArray( i, offset, bytes )
+  }
 }
