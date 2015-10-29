@@ -38,9 +38,11 @@ object EthECIES {
   val CurveParams = CurveInfo._1
   val Curve       = CurveInfo._2
 
+  val EncodedPublicKeyLen = 1 + 32 + 32; // 0x4 then two 256 bit values
+
   val EmptyByteArray = Array.ofDim[Byte](0)
-  def getDerivationV = EmptyByteArray
-  def getEncodingV   = EmptyByteArray
+  def DerivationVector = EmptyByteArray
+  def EncodingVector   = EmptyByteArray
 
   def createCipher( encrypt : Boolean, key : Array[Byte], initializationVector : Array[Byte] ) : BufferedBlockCipher = {
     val out = new BufferedBlockCipher( new SICBlockCipher( new AESFastEngine ) )
@@ -54,7 +56,7 @@ object EthECIES {
 
   def createRandom() : SecureRandom = new java.security.SecureRandom
 
-  def generateInitiationVector( random : SecureRandom = createRandom() ) : Array[Byte] = {
+  def generateInitializationVector( random : SecureRandom = createRandom() ) : Array[Byte] = {
     val out = Array.ofDim[Byte]( CipherKeyBytes )
     random.nextBytes( out )
     out
@@ -120,27 +122,28 @@ object EthECIES {
     out
   }
 
-  def kdf( sharedSecret : Array[Byte], len : Int ) : Array[Byte] = kdf( sharedSecret, getDerivationV, len )
-
-
   // adapted from EthereumJ's org.ethereum.crypto.EthereumIESEngine
   // sharedSecret is VZ in that class
   def doEncryptBlock( 
-    encodedPublicKey     : Array[Byte],
-    sharedSecret         : Array[Byte], 
-    initializationVector : Array[Byte], 
-    in                   : Array[Byte], 
-    inOffset             : Int, 
-    inLen                : Int 
+    mbEmbeddedEncodedPublicKey : Option[Array[Byte]],
+    sharedSecret               : Array[Byte], 
+    derivationVector           : Array[Byte],
+    encodingVector             : Array[Byte],
+    initializationVector       : Array[Byte],
+    in                         : Array[Byte], 
+    inOffset                   : Int, 
+    inLen                      : Int
   ) : Array[Byte] = {
-    val K  = kdf( sharedSecret, CipherKeyBytes + MacKeyBytes )
+    val V = mbEmbeddedEncodedPublicKey.getOrElse( EmptyByteArray )
+
+    val K  = kdf( sharedSecret, derivationVector, CipherKeyBytes + MacKeyBytes )
     val Ksplit = K.splitAt( CipherKeyBytes )
     val K1 = Ksplit._1
     val K2 = Ksplit._2
 
-    val P2 = getEncodingV
+    val P2 = encodingVector
     val L2 = {
-      val l2int = if ( encodedPublicKey.length != 0 && P2 != null ) (P2.length * 8) else 0
+      val l2int = if ( V.length != 0 && P2 != null ) (P2.length * 8) else 0
       l2int.toByteArrayBigEndian 
     }
 
@@ -162,42 +165,46 @@ object EthECIES {
       mac.update( initializationVector, 0, initializationVector.length )
       mac.update( C, 0, C.length )
       if (P2 != null) mac.update(P2, 0, P2.length);
-      if (encodedPublicKey.length != 0) mac.update(L2, 0, L2.length); // this just seems wrong somehow
+      if (V.length != 0) mac.update(L2, 0, L2.length); // this just seems wrong somehow
       mac.doFinal( t, 0 )
       t
     }
 
-    Array.concat( encodedPublicKey, C, T )
+    Array.concat( V, C, T )
   }
 
   // adapted from EthereumJ's org.ethereum.crypto.EthereumIESEngine
   // sharedSecret is VZ in that class
   def doDecryptBlock( 
-    encodedPublicKey     : Array[Byte],
-    sharedSecret         : Array[Byte], 
-    initializationVector : Array[Byte], 
-    in                   : Array[Byte], 
-    inOffset             : Int, 
-    inLen                : Int 
+    mbEmbeddedEncodedPublicKey : Option[Array[Byte]],
+    sharedSecret               : Array[Byte], 
+    derivationVector           : Array[Byte], 
+    encodingVector             : Array[Byte], 
+    initializationVector       : Array[Byte], 
+    in                         : Array[Byte], 
+    inOffset                   : Int, 
+    inLen                      : Int 
   ) : Array[Byte] = {
     require( inLen > MacKeyBytes )
 
-    val K  = kdf( sharedSecret, CipherKeyBytes + MacKeyBytes )
+    val V = mbEmbeddedEncodedPublicKey.getOrElse( EmptyByteArray )
+
+    val K  = kdf( sharedSecret, derivationVector, CipherKeyBytes + MacKeyBytes )
     val Ksplit = K.splitAt( CipherKeyBytes )
     val K1 = Ksplit._1
     val K2 = Ksplit._2
 
-    val P2 = getEncodingV
+    val P2 = encodingVector
     val L2 = {
-      val l2int = if ( encodedPublicKey.length != 0 && P2 != null ) (P2.length * 8) else 0
+      val l2int = if ( V.length != 0 && P2 != null ) (P2.length * 8) else 0
       l2int.toByteArrayBigEndian 
     }
 
     val cipher = createCipher( false, K1, initializationVector )
     val mac = createMac()
 
-    val M = Array.ofDim[Byte]( cipher.getOutputSize(inLen - encodedPublicKey.length - mac.getMacSize()) ) // will be PLAINTEXT ONLY
-    var len = cipher.processBytes(in, inOffset + encodedPublicKey.length, inLen - encodedPublicKey.length - mac.getMacSize(), M, 0)
+    val M = Array.ofDim[Byte]( cipher.getOutputSize(inLen - V.length - mac.getMacSize()) ) // will be PLAINTEXT ONLY
+    var len = cipher.processBytes(in, inOffset + V.length, inLen - V.length - mac.getMacSize(), M, 0)
     len += cipher.doFinal(M, len)
 
     // Verify MAC
@@ -213,14 +220,14 @@ object EthECIES {
       val t2 = Array.ofDim[Byte]( T1.length )
       mac.init(new KeyParameter(K2a));
       mac.update(initializationVector, 0, initializationVector.length);
-      mac.update(in, inOffset + encodedPublicKey.length, inLen - encodedPublicKey.length - t2.length);
+      mac.update(in, inOffset + V.length, inLen - V.length - t2.length);
       if (P2 != null) mac.update(P2, 0, P2.length);
-      if (encodedPublicKey.length != 0) mac.update(L2, 0, L2.length);
+      if (V.length != 0) mac.update(L2, 0, L2.length);
       mac.doFinal(t2, 0);
       t2
     }
 
-    if (T1 == T2) {
+    if (T1.sameElements(T2)) {
       M.slice(0, len) // Decoded plaintext
     } else {
       throw new Exception( s"MACs don't agree. T1: ${T1.hex}, T2: ${T2.hex}" )
@@ -245,19 +252,9 @@ object EthECIES {
 
   def encodePublicKey( pub : ECPublicKeyParameters ) : Array[Byte] = pub.getQ.getEncoded(false)
 
-  private def encryptBlock(
-    from : ECPrivateKeyParameters, 
-    to : ECPublicKeyParameters,
-    encodedPublicKeyTo : Array[Byte], 
-    initializationVector : Array[Byte], 
-    bytes : Array[Byte], 
-    offset : Int, 
-    len : Int 
-  ) : Array[Byte] = {
-    val sharedSecret = calculateSharedSecret( from, to )
-    doEncryptBlock( encodedPublicKeyTo, sharedSecret, initializationVector, bytes, offset, len )
-  }
-
+  /**
+    * Returns the concatenation of ciphertext and MAC in a byte array.
+    */ 
   def encryptBlock(
     from : ECPrivateKeyParameters, 
     to : ECPublicKeyParameters,
@@ -265,46 +262,57 @@ object EthECIES {
     bytes : Array[Byte], 
     offset : Int, 
     len : Int 
-  ) : Array[Byte] = encryptBlock( from, to, encodePublicKey( to ), initializationVector, bytes, offset, len )
+  ) : Array[Byte] = {
+    val sharedSecret = calculateSharedSecret( from, to )
+    doEncryptBlock( None, sharedSecret, DerivationVector, EncodingVector, initializationVector, bytes, offset, len )
+  }
 
+  /**
+    * Returns the concatenation of an ephemeral sender public key, ciphertext and MAC in a byte array.
+    */ 
   def encryptBlock(
-    from : ECPrivateKeyParameters,
-    encodedPublicKeyTo : Array[Byte], 
-    initializationVector : Array[Byte], 
-    bytes : Array[Byte], 
-    offset : Int, 
-    len : Int 
-  ) : Array[Byte] = encryptBlock( from, readEncodedPublicKey( encodedPublicKeyTo ), encodedPublicKeyTo, initializationVector, bytes, offset, len )
-
-  private def decryptBlock(
-    from : ECPrivateKeyParameters, 
     to : ECPublicKeyParameters,
-    encodedPublicKeyTo : Array[Byte], 
     initializationVector : Array[Byte], 
     bytes : Array[Byte], 
     offset : Int, 
     len : Int 
   ) : Array[Byte] = {
-    val sharedSecret = calculateSharedSecret( from, to )
-    doDecryptBlock( encodedPublicKeyTo, sharedSecret, initializationVector, bytes, offset, len )
+    val from = generateEphemeralKeyPair()
+    val sharedSecret = calculateSharedSecret( from._1, to )
+    doEncryptBlock( Some( encodePublicKey( from._2 ) ), sharedSecret, DerivationVector, EncodingVector, initializationVector, bytes, offset, len )
   }
 
+  /**
+    * Requires the sender's known public key.
+    *  
+    * Accepts the concatenation of ciphertext and MAC in a byte array.
+    */ 
   def decryptBlock(
-    from : ECPrivateKeyParameters, 
-    to : ECPublicKeyParameters,
+    from : ECPublicKeyParameters,
+    to : ECPrivateKeyParameters, 
     initializationVector : Array[Byte], 
     bytes : Array[Byte], 
     offset : Int, 
     len : Int 
-  ) : Array[Byte] = decryptBlock( from, to, encodePublicKey( to ), initializationVector, bytes, offset, len )
+  ) : Array[Byte] = {
+    val sharedSecret = calculateSharedSecret( to, from )
+    doDecryptBlock( None, sharedSecret, DerivationVector, EncodingVector, initializationVector, bytes, offset, len )
+  }
 
+  /**
+    * Accepts the concatenation of an ephemeral public sender key, ciphertext and MAC in a byte array.
+    */ 
   def decryptBlock(
-    from : ECPrivateKeyParameters,
-    encodedPublicKeyTo : Array[Byte], 
+    to : ECPrivateKeyParameters, 
     initializationVector : Array[Byte], 
     bytes : Array[Byte], 
     offset : Int, 
     len : Int 
-  ) : Array[Byte] = decryptBlock( from, readEncodedPublicKey( encodedPublicKeyTo ), encodedPublicKeyTo, initializationVector, bytes, offset, len )
+  ) : Array[Byte] = {
+    val fromKeyBytes = bytes.slice( offset, offset + EncodedPublicKeyLen )
+    val from = readEncodedPublicKey( fromKeyBytes )
+    val sharedSecret = calculateSharedSecret( to, from )
+    doDecryptBlock( Some( fromKeyBytes ), sharedSecret, DerivationVector, EncodingVector, initializationVector, bytes, offset, len )
+  }
 }
 
