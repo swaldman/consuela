@@ -43,8 +43,11 @@ import specification.Types.{ByteSeqExact65, SignatureV, SignatureR, SignatureS, 
 
 // what should I name 32 so that I don't keep retyping 32?
 object EthSignature {
-  def fromBytesVRS( arr : Array[Byte], offset : Int ) : EthSignature = {
-    val v = SignatureV( arr( offset ) )
+  private def fromBytesVRS( arr : Array[Byte], offset : Int, vAsRecId : Boolean ) : EthSignature = {
+    val v = {
+      val b = arr( offset )
+      SignatureV( if ( vAsRecId ) crypto.secp256k1.vFromRecId(b) else b )
+    }
     val r = {
       val tmp = Array.ofDim[Byte](32)
       Array.copy( arr, offset+1, tmp, 0, 32 )
@@ -57,9 +60,10 @@ object EthSignature {
     }
     EthSignature( v, r, s )
   }
+  def fromBytesVRS( arr : Array[Byte], offset : Int ) : EthSignature = fromBytesVRS( arr, offset, false )
   def fromBytesVRS( arr : Array[Byte] ) : EthSignature = fromBytesVRS( arr, 0 )
   def fromBytesVRS( seq : Seq[Byte] )   : EthSignature = fromBytesVRS( seq.toArray )
-  def fromBytesRSV( arr : Array[Byte], offset : Int ) : EthSignature = {
+  private def fromBytesRSV( arr : Array[Byte], offset : Int, vAsRecId : Boolean ) : EthSignature = {
     val r = {
       val tmp = Array.ofDim[Byte](32)
       Array.copy( arr, offset, tmp, 0, 32 )
@@ -70,11 +74,23 @@ object EthSignature {
       Array.copy( arr, offset+32, tmp, 0, 32 );
       SignatureS( BigInt(1, tmp) )
     }
-    val v = SignatureV( arr( offset+64 ) )
+    val v = {
+      val b = arr( offset+64 )
+      SignatureV( if ( vAsRecId ) crypto.secp256k1.vFromRecId(b) else b )
+    }
     EthSignature( v, r, s )
   }
+  def fromBytesRSV( arr : Array[Byte], offset : Int ) : EthSignature = fromBytesRSV( arr, offset, false )
   def fromBytesRSV( arr : Array[Byte] ) : EthSignature = fromBytesRSV( arr, 0 )
   def fromBytesRSV( seq : Seq[Byte] )   : EthSignature = fromBytesRSV( seq.toArray )
+  def fromBytesIRS( arr : Array[Byte], offset : Int ) : EthSignature = fromBytesVRS( arr, offset, true )
+  def fromBytesIRS( arr : Array[Byte] ) : EthSignature = fromBytesIRS( arr, 0 )
+  def fromBytesIRS( seq : Seq[Byte] )   : EthSignature = fromBytesIRS( seq.toArray )
+  def fromBytesRSI( arr : Array[Byte], offset : Int ) : EthSignature = fromBytesRSV( arr, offset, true )
+  def fromBytesRSI( arr : Array[Byte] ) : EthSignature = fromBytesRSI( arr, 0 )
+  def fromBytesRSI( seq : Seq[Byte] )   : EthSignature = fromBytesRSI( seq.toArray )
+
+
 }
 
 final case class EthSignature( val v : SignatureV, val r : SignatureR, val s : SignatureS ) {
@@ -95,6 +111,8 @@ final case class EthSignature( val v : SignatureV, val r : SignatureR, val s : S
 
   lazy val exportBytesVRS : ByteSeqExact65 = ByteSeqExact65.assert( v.widen +: Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) : _* ) );
   lazy val exportBytesRSV : ByteSeqExact65 = ByteSeqExact65.assert( Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) :+ v.widen : _* ) );
+  lazy val exportBytesIRS : ByteSeqExact65 = ByteSeqExact65.assert( recId.widen +: Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) : _* ) );
+  lazy val exportBytesRSI : ByteSeqExact65 = ByteSeqExact65.assert( Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) :+ recId.widen : _* ) );
 
   val recId : SignatureRecId = SignatureRecId( crypto.secp256k1.recIdFromV( v.widen ) )
 }

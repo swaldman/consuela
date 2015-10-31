@@ -1,6 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum.ethcrypt.bouncycastle;
 
 import com.mchange.sc.v1.consuela._
+import com.mchange.sc.v1.consuela.ethereum.{EthPrivateKey,EthPublicKey,EthKeyPair}
 
 import java.security.SecureRandom
 import java.util.Random
@@ -235,7 +236,7 @@ object EthECIES {
   }
 
   // adapted from org.bouncycastle.crypto.agreement.ECDHBasicAgreement
-  def calculateSharedSecret( myPriv : ECPrivateKeyParameters, yourPub : ECPublicKeyParameters ) : Array[Byte] = {
+  def ecdheSharedSecret( myPriv : ECPrivateKeyParameters, yourPub : ECPublicKeyParameters ) : Array[Byte] = {
     val P = yourPub.getQ().multiply(myPriv.getD()).normalize();
 
     if (P.isInfinity()) throw new IllegalStateException("Infinity is not a valid agreement value for ECDH");
@@ -245,6 +246,8 @@ object EthECIES {
     return P.getAffineXCoord().toBigInteger().unsignedBytes( fieldSize )
   }
 
+  def ecdheSharedSecret( myPriv : EthPrivateKey, yourPub : EthPublicKey ) : Array[Byte] = ecdheSharedSecret( toECPrivateKeyParameters( myPriv ), toECPublicKeyParameters( yourPub ) )
+
   def readEncodedPublicKey( keyBytes : Array[Byte] ) : ECPublicKeyParameters = {
     val point = Curve.decodePoint(keyBytes)
     new ECPublicKeyParameters( point, CurveParams )
@@ -252,18 +255,36 @@ object EthECIES {
 
   def encodePublicKey( pub : ECPublicKeyParameters ) : Array[Byte] = pub.getQ.getEncoded(false)
 
+  private def valueAsArray( bi : BigInt ) = bi.unsignedBytes( crypto.secp256k1.ValueByteLength )
+  
+  def toEthPublicKey( pub : ECPublicKeyParameters ) : EthPublicKey = {
+    val point = pub.getQ.normalize
+    EthPublicKey( Array.concat( point.getXCoord.getEncoded, point.getYCoord.getEncoded ) )
+  }
+
+  def toECPublicKeyParameters( ethPub : EthPublicKey ) : ECPublicKeyParameters = new ECPublicKeyParameters( Curve.createPoint( ethPub.x.bigInteger, ethPub.y.bigInteger ), CurveParams )
+
+  def toEthPrivateKey( priv : ECPrivateKeyParameters ) : EthPrivateKey = EthPrivateKey( valueAsArray( priv.getD ) )
+
+  def toECPrivateKeyParameters( ethPriv : EthPrivateKey ) : ECPrivateKeyParameters = new ECPrivateKeyParameters( ethPriv.s.bigInteger, CurveParams )
+
+  def toEthKeyPair( rawKeyPair  : (ECPrivateKeyParameters, ECPublicKeyParameters) ) : EthKeyPair = {
+    EthKeyPair( toEthPrivateKey( rawKeyPair._1 ), toEthPublicKey( rawKeyPair._2 ) )
+  }
+
   /**
     * Returns the concatenation of ciphertext and MAC in a byte array.
     */ 
   def encryptBlock(
     from : ECPrivateKeyParameters, 
     to : ECPublicKeyParameters,
-    initializationVector : Array[Byte], 
+    initializationVector : Array[Byte],
+    mbSharedSecret : Option[Array[Byte]],
     bytes : Array[Byte], 
     offset : Int, 
     len : Int 
   ) : Array[Byte] = {
-    val sharedSecret = calculateSharedSecret( from, to )
+    val sharedSecret = mbSharedSecret.getOrElse( ecdheSharedSecret( from, to ) )
     doEncryptBlock( None, sharedSecret, DerivationVector, EncodingVector, initializationVector, bytes, offset, len )
   }
 
@@ -273,12 +294,13 @@ object EthECIES {
   def encryptBlock(
     to : ECPublicKeyParameters,
     initializationVector : Array[Byte], 
+    mbSharedSecret : Option[Array[Byte]],
     bytes : Array[Byte], 
     offset : Int, 
     len : Int 
   ) : Array[Byte] = {
     val from = generateEphemeralKeyPair()
-    val sharedSecret = calculateSharedSecret( from._1, to )
+    val sharedSecret = mbSharedSecret.getOrElse( ecdheSharedSecret( from._1, to ) )
     doEncryptBlock( Some( encodePublicKey( from._2 ) ), sharedSecret, DerivationVector, EncodingVector, initializationVector, bytes, offset, len )
   }
 
@@ -291,11 +313,12 @@ object EthECIES {
     from : ECPublicKeyParameters,
     to : ECPrivateKeyParameters, 
     initializationVector : Array[Byte], 
+    mbSharedSecret : Option[Array[Byte]],
     bytes : Array[Byte], 
     offset : Int, 
     len : Int 
   ) : Array[Byte] = {
-    val sharedSecret = calculateSharedSecret( to, from )
+    val sharedSecret = mbSharedSecret.getOrElse( ecdheSharedSecret( to, from ) )
     doDecryptBlock( None, sharedSecret, DerivationVector, EncodingVector, initializationVector, bytes, offset, len )
   }
 
@@ -305,13 +328,14 @@ object EthECIES {
   def decryptBlock(
     to : ECPrivateKeyParameters, 
     initializationVector : Array[Byte], 
+    mbSharedSecret : Option[Array[Byte]],
     bytes : Array[Byte], 
     offset : Int, 
     len : Int 
   ) : Array[Byte] = {
     val fromKeyBytes = bytes.slice( offset, offset + EncodedPublicKeyLen )
     val from = readEncodedPublicKey( fromKeyBytes )
-    val sharedSecret = calculateSharedSecret( to, from )
+    val sharedSecret = mbSharedSecret.getOrElse( ecdheSharedSecret( to, from ) )
     doDecryptBlock( Some( fromKeyBytes ), sharedSecret, DerivationVector, EncodingVector, initializationVector, bytes, offset, len )
   }
 }

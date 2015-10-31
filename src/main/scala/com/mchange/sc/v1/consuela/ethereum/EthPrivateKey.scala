@@ -82,7 +82,8 @@ final class EthPrivateKey private( val bytes : ImmutableArraySeq.Byte ) extends 
       }
     }
   }
-  private def signEthHash( hash : EthHash ) = this.signRawBytes( hash.toByteArray );
+  def signEthHash( hash : EthHash ) = this.signRawBytes( hash.toByteArray );
+  
   private def signEthHash( document : Array[Byte] ) : EthSignature = this.signEthHash( EthHash.hash( document ) );
 
   // default signing scheme
