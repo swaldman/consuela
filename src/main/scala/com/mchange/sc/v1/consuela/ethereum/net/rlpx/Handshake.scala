@@ -13,8 +13,10 @@ import scala.collection._
 import java.security.SecureRandom
 
 object Handshake {
+
   private def genKeyPair( random : SecureRandom ) : EthKeyPair = toEthKeyPair( generateEphemeralKeyPair( random ) )
   private def genNonce( random : SecureRandom ) : ByteSeqExact32 = ByteSeqExact32.assert( ImmutableArraySeq.Byte.random(32)( random ) )
+
   final object Block {
     final object Initiator {
       def create( senderPublicKey : EthPublicKey, recipientPublicKey : EthPublicKey, mbSharedSecret : Option[ByteSeqExact32] )( random : SecureRandom ) : Block = {

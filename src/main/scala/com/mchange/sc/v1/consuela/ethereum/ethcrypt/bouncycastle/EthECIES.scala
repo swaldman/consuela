@@ -27,7 +27,10 @@ object EthECIES {
   val CipherKeyBits  = 128
   val CipherKeyBytes = CipherKeyBits / 8
 
-  val MacBits  = 128;
+  val MacKeyBits  = 128;
+  val MacKeyBytes = MacKeyBits / 8
+
+  val MacBits  = 256;
   val MacBytes = MacBits / 8
 
   val DigestBits  = 256
@@ -173,7 +176,7 @@ object EthECIES {
   ) : Array[Byte] = {
     val V = mbEmbeddedEncodedPublicKey.getOrElse( EmptyByteArray )
 
-    val K  = kdf( sharedSecret, derivationVector, CipherKeyBytes + MacBytes )
+    val K  = kdf( sharedSecret, derivationVector, CipherKeyBytes + MacKeyBytes )
     val Ksplit = K.splitAt( CipherKeyBytes )
     val K1 = Ksplit._1
     val K2 = Ksplit._2
@@ -222,11 +225,11 @@ object EthECIES {
     inOffset                   : Int, 
     inLen                      : Int 
   ) : Array[Byte] = {
-    require( inLen > MacBytes )
+    require( inLen > MacKeyBytes )
 
     val V = mbEmbeddedEncodedPublicKey.getOrElse( EmptyByteArray )
 
-    val K  = kdf( sharedSecret, derivationVector, CipherKeyBytes + MacBytes )
+    val K  = kdf( sharedSecret, derivationVector, CipherKeyBytes + MacKeyBytes )
     val Ksplit = K.splitAt( CipherKeyBytes )
     val K1 = Ksplit._1
     val K2 = Ksplit._2
