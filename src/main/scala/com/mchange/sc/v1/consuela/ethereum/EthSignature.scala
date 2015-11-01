@@ -95,19 +95,15 @@ object EthSignature {
 
 final case class EthSignature( val v : SignatureV, val r : SignatureR, val s : SignatureS ) {
 
-  /*
-  // this behaves oddly. hmm. But EthPublicKey verify works fine.
-
   private def rawBytesWereSigned( bytes : Array[Byte] ) : Option[EthPublicKey] = {
     crypto.secp256k1.recoverPublicKeyBytesV( v.widen, r.widen.bigInteger, s.widen.bigInteger, bytes ).map( EthPublicKey(_) )
   }
 
-  private def ethHashWasSigned( hash : EthHash )         : Option[EthPublicKey] = rawBytesWereSigned( hash.toByteArray );
-  private def ethHashWasSigned( document : Array[Byte] ) : Option[EthPublicKey] = ethHashWasSigned( EthHash.hash( document ) );
+  def ethHashWasSigned( hash : EthHash )         : Option[EthPublicKey] = rawBytesWereSigned( hash.toByteArray );
+  private def ethHashOfDocumentWasSigned( document : Array[Byte] ) : Option[EthPublicKey] = ethHashWasSigned( EthHash.hash( document ) );
 
   // default
-  def wasSigned( document : Array[Byte] ) : Option[EthPublicKey] = this.ethHashWasSigned( document );
-  */ 
+  def wasSigned( document : Array[Byte] ) : Option[EthPublicKey] = this.ethHashOfDocumentWasSigned( document );
 
   lazy val exportBytesVRS : ByteSeqExact65 = ByteSeqExact65.assert( v.widen +: Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) : _* ) );
   lazy val exportBytesRSV : ByteSeqExact65 = ByteSeqExact65.assert( Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) :+ v.widen : _* ) );
