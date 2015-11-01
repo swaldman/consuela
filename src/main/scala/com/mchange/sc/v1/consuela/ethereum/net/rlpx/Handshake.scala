@@ -8,18 +8,37 @@ import com.mchange.sc.v1.consuela.ethereum.specification.Types._
 
 import com.mchange.sc.v1.consuela.ethereum.ethcrypt.bouncycastle.EthECIES._
 
-import scala.collection.mutable
+import scala.collection._
 
 import java.security.SecureRandom
 
 object Handshake {
-  final object Message {
-    private def genKeyPair( random : SecureRandom ) : EthKeyPair = toEthKeyPair( generateEphemeralKeyPair( random ) )
-    private def genNonce( random : SecureRandom ) : ByteSeqExact32 = {
-      val tmp = Array.ofDim[Byte]( 32 )
-      random.nextBytes( tmp )
-      ByteSeqExact32.assert( tmp )
+  private def genKeyPair( random : SecureRandom ) : EthKeyPair = toEthKeyPair( generateEphemeralKeyPair( random ) )
+  private def genNonce( random : SecureRandom ) : ByteSeqExact32 = ByteSeqExact32.assert( ImmutableArraySeq.Byte.random(32)( random ) )
+  final object Block {
+    final object Initiator {
+      def create( senderPublicKey : EthPublicKey, recipientPublicKey : EthPublicKey, mbSharedSecret : Option[ByteSeqExact32] )( random : SecureRandom ) : Block = {
+        val initializationVector = ByteSeqExact16.assert( ImmutableArraySeq.Byte.random(16)( random ) )
+        val ephemeralKeyPair = genKeyPair( random )
+        val sharedSecret = mbSharedSecret.getOrElse( ByteSeqExact32( ecdheSharedSecret( ephemeralKeyPair.Private, recipientPublicKey ) ) )
+        val initiator = Message.Initiator.create( sharedSecret, mbSharedSecret != None, ephemeralKeyPair, senderPublicKey )( random )
+        val plaintext = initiator.bytes.widen.toArray
+        val ciphertextBlock = encryptBlock( ephemeralKeyPair.Private, recipientPublicKey, initializationVector.widen.toArray, Some( sharedSecret.widen.toArray ), plaintext, 0, plaintext.length )
+        val shortEncryptedBlock = EncryptedBlock.Short( ciphertextBlock )
+        Block( ephemeralKeyPair.Public, initializationVector, ImmutableArraySeq.Byte.createNoCopy( shortEncryptedBlock.ciphertext ), ByteSeqExact32( shortEncryptedBlock.mac ) )
+      }
     }
+  }
+  case class Block( eciesPublicKey : EthPublicKey, aesInitialVector : ByteSeqExact16, ciphertext : immutable.Seq[Byte], eciesMac : ByteSeqExact32 ) {
+    private lazy val _bytes = Array.concat( // treat as immutable, do not modify!
+      eciesPublicKey.toByteArray,
+      aesInitialVector.widen.toArray,
+      ciphertext.toArray,
+      eciesMac.widen.toArray
+    )
+    lazy val bytes : immutable.Seq[Byte] = ImmutableArraySeq.Byte.createNoCopy( _bytes )
+  }
+  final object Message {
     final object Initiator {
       def apply( arr : Array[Byte] ) : Initiator = {
         val sig   = EthSignature.fromBytesRSI( arr, 0 )     // 65 bytes, indices  0 thru 64
@@ -29,15 +48,13 @@ object Handshake {
         val ikp   = Unsigned1( arr(193) )                   //  1 byte @ index 193
         Initiator( sig, ekm, ppk, nonce, ikp )
       }
-      def create( mbSharedSecret : Option[ByteSeqExact32], permanentPublicKey : EthPublicKey )( implicit random : SecureRandom ) : ( Initiator, EthKeyPair ) = {
-        val ephemeralKeyPair = genKeyPair( random )
+      def create( sharedSecret : ByteSeqExact32, isKnownPeer : Boolean, ephemeralKeyPair : EthKeyPair, senderPermanentPublicKey : EthPublicKey )( implicit random : SecureRandom ) : Initiator = {
         val initiatorNonce = genNonce( random )
         val ephemeralKeyMac = EthHash.hash( ephemeralKeyPair.Public.bytes )
-        val initiatorKnownPeer = mbSharedSecret.fold( Unsigned1.assert(0) )( _ => Unsigned1.assert(1) )
-        val sharedSecret = mbSharedSecret.getOrElse( ByteSeqExact32( ecdheSharedSecret( ephemeralKeyPair.Private, permanentPublicKey ) ) )
+        val initiatorKnownPeer = if ( isKnownPeer ) Unsigned1.assert(1) else Unsigned1.assert(0)
         val signMe = (sharedSecret.widen ^ initiatorNonce.widen) // this 32 byte quantity is signed directly, without further hashing
         val signature = ephemeralKeyPair.Private.signEthHash( EthHash.withBytes( signMe ) )
-        ( Initiator( signature, ephemeralKeyMac, permanentPublicKey, initiatorNonce, initiatorKnownPeer ), ephemeralKeyPair )
+        Initiator( signature, ephemeralKeyMac, senderPermanentPublicKey, initiatorNonce, initiatorKnownPeer )
       }
     }
     final case class Initiator (
@@ -64,11 +81,11 @@ object Handshake {
         val rkp   = Unsigned1( arr(96) )                   //  1 byte @ index 96
         Receiver( rerpk, nonce, rkp )
       }
-      def create( knownPeer : Boolean )( implicit random : SecureRandom ) : ( Receiver, EthKeyPair ) = {
+      def create( knownPeer : Boolean )( implicit random : SecureRandom ) : Receiver = {
         val ephemeralKeyPair = genKeyPair( random )
         val receiverNonce = genNonce( random )
         val receiverKnownPeer = if ( knownPeer ) Unsigned1( 1 ) else Unsigned1( 0 )
-        ( Receiver( ephemeralKeyPair.Public, receiverNonce, receiverKnownPeer ), ephemeralKeyPair )
+        Receiver( ephemeralKeyPair.Public, receiverNonce, receiverKnownPeer )
       }
     }
     final case class Receiver (

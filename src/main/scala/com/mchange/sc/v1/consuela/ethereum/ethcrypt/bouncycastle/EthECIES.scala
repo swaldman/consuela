@@ -17,6 +17,8 @@ import org.bouncycastle.crypto.modes.SICBlockCipher // implements CTR mode
 import org.bouncycastle.crypto.params.{ECDomainParameters,ECKeyGenerationParameters,ECPrivateKeyParameters,ECPublicKeyParameters,KeyParameter,ParametersWithIV}
 import org.bouncycastle.crypto.tls.NamedCurve
 
+import scala.language.implicitConversions
+
 /*
  * Everything about this is liberally stolen, um, adapted from 
  * bouncycastle and EthereumJ implementations!
@@ -25,8 +27,11 @@ object EthECIES {
   val CipherKeyBits  = 128
   val CipherKeyBytes = CipherKeyBits / 8
 
-  val MacKeyBits  = 128;
-  val MacKeyBytes = MacKeyBits / 8
+  val MacBits  = 128;
+  val MacBytes = MacBits / 8
+
+  val DigestBits  = 256
+  val DigestBytes = DigestBits / 8 
 
   val KdfCounterStart = 1
 
@@ -44,6 +49,37 @@ object EthECIES {
   val EmptyByteArray = Array.ofDim[Byte](0)
   def DerivationVector = EmptyByteArray
   def EncodingVector   = EmptyByteArray
+
+  // just an over-elaborate parser for the
+  // results of this class' encryption
+  final object EncryptedBlock {
+    final object Short {
+      def apply( bytes : Array[Byte] ) : EncryptedBlock.Short = {
+        require ( bytes.length >= MacBytes )
+
+        val macIndex = (bytes.length - MacBytes)
+        var ciphertext       = bytes.slice( 0, macIndex )
+        var mac              = bytes.slice( macIndex, bytes.length )
+
+        new EncryptedBlock.Short( ciphertext, mac )
+      }
+    }
+    class Short( ciphertext : Array[Byte], mac : Array[Byte] ) extends EncryptedBlock( ciphertext, mac );
+    final object Long {
+      def apply( bytes : Array[Byte] ) : EncryptedBlock.Long = {
+        require ( bytes.length >= EncodedPublicKeyLen + MacBytes )
+
+        val macIndex = (bytes.length - MacBytes)
+        var encodedPublicKey = bytes.slice( 0, EncodedPublicKeyLen )
+        var ciphertext       = bytes.slice( EncodedPublicKeyLen, macIndex )
+        var mac              = bytes.slice( macIndex, bytes.length )
+
+        new EncryptedBlock.Long( encodedPublicKey, ciphertext, mac )
+      }
+    }
+    class Long( var encodedPublicKey : Array[Byte], ciphertext : Array[Byte], mac : Array[Byte] ) extends EncryptedBlock( ciphertext, mac );
+  }
+  sealed abstract class EncryptedBlock( var ciphertext : Array[Byte], var mac : Array[Byte] )
 
   def createCipher( encrypt : Boolean, key : Array[Byte], initializationVector : Array[Byte] ) : BufferedBlockCipher = {
     val out = new BufferedBlockCipher( new SICBlockCipher( new AESFastEngine ) )
@@ -77,7 +113,7 @@ object EthECIES {
     val digest = createDigest()
 
     val oBytes = len.toLong
-    val outLen = digest.getDigestSize()
+    val outLen = DigestBytes
 
     // omitted test of the size of oBytes, because AFICT, there's no way
     // what starts as an Int, even if interpreted as unsigned, could exceed 
@@ -137,7 +173,7 @@ object EthECIES {
   ) : Array[Byte] = {
     val V = mbEmbeddedEncodedPublicKey.getOrElse( EmptyByteArray )
 
-    val K  = kdf( sharedSecret, derivationVector, CipherKeyBytes + MacKeyBytes )
+    val K  = kdf( sharedSecret, derivationVector, CipherKeyBytes + MacBytes )
     val Ksplit = K.splitAt( CipherKeyBytes )
     val K1 = Ksplit._1
     val K2 = Ksplit._2
@@ -154,14 +190,14 @@ object EthECIES {
     var len = cipher.processBytes( in, inOffset, inLen, C, 0 )
     len += cipher.doFinal( C, len )
 
+    val K2a = Array.ofDim[Byte]( DigestBytes )
     val hash = createDigest()
-    val K2a = Array.ofDim[Byte]( hash.getDigestSize )
     hash.update(K2, 0, K2.length);
     hash.doFinal(K2a, 0);
 
     val T = {
+      val t = Array.ofDim[Byte]( MacBytes )
       val mac = createMac()
-      val t = Array.ofDim[Byte]( mac.getMacSize )
       mac.init( new KeyParameter( K2a ) )
       mac.update( initializationVector, 0, initializationVector.length )
       mac.update( C, 0, C.length )
@@ -186,11 +222,11 @@ object EthECIES {
     inOffset                   : Int, 
     inLen                      : Int 
   ) : Array[Byte] = {
-    require( inLen > MacKeyBytes )
+    require( inLen > MacBytes )
 
     val V = mbEmbeddedEncodedPublicKey.getOrElse( EmptyByteArray )
 
-    val K  = kdf( sharedSecret, derivationVector, CipherKeyBytes + MacKeyBytes )
+    val K  = kdf( sharedSecret, derivationVector, CipherKeyBytes + MacBytes )
     val Ksplit = K.splitAt( CipherKeyBytes )
     val K1 = Ksplit._1
     val K2 = Ksplit._2
@@ -202,23 +238,26 @@ object EthECIES {
     }
 
     val cipher = createCipher( false, K1, initializationVector )
-    val mac = createMac()
 
-    val M = Array.ofDim[Byte]( cipher.getOutputSize(inLen - V.length - mac.getMacSize()) ) // will be PLAINTEXT ONLY
-    var len = cipher.processBytes(in, inOffset + V.length, inLen - V.length - mac.getMacSize(), M, 0)
+    val M = Array.ofDim[Byte]( cipher.getOutputSize(inLen - V.length - MacBytes) ) // will be PLAINTEXT ONLY
+    var len = cipher.processBytes(in, inOffset + V.length, inLen - V.length - MacBytes, M, 0)
     len += cipher.doFinal(M, len)
 
     // Verify MAC
     val inEnd = inOffset + inLen
-    val T1 = in.slice( inEnd - mac.getMacSize, inEnd )
+    val T1 = in.slice( inEnd - MacBytes, inEnd )
 
-    val hash = createDigest()
-    val K2a = Array.ofDim[Byte]( hash.getDigestSize )
-    hash.update(K2, 0, K2.length);
-    hash.doFinal(K2a, 0);
+    val K2a = {
+      val k2a = Array.ofDim[Byte]( DigestBytes )
+      val hash = createDigest()
+      hash.update(K2, 0, K2.length);
+      hash.doFinal(k2a, 0);
+      k2a
+    }
 
     val T2  = {
       val t2 = Array.ofDim[Byte]( T1.length )
+      val mac = createMac()
       mac.init(new KeyParameter(K2a));
       mac.update(initializationVector, 0, initializationVector.length);
       mac.update(in, inOffset + V.length, inLen - V.length - t2.length);
@@ -257,16 +296,16 @@ object EthECIES {
 
   private def valueAsArray( bi : BigInt ) = bi.unsignedBytes( crypto.secp256k1.ValueByteLength )
   
-  def toEthPublicKey( pub : ECPublicKeyParameters ) : EthPublicKey = {
+  implicit def toEthPublicKey( pub : ECPublicKeyParameters ) : EthPublicKey = {
     val point = pub.getQ.normalize
     EthPublicKey( Array.concat( point.getXCoord.getEncoded, point.getYCoord.getEncoded ) )
   }
 
-  def toECPublicKeyParameters( ethPub : EthPublicKey ) : ECPublicKeyParameters = new ECPublicKeyParameters( Curve.createPoint( ethPub.x.bigInteger, ethPub.y.bigInteger ), CurveParams )
+  implicit def toECPublicKeyParameters( ethPub : EthPublicKey ) : ECPublicKeyParameters = new ECPublicKeyParameters( Curve.createPoint( ethPub.x.bigInteger, ethPub.y.bigInteger ), CurveParams )
 
-  def toEthPrivateKey( priv : ECPrivateKeyParameters ) : EthPrivateKey = EthPrivateKey( valueAsArray( priv.getD ) )
+  implicit def toEthPrivateKey( priv : ECPrivateKeyParameters ) : EthPrivateKey = EthPrivateKey( valueAsArray( priv.getD ) )
 
-  def toECPrivateKeyParameters( ethPriv : EthPrivateKey ) : ECPrivateKeyParameters = new ECPrivateKeyParameters( ethPriv.s.bigInteger, CurveParams )
+  implicit def toECPrivateKeyParameters( ethPriv : EthPrivateKey ) : ECPrivateKeyParameters = new ECPrivateKeyParameters( ethPriv.s.bigInteger, CurveParams )
 
   def toEthKeyPair( rawKeyPair  : (ECPrivateKeyParameters, ECPublicKeyParameters) ) : EthKeyPair = {
     EthKeyPair( toEthPrivateKey( rawKeyPair._1 ), toEthPublicKey( rawKeyPair._2 ) )
