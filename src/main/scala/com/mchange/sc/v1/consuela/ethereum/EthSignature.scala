@@ -96,7 +96,7 @@ object EthSignature {
 final case class EthSignature( val v : SignatureV, val r : SignatureR, val s : SignatureS ) {
 
   /*
-  // this behaves oddly. hmm. But EthPublickKey verify works fine.
+  // this behaves oddly. hmm. But EthPublicKey verify works fine.
 
   private def rawBytesWereSigned( bytes : Array[Byte] ) : Option[EthPublicKey] = {
     crypto.secp256k1.recoverPublicKeyBytesV( v.widen, r.widen.bigInteger, s.widen.bigInteger, bytes ).map( EthPublicKey(_) )

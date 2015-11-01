@@ -60,6 +60,8 @@ object EthPublicKey {
   def apply( priv  : EthPrivateKey ) : EthPublicKey = new EthPublicKey( this.computeBytes( priv ) );
 
   def computeBytes( priv : EthPrivateKey ) : Array[Byte] = crypto.secp256k1.computePublicKeyBytes( priv.toBigInteger )
+
+  def fromBytesWithUncompressedHeader( bytes : ByteSeqExact65 ) : EthPublicKey = apply( bytes.widen.toArray.drop(1) )
 }
 final class EthPublicKey private ( protected val _bytes : Array[Byte] ) extends ByteArrayValue {
   import EthPublicKey.ByteLength

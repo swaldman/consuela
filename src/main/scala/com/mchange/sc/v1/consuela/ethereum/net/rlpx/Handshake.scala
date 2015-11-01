@@ -8,6 +8,8 @@ import com.mchange.sc.v1.consuela.ethereum.specification.Types._
 
 import com.mchange.sc.v1.consuela.ethereum.ethcrypt.bouncycastle.EthECIES._
 
+import com.mchange.sc.v2.failable._;
+
 import scala.collection._
 
 import java.security.SecureRandom
@@ -19,7 +21,7 @@ object Handshake {
 
   final object Block {
     final object Initiator {
-      def create( senderPublicKey : EthPublicKey, recipientPublicKey : EthPublicKey, mbSharedSecret : Option[ByteSeqExact32] )( random : SecureRandom ) : Block = {
+      def create( senderPublicKey : EthPublicKey, recipientPublicKey : EthPublicKey, mbSharedSecret : Option[ByteSeqExact32] )( random : SecureRandom ) : (Block, Message.Initiator) = {
         val initializationVector = ByteSeqExact16.assert( ImmutableArraySeq.Byte.random(16)( random ) )
         val ephemeralKeyPair = genKeyPair( random )
         val sharedSecret = mbSharedSecret.getOrElse( ByteSeqExact32( ecdheSharedSecret( ephemeralKeyPair.Private, recipientPublicKey ) ) )
@@ -27,25 +29,66 @@ object Handshake {
         val plaintext = initiator.bytes.widen.toArray
         val ciphertextBlock = encryptBlock( ephemeralKeyPair.Private, recipientPublicKey, initializationVector.widen.toArray, Some( sharedSecret.widen.toArray ), plaintext, 0, plaintext.length )
         val shortEncryptedBlock = EncryptedBlock.Short( ciphertextBlock )
-        Block( ephemeralKeyPair.Public, initializationVector, ImmutableArraySeq.Byte.createNoCopy( shortEncryptedBlock.ciphertext ), ByteSeqExact32( shortEncryptedBlock.mac ) )
+        val block = Block( ephemeralKeyPair.Public, initializationVector, ImmutableArraySeq.Byte.createNoCopy( shortEncryptedBlock.ciphertext ), ByteSeqExact32( shortEncryptedBlock.mac ) )
+        ( block, initiator )
       }
+    }
+    final object Receiver {
+      // TODO: def create( ... )
+    }
+    def apply( bytes : Array[Byte] ) : Block = {
+      val pubKeyBytes = bytes.slice(  0, 65 )
+      val aesIVBytes  = bytes.slice( 65, 81 )
+      val shortEncryptedBlock = EncryptedBlock.Short( bytes.drop(81) )
+      Block( 
+        EthPublicKey.fromBytesWithUncompressedHeader( ByteSeqExact65 ( pubKeyBytes ) ), 
+        ByteSeqExact16( aesIVBytes ), 
+        ImmutableArraySeq.Byte( shortEncryptedBlock.ciphertext ),
+        ByteSeqExact32( shortEncryptedBlock.mac )
+      )
     }
   }
   case class Block( eciesPublicKey : EthPublicKey, aesInitialVector : ByteSeqExact16, ciphertext : immutable.Seq[Byte], eciesMac : ByteSeqExact32 ) {
     private lazy val _bytes = Array.concat( // treat as immutable, do not modify!
-      eciesPublicKey.toByteArray,
+      eciesPublicKey.bytesWithUncompressedHeader.widen.toArray,
       aesInitialVector.widen.toArray,
       ciphertext.toArray,
       eciesMac.widen.toArray
     )
     lazy val bytes : immutable.Seq[Byte] = ImmutableArraySeq.Byte.createNoCopy( _bytes )
+
+    def decryptToPlaintext( to : EthPrivateKey, mbSharedSecret : Option[ByteSeqExact32] ) : Array[Byte] = {
+      val sharedSecret = mbSharedSecret.getOrElse( ByteSeqExact32( ecdheSharedSecret( to, eciesPublicKey ) ) )
+      val cipherMac = Array.concat( ciphertext.toArray, eciesMac.widen.toArray )
+      decryptBlock( eciesPublicKey, to, aesInitialVector.widen.toArray, Some( sharedSecret.widen.toArray ), cipherMac, 0, cipherMac.length )
+    }
+    def decryptToInitiatorMessage( to : EthPrivateKey, mbSharedSecret : Option[ByteSeqExact32] ) : Failable[Message.Initiator] = {
+      Message.Initiator( this.decryptToPlaintext( to, mbSharedSecret ) )
+    }
+    def decryptToReceiverMessage( to : EthPrivateKey, mbSharedSecret : Option[ByteSeqExact32] ) : Failable[Message.Receiver] = {
+      Message.Receiver( this.decryptToPlaintext( to, mbSharedSecret ) )
+    }
+    def decryptToMessage( to : EthPrivateKey, mbSharedSecret : Option[ByteSeqExact32] ) : Failable[Message] = {
+      val plaintext = this.decryptToPlaintext( to, mbSharedSecret )
+      plaintext.length match {
+        case Message.Initiator.Length => succeed( Message.Initiator._apply( this.decryptToPlaintext( to, mbSharedSecret ) ) )
+        case Message.Receiver.Length  => succeed( Message.Receiver._apply( this.decryptToPlaintext( to, mbSharedSecret ) ) )
+        case _                        => fail( s"Plaintext length ${plaintext.length} does not match the expected length of any Handshake.Message." )
+      }
+    }
   }
   final object Message {
     final object Initiator {
-      def apply( arr : Array[Byte] ) : Initiator = {
+      val Length = 194
+      def apply( arr : Array[Byte] ) : Failable[Initiator] = {
+        if ( arr.length == Length ) succeed( _apply(arr) ) else fail( s"Initator must be ${Length} bytes, found ${arr.length} bytes" )
+      }
+      def apply( bytes : ByteSeqExact194 ) : Initiator = _apply( bytes.widen.toArray )
+
+      private[Handshake] def _apply( arr : Array[Byte] ) : Initiator = {
         val sig   = EthSignature.fromBytesRSI( arr, 0 )     // 65 bytes, indices  0 thru 64
         val ekm   = EthHash.withBytes( arr, 65, 32 )        // 32 bytes, indices 65 thru 96
-        val ppk   = EthPublicKey( arr, 97 )                 // 64 bytes, indices 97 thru 160 
+        val ppk   = EthPublicKey( arr, 97 )                 // 64 bytes, indices 97 thru 160
         val nonce = ByteSeqExact32( arr.slice( 161, 193 ) ) // 32 bytes, indices 161 thru 192
         val ikp   = Unsigned1( arr(193) )                   //  1 byte @ index 193
         Initiator( sig, ekm, ppk, nonce, ikp )
@@ -65,7 +108,7 @@ object Handshake {
       permanentPublicKey : EthPublicKey,
       initiatorNonce     : ByteSeqExact32,
       initiatorKnownPeer : Unsigned1
-    ) {
+    ) extends Message {
       lazy val bytes : ByteSeqExact194 = {
         val buff = new mutable.ArrayBuffer[Byte]( 194 ) // serializes to exactly 194 bytes
         buff ++= signature.exportBytesRSI.widen // note that this is in r ++ s ++ recId format
@@ -77,7 +120,13 @@ object Handshake {
       }
     }
     final object Receiver {
-      def apply( arr : Array[Byte] ) : Receiver = {
+      val Length = 97
+      def apply( arr : Array[Byte] ) : Failable[Receiver] = {
+        if ( arr.length == Length ) succeed( _apply(arr) ) else fail( s"Receiver must be ${Length} bytes, found ${arr.length} bytes" )
+      }
+      def apply( bytes : ByteSeqExact97 ) : Receiver = _apply( bytes.widen.toArray )
+
+      private[Handshake] def _apply( arr : Array[Byte] ) : Receiver = {
         val rerpk = EthPublicKey( arr, 0 )                 // 64 bytes, indices  0 thru 63
         val nonce = ByteSeqExact32( arr.slice( 64, 96 ) )  // 32 bytes, indices 64 thru 95
         val rkp   = Unsigned1( arr(96) )                   //  1 byte @ index 96
@@ -94,7 +143,7 @@ object Handshake {
       receiverEcdheRandomPublicKey : EthPublicKey,
       receiverNonce                : ByteSeqExact32,
       receiverKnownPeer            : Unsigned1
-    ) {
+    ) extends Message {
       lazy val bytes : ByteSeqExact97 = {
         val buff = new mutable.ArrayBuffer[Byte]( 97 ) // serializes to exactly 97 bytes
         buff ++= receiverEcdheRandomPublicKey.toByteSeqExact64.widen
@@ -104,4 +153,5 @@ object Handshake {
       }
     }
   }
+  sealed trait Message;
 }
