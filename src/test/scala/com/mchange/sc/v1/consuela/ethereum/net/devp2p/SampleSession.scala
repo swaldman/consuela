@@ -8,6 +8,7 @@ import com.mchange.sc.v1.consuela.ethereum._
 import com.mchange.sc.v1.consuela.ethereum.net.devp2p._
 import com.mchange.sc.v1.consuela.ethereum.specification.Types._
 
+/*
 object SampleSession {
   def main( argv : Array[String] ) : Unit = {
     val host = argv(0)
@@ -30,7 +31,7 @@ object SampleSession {
 
     val EthKeyPair( eprivkey, epubkey ) = EthKeyPair( new java.security.SecureRandom )
 
-    val initiator = Hadshake.Message.Initiator( None, epubkey )
+    val initiator = Handshake.Message.Initiator( None, epubkey )
 
     val capabilities = Subprotocol.P2P4.Hello.Capabilities( immutable.Set( Subprotocol.Eth60.Identifier, Subprotocol.P2P4.Identifier ) )
     val hello = Subprotocol.P2P4.Hello( Unsigned16(0), Unsigned16(1), StringUTF8("Test"), capabilities, Unsigned16(0), ByteSeqExact64( epubkey.bytes ) )
@@ -56,3 +57,4 @@ object SampleSession {
     t.join
   }
 }
+*/
