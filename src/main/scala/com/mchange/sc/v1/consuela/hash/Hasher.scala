@@ -39,7 +39,8 @@ import scala.language.reflectiveCalls;
 
 object Hasher {
   trait FixedLength[T <: Hash[T]] extends Abstract[T]{
-    val HashLength : Int; 
+    val HashLength : Int;
+    val AlgoName : String;
 
     lazy val Zero = instantiate( Array.ofDim[Byte]( HashLength ) );
 
@@ -65,7 +66,6 @@ object Hasher {
     private def badLenMessage( bytes : { def length : Int } ) = s"A ${AlgoName} hash must have a fixed length of ${HashLength} bytes, cannot create with ${bytes.length} bytes. bytes -> ${bytes}"
   }
   abstract class Abstract[T <: Hash[T]] extends Hasher[T] {
-    val AlgoName : String;
     protected def instantiate( bytes : Array[Byte] ) : T;
 
     def withBytes( bytes : Array[Byte], offset : Int, len : Int ) : T = {
@@ -75,10 +75,15 @@ object Hasher {
     }
     def withBytes( bytes : Array[Byte] ) : T = instantiate( bytes.clone() );
     def withBytes( bytes : Seq[Byte] ) : T   = instantiate( bytes.toArray );
-    def hash( bytes : Array[Byte] ) : T      = instantiate( doHash(AlgoName, bytes) );
-    def hash( bytes : Seq[Byte] ) : T        = instantiate( doHash(AlgoName, bytes) );
+    def hash( bytes : Array[Byte] ) : T      = instantiate( rawHash(bytes) );
+    def hash( bytes : Seq[Byte] ) : T        = instantiate( rawHash(bytes.toArray) );
 
-    def rawHash( bytes : Array[Byte] ) : Array[Byte] = doHash(AlgoName, bytes)
+    def rawHash( bytes : Array[Byte] ) : Array[Byte];
+  }
+  abstract class Jca[T <: Hash[T]] extends Hasher.Abstract[T] {
+    val AlgoName : String;
+
+    def rawHash( bytes : Array[Byte] ) : Array[Byte] = jcaDoHash(AlgoName, bytes)
   }
 }
 

@@ -10,7 +10,7 @@ version := "0.0.2-SNAPSHOT"
 
 scalaVersion := "2.11.4"
 
-scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked")
+scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked" /*, "-Xlog-implicits" */)
 
 resolvers += ("releases" at nexusReleases)
 

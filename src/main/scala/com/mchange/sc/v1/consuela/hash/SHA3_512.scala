@@ -39,7 +39,7 @@ import scala.collection._;
 
 import com.mchange.sc.v1.consuela._;
 
-object SHA3_512 extends Hasher.Abstract[SHA3_512] with Hasher.FixedLength[SHA3_512] {
+object SHA3_512 extends Hasher.Jca[SHA3_512] with Hasher.FixedLength[SHA3_512] {
   val AlgoName = "SHA3-512";
   val HashLength = 64;
 

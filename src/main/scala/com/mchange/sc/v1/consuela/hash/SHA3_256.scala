@@ -37,9 +37,7 @@ package com.mchange.sc.v1.consuela.hash;
 
 import scala.collection._;
 
-import com.mchange.sc.v1.consuela._;
-
-object SHA3_256 extends Hasher.Abstract[SHA3_256] with Hasher.FixedLength[SHA3_256] {
+object SHA3_256 extends Hasher.Jca[SHA3_256] with Hasher.FixedLength[SHA3_256] {
   val AlgoName = "SHA3-256";
   val HashLength = 32;
 
