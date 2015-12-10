@@ -47,6 +47,6 @@ object EthKeyPair {
   }
   def apply( priv : EthPrivateKey ) : EthKeyPair = EthKeyPair( priv, EthPublicKey( priv ) );
 }
-final case class EthKeyPair( val Private : EthPrivateKey, val Public : EthPublicKey ) {
-  lazy val Address = Public.toAddress;
+final case class EthKeyPair( val pvt : EthPrivateKey, val pub : EthPublicKey ) {
+  lazy val address = pub.toAddress;
 }

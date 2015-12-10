@@ -34,9 +34,9 @@ object Handshake {
       val ephemeralKeyPair = genKeyPair( random )
       val message = buildMessage( initializationVector, ephemeralKeyPair, handshakeSharedSecret, random )
       val plaintext = message.bytes.widen.toArray
-      val ciphertextBlock = encryptBlock( ephemeralKeyPair.Private, recipientPublicKey, initializationVector.widen.toArray, Some( handshakeSharedSecret.widen.toArray ), plaintext, 0, plaintext.length )
+      val ciphertextBlock = encryptBlock( ephemeralKeyPair.pvt, recipientPublicKey, initializationVector.widen.toArray, Some( handshakeSharedSecret.widen.toArray ), plaintext, 0, plaintext.length )
       val shortEncryptedBlock = EncryptedBlock.Short( ciphertextBlock )
-      val block = Block( ephemeralKeyPair.Public, initializationVector, ImmutableArraySeq.Byte.createNoCopy( shortEncryptedBlock.ciphertext ), ByteSeqExact32( shortEncryptedBlock.mac ) )
+      val block = Block( ephemeralKeyPair.pub, initializationVector, ImmutableArraySeq.Byte.createNoCopy( shortEncryptedBlock.ciphertext ), ByteSeqExact32( shortEncryptedBlock.mac ) )
       ( block, message )
     }
     def parse( bytes : Seq[Byte] ) : Failable[Block] = {
@@ -150,10 +150,10 @@ object Handshake {
       }
       def create( sharedSecret : ByteSeqExact32, isKnownPeer : Boolean, ephemeralKeyPair : EthKeyPair, senderPermanentPublicKey : EthPublicKey )( implicit random : SecureRandom ) : Initiator = {
         val initiatorNonce = genNonce( random )
-        val ephemeralKeyMac = EthHash.hash( ephemeralKeyPair.Public.bytes )
+        val ephemeralKeyMac = EthHash.hash( ephemeralKeyPair.pub.bytes )
         val initiatorKnownPeer = if ( isKnownPeer ) Unsigned1.assert(1) else Unsigned1.assert(0)
         val signMe = (sharedSecret.widen ^ initiatorNonce.widen) // this 32 byte quantity is signed directly, without further hashing
-        val signature = ephemeralKeyPair.Private.signEthHash( EthHash.withBytes( signMe ) )
+        val signature = ephemeralKeyPair.pvt.signEthHash( EthHash.withBytes( signMe ) )
         Initiator( signature, ephemeralKeyMac, senderPermanentPublicKey, initiatorNonce, initiatorKnownPeer )
       }
     }
@@ -190,7 +190,7 @@ object Handshake {
       def create( isKnownPeer : Boolean, ephemeralKeyPair : EthKeyPair )( implicit random : SecureRandom ) : Receiver = {
         val receiverNonce = genNonce( random )
         val receiverKnownPeer = if ( isKnownPeer ) Unsigned1( 1 ) else Unsigned1( 0 )
-        Receiver( ephemeralKeyPair.Public, receiverNonce, receiverKnownPeer )
+        Receiver( ephemeralKeyPair.pub, receiverNonce, receiverKnownPeer )
       }
     }
     final case class Receiver (
