@@ -6,6 +6,8 @@ import com.mchange.sc.v1.consuela._
 import com.mchange.sc.v1.consuela.ethereum._
 import com.mchange.sc.v1.consuela.ethereum.specification.Types._
 
+import com.mchange.sc.v2.restrict.RestrictedByteSeq;
+
 import com.mchange.sc.v1.consuela.ethereum.ethcrypt.bouncycastle.EthECIES._
 
 import com.mchange.sc.v2.failable._;
@@ -20,32 +22,85 @@ object Handshake {
   private def genNonce( random : SecureRandom ) : ByteSeqExact32 = ByteSeqExact32.assert( ImmutableArraySeq.Byte.random(32)( random ) )
 
   final object Block {
+    private type MessageBuilder = (
+      ByteSeqExact16,        // initialization vector
+      EthKeyPair,            // an ephemeral key pair
+      ByteSeqExact32,        // shared secret
+      SecureRandom           // source of randomness
+    ) => Message
+
+    private def createBlock( random : SecureRandom, handshakeSharedSecret : ByteSeqExact32, recipientPublicKey : EthPublicKey )( buildMessage : MessageBuilder ) : (Block, Message) = {
+      val initializationVector = ByteSeqExact16.assert( ImmutableArraySeq.Byte.random(16)( random ) )
+      val ephemeralKeyPair = genKeyPair( random )
+      val message = buildMessage( initializationVector, ephemeralKeyPair, handshakeSharedSecret, random )
+      val plaintext = message.bytes.widen.toArray
+      val ciphertextBlock = encryptBlock( ephemeralKeyPair.Private, recipientPublicKey, initializationVector.widen.toArray, Some( handshakeSharedSecret.widen.toArray ), plaintext, 0, plaintext.length )
+      val shortEncryptedBlock = EncryptedBlock.Short( ciphertextBlock )
+      val block = Block( ephemeralKeyPair.Public, initializationVector, ImmutableArraySeq.Byte.createNoCopy( shortEncryptedBlock.ciphertext ), ByteSeqExact32( shortEncryptedBlock.mac ) )
+      ( block, message )
+    }
+    def parse( bytes : Seq[Byte] ) : Failable[Block] = {
+      val macIndex = bytes.length - MacBytes
+
+      val pubKeyBytes     = bytes.slice( 0, 65 )
+      val aivBytes        = bytes.slice( 65, 81 )
+      val ciphertextBytes = bytes.slice( 81, macIndex )
+      val mac             = bytes.drop( 81 )
+
+      EthPublicKey.fromBytesWithUncompressedHeader( ByteSeqExact65.assert( pubKeyBytes ) ).map { ethPublicKey =>
+        Block( ethPublicKey, ByteSeqExact16.assert( aivBytes ), ciphertextBytes.toImmutableSeq, ByteSeqExact32.assert( mac ) )
+      }
+    }
+    /*
     final object Initiator {
-      def create( senderPublicKey : EthPublicKey, recipientPublicKey : EthPublicKey, mbSharedSecret : Option[ByteSeqExact32] )( random : SecureRandom ) : (Block, Message.Initiator) = {
-        val initializationVector = ByteSeqExact16.assert( ImmutableArraySeq.Byte.random(16)( random ) )
-        val ephemeralKeyPair = genKeyPair( random )
-        val sharedSecret = mbSharedSecret.getOrElse( ByteSeqExact32( ecdheSharedSecret( ephemeralKeyPair.Private, recipientPublicKey ) ) )
-        val initiator = Message.Initiator.create( sharedSecret, mbSharedSecret != None, ephemeralKeyPair, senderPublicKey )( random )
-        val plaintext = initiator.bytes.widen.toArray
-        val ciphertextBlock = encryptBlock( ephemeralKeyPair.Private, recipientPublicKey, initializationVector.widen.toArray, Some( sharedSecret.widen.toArray ), plaintext, 0, plaintext.length )
-        val shortEncryptedBlock = EncryptedBlock.Short( ciphertextBlock )
-        val block = Block( ephemeralKeyPair.Public, initializationVector, ImmutableArraySeq.Byte.createNoCopy( shortEncryptedBlock.ciphertext ), ByteSeqExact32( shortEncryptedBlock.mac ) )
-        ( block, initiator )
+      def create( recipientPublicKey : EthPublicKey, senderPublicKey : EthPublicKey, mbSharedSecret : Option[ByteSeqExact32] )( random : SecureRandom ) : (Block, Message.Initiator) = {
+        val ( block, message ) = createBlock( random ) { ( initializationVector, ephemeralKeyPair, sharedSecret, randomness ) => 
+          Message.Initiator.create( sharedSecret, mbSharedSecret != None, ephemeralKeyPair, senderPublicKey )( randomness )
+        }
+        ( block, message.asInstanceOf[Message.Initiator]
       }
     }
     final object Receiver {
-      // TODO: def create( ... )
+      def create( peerIsKnown : Boolean, sharedSecret : ByteSeqExact32 ) : (Block, Message.Receiver) = {
+        val ( block, message ) = createBlock( random ) { ( initializationVector, ephemeralKeyPair, sharedSecret, randomness ) => 
+          Message.Initiator.create( sharedSecret, mbSharedSecret != None, ephemeralKeyPair, senderPublicKey )( randomness )
+        }
+        ( block, message.asInstanceOf[Message.Initiator]
+      }
+     */ 
+      /*
+      def create( initiator : Message.Initiator, mbKnownPeerDb : Option[KnownPeer.Database] )( random : SecureRandom ) : Message.Receiver = {
+        val ( sharedSecret, isKnownPeer ) = {
+          def autoSharedSecret = ???
+          def unknownPeerTuple = ( autoSharedSecret, false )
+          ( initiator.initiatorKnownPeer, mbKnownPeerDb ) match {
+            case ( true, Some( knownPeerDb ) ) => {
+              val mbKnownPeer = knownPeerDb.seek( initiator.permanentPublicKey ).logRecover( WARNING, _ => None ).get
+              mbKnownPeer.fold( unknownPeerTuple )( knownPeer => (knownPeer.sessionToken, true) )
+            }
+            case _ => unknownPeerTuple
+          }
+        }
+        val ( block, message ) = createBlock( mbSharedSecret, random ) { ( initializationVector, ephemeralKeyPair, sharedSecret, randomness ) =>
+          Message.Receiver.create( isKnownPeer, ephemeralKeyPair )( randomness )
+        }
+        ( block, message.asInstanceOf[Message.Receiver]
+      }
     }
-    def apply( bytes : Array[Byte] ) : Block = {
+    */
+    def apply( bytes : Array[Byte] ) : Failable[Block] = {
       val pubKeyBytes = bytes.slice(  0, 65 )
       val aesIVBytes  = bytes.slice( 65, 81 )
       val shortEncryptedBlock = EncryptedBlock.Short( bytes.drop(81) )
-      Block( 
-        EthPublicKey.fromBytesWithUncompressedHeader( ByteSeqExact65 ( pubKeyBytes ) ), 
-        ByteSeqExact16( aesIVBytes ), 
-        ImmutableArraySeq.Byte( shortEncryptedBlock.ciphertext ),
-        ByteSeqExact32( shortEncryptedBlock.mac )
-      )
+
+      EthPublicKey.fromBytesWithUncompressedHeader( ByteSeqExact65 ( pubKeyBytes ) ).map{ ethPublicKey =>
+        Block(
+          ethPublicKey,
+          ByteSeqExact16( aesIVBytes ),
+          ImmutableArraySeq.Byte( shortEncryptedBlock.ciphertext ),
+          ByteSeqExact32( shortEncryptedBlock.mac )
+        )
+      }
     }
   }
   case class Block( eciesPublicKey : EthPublicKey, aesInitialVector : ByteSeqExact16, ciphertext : immutable.Seq[Byte], eciesMac : ByteSeqExact32 ) {
@@ -132,10 +187,9 @@ object Handshake {
         val rkp   = Unsigned1( arr(96) )                   //  1 byte @ index 96
         Receiver( rerpk, nonce, rkp )
       }
-      def create( knownPeer : Boolean )( implicit random : SecureRandom ) : Receiver = {
-        val ephemeralKeyPair = genKeyPair( random )
+      def create( isKnownPeer : Boolean, ephemeralKeyPair : EthKeyPair )( implicit random : SecureRandom ) : Receiver = {
         val receiverNonce = genNonce( random )
-        val receiverKnownPeer = if ( knownPeer ) Unsigned1( 1 ) else Unsigned1( 0 )
+        val receiverKnownPeer = if ( isKnownPeer ) Unsigned1( 1 ) else Unsigned1( 0 )
         Receiver( ephemeralKeyPair.Public, receiverNonce, receiverKnownPeer )
       }
     }
@@ -153,5 +207,7 @@ object Handshake {
       }
     }
   }
-  sealed trait Message;
+  sealed trait Message {
+    val bytes : RestrictedByteSeq.Shield;
+  }
 }
