@@ -1,7 +1,9 @@
 package com.mchange.sc.v1.consuela.ethereum.ethcrypt.bouncycastle;
 
 import com.mchange.sc.v1.consuela._
+
 import com.mchange.sc.v1.consuela.ethereum.{EthPrivateKey,EthPublicKey,EthKeyPair}
+import com.mchange.sc.v1.consuela.ethereum.specification.Types.ByteSeqExact64
 
 import java.security.SecureRandom
 import java.util.Random
@@ -301,7 +303,7 @@ object EthECIES {
   
   implicit def toEthPublicKey( pub : ECPublicKeyParameters ) : EthPublicKey = {
     val point = pub.getQ.normalize
-    EthPublicKey( Array.concat( point.getXCoord.getEncoded, point.getYCoord.getEncoded ) )
+    EthPublicKey( ByteSeqExact64( Array.concat( point.getXCoord.getEncoded, point.getYCoord.getEncoded ) ) )
   }
 
   implicit def toECPublicKeyParameters( ethPub : EthPublicKey ) : ECPublicKeyParameters = new ECPublicKeyParameters( Curve.createPoint( ethPub.x.bigInteger, ethPub.y.bigInteger ), CurveParams )

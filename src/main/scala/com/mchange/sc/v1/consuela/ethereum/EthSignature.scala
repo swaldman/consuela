@@ -39,7 +39,7 @@ import com.mchange.sc.v1.consuela._;
 
 import scala.collection._;
 
-import specification.Types.{ByteSeqExact65, SignatureV, SignatureR, SignatureS, SignatureRecId};
+import specification.Types.{ByteSeqExact64, ByteSeqExact65, SignatureV, SignatureR, SignatureS, SignatureRecId};
 
 // what should I name 32 so that I don't keep retyping 32?
 object EthSignature {
@@ -96,7 +96,7 @@ object EthSignature {
 final case class EthSignature( val v : SignatureV, val r : SignatureR, val s : SignatureS ) {
 
   private def rawBytesWereSigned( bytes : Array[Byte] ) : Option[EthPublicKey] = {
-    crypto.secp256k1.recoverPublicKeyBytesV( v.widen, r.widen.bigInteger, s.widen.bigInteger, bytes ).map( EthPublicKey(_) )
+    crypto.secp256k1.recoverPublicKeyBytesV( v.widen, r.widen.bigInteger, s.widen.bigInteger, bytes ).map( bytes => EthPublicKey( ByteSeqExact64( bytes ) ) )
   }
 
   def ethHashWasSigned( hash : EthHash )         : Option[EthPublicKey] = rawBytesWereSigned( hash.toByteArray );

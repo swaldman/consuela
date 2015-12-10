@@ -45,7 +45,7 @@ import java.util.Arrays;
 import scala.util.hashing.MurmurHash3;
 
 import encoding.{RLP, RLPSerializing};
-import specification.Types.{SignatureV, SignatureR, SignatureS, Unsigned256};
+import specification.Types.{ByteSeqExact64, SignatureV, SignatureR, SignatureS, Unsigned256};
 
 object EthTransaction {
   final object Unsigned {
@@ -98,7 +98,8 @@ object EthTransaction {
 
     lazy val senderPublicKey : EthPublicKey = {
       def fail : EthPublicKey = throw new EthereumException(s"Could not recover public key for signature ${signature} with signed hash '${signedHash}'");
-      crypto.secp256k1.recoverPublicKeyBytesV( v.widen, r.widen.bigInteger, s.widen.bigInteger, signedHash.toByteArray ).fold( fail )( pubKeyBytes => EthPublicKey( pubKeyBytes ) );
+      val mbPubKeyBytes = crypto.secp256k1.recoverPublicKeyBytesV( v.widen, r.widen.bigInteger, s.widen.bigInteger, signedHash.toByteArray );
+      mbPubKeyBytes.fold( fail )( pubKeyBytes => EthPublicKey( ByteSeqExact64 ( pubKeyBytes ) ) );
     }
     lazy val sender : EthAddress = senderPublicKey.toAddress;
 

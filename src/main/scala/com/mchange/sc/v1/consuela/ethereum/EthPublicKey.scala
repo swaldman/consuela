@@ -40,72 +40,63 @@ import com.mchange.sc.v1.consuela.crypto;
 
 import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact64,ByteSeqExact65}
 
-import com.mchange.sc.v1.consuela.util.ByteArrayValue;
-
 import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq;
-
-import java.util.Arrays;
 
 import com.mchange.sc.v2.failable._;
 
+import java.util.Arrays;
+
+import scala.collection._;
+
 object EthPublicKey {
-  val ByteLength = 2 * crypto.secp256k1.ValueByteLength;
-
-  def apply( bytes : Array[Byte], offset : Int ) : EthPublicKey = {
-    val tmp = Array.ofDim[Byte]( ByteLength )
-    Array.copy( bytes, offset, tmp, 0, ByteLength )
-    new EthPublicKey( tmp );
-  }
-  def apply( bytes : Array[Byte] ) : EthPublicKey = EthPublicKey( bytes, 0 )
-  def apply( bytes : Seq[Byte] ) : EthPublicKey = EthPublicKey( bytes.toArray );
-
-  def apply( priv  : EthPrivateKey ) : EthPublicKey = new EthPublicKey( this.computeBytes( priv ) );
+  def apply( priv  : EthPrivateKey ) : EthPublicKey = new EthPublicKey( ByteSeqExact64( this.computeBytes( priv ) ) );
 
   def computeBytes( priv : EthPrivateKey ) : Array[Byte] = crypto.secp256k1.computePublicKeyBytes( priv.toBigInteger )
 
   def fromBytesWithUncompressedHeader( bytes : ByteSeqExact65 ) : Failable[EthPublicKey] = {
     val header = bytes.widen(0) 
     if ( header == 0x04 ) {
-      succeed( apply( bytes.widen.toArray.drop(1) ) ) 
+      succeed( apply( ByteSeqExact64.assert( bytes.widen.toArray.drop(1) ) ) ) 
     } else {
       fail( s"Bad header for public key. We expressed the uncompressed marker, 0x04, found 0x${header.hex}" )
     }
   }
 }
-final class EthPublicKey private ( protected val _bytes : Array[Byte] ) extends ByteArrayValue {
-  import EthPublicKey.ByteLength
+final case class EthPublicKey( val bytes : ByteSeqExact64 ) {
 
-  require( _bytes.length == ByteLength );
+  private lazy val _arr : Array[Byte] = bytes.widen.toArray
 
-  private lazy val (_xBytes, _yBytes) = _bytes.splitAt( crypto.secp256k1.ValueByteLength );
+  private lazy val (_xBytes, _yBytes) = _arr.splitAt( crypto.secp256k1.ValueByteLength );
+
   lazy val x = BigInt( new java.math.BigInteger( 1, _xBytes ) );
   lazy val y = BigInt( new java.math.BigInteger( 1, _yBytes ) );
 
   lazy val toAddress = EthAddress( this );
 
-  lazy val toByteSeqExact64 = ByteSeqExact64( this.bytes );
-
   lazy val bytesWithUncompressedHeader : ByteSeqExact65 = {
-    val arr = Array.ofDim[Byte](ByteLength + 1)
-    arr(0) = 0x04.toByte; // uncompressed header
-    Array.copy( _bytes, 0, arr, 1, ByteLength )
-    ByteSeqExact65( ImmutableArraySeq.Byte( arr ) )
+    val buff = new mutable.ArrayBuffer[Byte](65)
+    buff += 0x04.toByte; // uncompressed header
+    buff ++= bytes.widen
+    ByteSeqExact65( ImmutableArraySeq.Byte( buff.toArray ) )
   }
 
-  def matches( priv : EthPrivateKey ) : Boolean = Arrays.equals( _bytes, EthPublicKey.computeBytes( priv ) );
-
-  private def verifyRawBytes( rawBytes : Array[Byte], signature : EthSignature ) : Boolean = {
-    val _signature = crypto.secp256k1.Signature( signature.r.widen.bigInteger, signature.s.widen.bigInteger )
-    crypto.secp256k1.verifySignature( rawBytes, _signature, this.x.bigInteger, this.y.bigInteger )
-  }
-  private def verifyEthHash( hash : EthHash, signature : EthSignature ) : Boolean = this.verifyRawBytes( hash.toByteArray, signature );
-
-  private def verifyEthHash( document : Array[Byte], signature : EthSignature ) : Boolean = {
-    this.verifyEthHash( EthHash.hash( document ), signature );
-  }
+  def matches( priv : EthPrivateKey ) : Boolean = Arrays.equals( _arr, EthPublicKey.computeBytes( priv ) );
 
   // default scheme
-  def verify( document : Array[Byte], signature : EthSignature ) : Boolean = this.verifyEthHash( document, signature );
+  def verify( document : Array[Byte], signature : EthSignature ) : Boolean = {
+    def verifyRawBytes( rawBytes : Array[Byte], signature : EthSignature ) : Boolean = {
+      val _signature = crypto.secp256k1.Signature( signature.r.widen.bigInteger, signature.s.widen.bigInteger )
+      crypto.secp256k1.verifySignature( rawBytes, _signature, this.x.bigInteger, this.y.bigInteger )
+    }
+    def verifyEthHash( hash : EthHash, signature : EthSignature ) : Boolean = {
+      verifyRawBytes( hash.toByteArray, signature );
+    }
+    def verifyHashedDocument( document : Array[Byte], signature : EthSignature ) : Boolean = {
+      verifyEthHash( EthHash.hash( document ), signature );
+    }
+
+    verifyHashedDocument( document, signature )
+  }
 }
 
 

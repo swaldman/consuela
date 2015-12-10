@@ -14,7 +14,7 @@ object Enode {
     urlStr match {
       case ParseRegex( id, ip, port, discport ) => {
         val discoveryPort = if ( discport == null ) port else discport
-        Enode( EthPublicKey( id.decodeHex ), IPAddress( ip ), Unsigned16( port.toInt ), Unsigned16( discoveryPort.toInt ) )
+        Enode( EthPublicKey( ByteSeqExact64( id.decodeHex ) ), IPAddress( ip ), Unsigned16( port.toInt ), Unsigned16( discoveryPort.toInt ) )
       }
       case _ => throw new java.net.MalformedURLException( s"'${urlStr}' is not a valid enode URL." )
     }
@@ -23,7 +23,7 @@ object Enode {
 final case class Enode( nodeId : EthPublicKey, address : IPAddress, port : Unsigned16, discoveryPort : Unsigned16 ) {
   override lazy val toString : String = {
     val suffix = if ( port != discoveryPort ) "?discport=${discoveryPort}" else ""
-    s"enode://${nodeId.hex}@${address}:${port}${suffix}"
+    s"enode://${nodeId.bytes.widen.hex}@${address}:${port}${suffix}"
   }
 }
 

@@ -56,7 +56,7 @@ object EthAddress {
 
   def apply( bytes : ByteSeqExact20 ) : EthAddress = this.apply( bytes.widen );
 
-  def computeBytes( pub : EthPublicKey ) : Array[Byte] = EthHash.hash(pub.toByteArray).toByteArray.drop(12);
+  def computeBytes( pub : EthPublicKey ) : Array[Byte] = EthHash.hash(pub.bytes.widen).toByteArray.drop(12);
 }
 final class EthAddress private ( protected val _bytes : Array[Byte] ) extends ByteArrayValue with EthByteArrayValue.Nibbly {
 
