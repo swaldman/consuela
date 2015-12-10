@@ -38,9 +38,11 @@ package com.mchange.sc.v1.consuela.hash;
 import scala.language.reflectiveCalls;
 
 object Hasher {
-  trait FixedLength[T <: Hash[T]] extends Abstract[T]{
-    val HashLength : Int;
+  trait NamedAlgorithm {
     val AlgoName : String;
+  }
+  trait FixedLength[T <: Hash[T]] extends Abstract[T] with NamedAlgorithm {
+    val HashLength : Int;
 
     lazy val Zero = instantiate( Array.ofDim[Byte]( HashLength ) );
 
@@ -80,9 +82,7 @@ object Hasher {
 
     def rawHash( bytes : Array[Byte] ) : Array[Byte];
   }
-  abstract class Jca[T <: Hash[T]] extends Hasher.Abstract[T] {
-    val AlgoName : String;
-
+  abstract class Jca[T <: Hash[T]] extends Hasher.Abstract[T] with NamedAlgorithm {
     def rawHash( bytes : Array[Byte] ) : Array[Byte] = jcaDoHash(AlgoName, bytes)
   }
 }
