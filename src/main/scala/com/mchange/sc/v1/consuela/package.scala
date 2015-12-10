@@ -50,6 +50,9 @@ package object consuela {
 
   implicit val MainProvider : crypto.jce.Provider = crypto.jce.Provider.ConfiguredProvider;
 
+  implicit final class RichByte( val byte : Byte ) extends AnyVal {
+    def hex : String = ByteUtils.toLowercaseHexAscii( byte ) 
+  }
   implicit final class RichString( val string : String ) extends AnyVal {
     def decodeHex : Array[Byte] = {
       val hexstring = if ( string.startsWith( "0x" ) ) string.substring(2) else string;
@@ -81,7 +84,7 @@ package object consuela {
   }
   implicit final class RichByteArray( bytes : Array[Byte] ) extends RichBytes {
     protected val _bytes = bytes;
-    def toImmutableSeq : immutable.Seq[Byte] = ImmutableArraySeq( _bytes )
+    def toImmutableSeq : immutable.Seq[Byte] = ImmutableArraySeq.Byte( _bytes )
     def ^( other : Array[Byte] ) : Array[Byte] = xor( other )
   }
   implicit final class RichBigInt( val bi : BigInt ) extends AnyVal {
