@@ -51,7 +51,7 @@ import scala.collection._;
 object EthPublicKey {
   def apply( priv  : EthPrivateKey ) : EthPublicKey = new EthPublicKey( ByteSeqExact64( this.computeBytes( priv ) ) );
 
-  def computeBytes( priv : EthPrivateKey ) : Array[Byte] = crypto.secp256k1.computePublicKeyBytes( priv.toBigInteger )
+  def computeBytes( priv : EthPrivateKey ) : Array[Byte] = crypto.secp256k1.computePublicKeyBytes( priv.s.bigInteger )
 
   def fromBytesWithUncompressedHeader( bytes : ByteSeqExact65 ) : Failable[EthPublicKey] = {
     val header = bytes.widen(0) 

@@ -3,7 +3,7 @@ package com.mchange.sc.v1.consuela.ethereum.ethcrypt.bouncycastle;
 import com.mchange.sc.v1.consuela._
 
 import com.mchange.sc.v1.consuela.ethereum.{EthPrivateKey,EthPublicKey,EthKeyPair}
-import com.mchange.sc.v1.consuela.ethereum.specification.Types.ByteSeqExact64
+import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact32,ByteSeqExact64}
 
 import java.security.SecureRandom
 import java.util.Random
@@ -308,7 +308,7 @@ object EthECIES {
 
   implicit def toECPublicKeyParameters( ethPub : EthPublicKey ) : ECPublicKeyParameters = new ECPublicKeyParameters( Curve.createPoint( ethPub.x.bigInteger, ethPub.y.bigInteger ), CurveParams )
 
-  implicit def toEthPrivateKey( priv : ECPrivateKeyParameters ) : EthPrivateKey = EthPrivateKey( valueAsArray( priv.getD ) )
+  implicit def toEthPrivateKey( priv : ECPrivateKeyParameters ) : EthPrivateKey = EthPrivateKey( ByteSeqExact32( valueAsArray( priv.getD ) ) )
 
   implicit def toECPrivateKeyParameters( ethPriv : EthPrivateKey ) : ECPrivateKeyParameters = new ECPrivateKeyParameters( ethPriv.s.bigInteger, CurveParams )
 
