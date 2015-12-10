@@ -88,8 +88,15 @@ package object ethereum {
     }
   }
 
-  // XXX: should I switch to the more strongly typed version below?
-  implicit final object EthAddress_RLPSerializing extends RLPSerializing.ByteArrayValue[EthAddress]( EthAddress.apply );
+  implicit final object EthAddress_RLPSerializing extends RLPSerializing[EthAddress] {
+    def toElement( addr : EthAddress ) : RLP.Element = RLP.Element.ByteSeq( addr.bytes.widen );
+    def fromElement( element : RLP.Element.Basic ) : Failable[EthAddress] = {
+      element match {
+        case RLP.Element.ByteSeq( rawbytes ) => Try( EthAddress( ByteSeqExact20( rawbytes ) ) ).toFailable;
+        case _                               => failNotLeaf( element );
+      }
+    }
+  }
 
   //implicit final object EthAddress_RLPSerializing extends RLPSerializing[EthAddress] {
   //  def toElement( address : EthAddress ) : RLP.Element = RLP.toElement[ByteSeqExact20]( address.toByteSeqExact20 );
@@ -104,8 +111,8 @@ package object ethereum {
 
       def baseElements( unsigned : Unsigned ) : Vector[RLP.Element] = {
         val (rlpMbTo, payload) = unsigned match {
-          case msg : Unsigned.Message          => (msg.to.bytes, msg.data);
-          case cc  : Unsigned.ContractCreation => (Nil, cc.init);
+          case msg : Unsigned.Message          => (msg.to.bytes.widen, msg.data);
+          case cc  : Unsigned.ContractCreation => (immutable.Seq.empty[Byte], cc.init);
         }
         Vector( elem( unsigned.nonce ), elem( unsigned.gasPrice ), elem( unsigned.gasLimit ), elem( rlpMbTo ), elem( unsigned.value ), elem( payload ) );
       }
@@ -120,7 +127,7 @@ package object ethereum {
     override def fromElement( element : RLP.Element.Basic ) : Failable[EthTransaction] = {
       def fromMbToElement( mbToElement : RLP.Element.Basic ) : Failable[Option[EthAddress]] = {
         mbToElement match {
-          case RLP.Element.ByteSeq( mbToBytes ) => Try( if (mbToBytes == Nil) None else Some( EthAddress( mbToBytes ) ) ).toFailable;
+          case RLP.Element.ByteSeq( mbToBytes ) => Try( if (mbToBytes.isEmpty) None else Some( EthAddress( ByteSeqExact20( mbToBytes ) ) ) ).toFailable;
           case whatever                           => failNotLeaf( whatever );
         }
       }

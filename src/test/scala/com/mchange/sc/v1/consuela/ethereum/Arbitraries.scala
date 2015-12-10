@@ -49,7 +49,7 @@ import Arbitrary.arbitrary;
 object Arbitraries {
   def genByteArrayN( n : Int ) : Gen[Array[Byte]] = Gen.containerOfN[Array,Byte]( n, Gen.choose( Byte.MinValue, Byte.MaxValue ).map( _.toByte ) )
 
-  implicit val ArbitraryEthAddress : Arbitrary[EthAddress] = Arbitrary( genByteArrayN( EthAddress.ByteLength ).map( EthAddress(_) ) )
+  implicit val ArbitraryEthAddress : Arbitrary[EthAddress] = Arbitrary( genByteArrayN( EthAddress.ByteLength ).map( bs => EthAddress(ByteSeqExact20(bs) ) ) )
   implicit val ArbitraryEthHash    : Arbitrary[EthHash]    = Arbitrary( genByteArrayN( EthHashLen ).map( EthHash.withBytes( _ ) ) )
 
   val GenTransactionUnsignedMessage : Gen[EthTransaction.Unsigned.Message] = {

@@ -36,7 +36,7 @@
 package com.mchange.sc.v1.consuela.ethereum;
 
 import encoding.{RLP, RLPSerializable}
-import specification.Types.{Unsigned64,Unsigned256,Unsigned2048,ByteSeqMax1024};
+import specification.Types.{ByteSeqExact20,Unsigned64,Unsigned256,Unsigned2048,ByteSeqMax1024};
 
 import pow.ProofOfWork;
 
@@ -52,7 +52,7 @@ object EthBlockDetails {
     val header = EthBlock.Header(
       parentHash      = AllZeroesEthHash,
       ommersHash      = EthHash.withBytes("0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347".decodeHex),
-      coinbase        = EthAddress( "0x8888f1f195afa192cfee860698584c030f4c9db1".decodeHex ),
+      coinbase        = EthAddress( ByteSeqExact20("0x8888f1f195afa192cfee860698584c030f4c9db1".decodeHex) ),
       stateRoot       = EthHash.withBytes( "0x7dba07d6b448a186e9612e5f737d1c909dce473e53199901a302c00646d523c1".decodeHex ),
       transactionRoot = EthHash.withBytes( "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421".decodeHex ),
       receiptsRoot    = EthHash.withBytes( "0x56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421".decodeHex ),

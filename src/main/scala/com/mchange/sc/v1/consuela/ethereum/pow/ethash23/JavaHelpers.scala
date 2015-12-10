@@ -71,7 +71,7 @@ object JavaHelpers {
   ) : EthBlock.Header = EthBlock.Header(
     asHash( parentHash ),
     asHash( ommersHash ),
-    EthAddress( coinbase ),
+    EthAddress( ByteSeqExact20( coinbase ) ),
     asHash( stateRoot ),
     asHash( transactionRoot ),
     asHash( receiptsRoot ),

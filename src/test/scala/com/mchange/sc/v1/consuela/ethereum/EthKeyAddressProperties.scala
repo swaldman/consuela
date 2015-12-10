@@ -48,7 +48,7 @@ object EthKeyAddressProperties extends Properties("Ethereum Keys and Addresses")
 
   property("EthPrivateKey length is 32 bytes (256 bits)") = Prop( priv.bytes.widen.length == 32 ); // now ensured by types
   property("EthPublicKey length is 64 bytes (512 bits)")  = Prop( pub.bytes.widen.length == 64 );  // now ensured by types
-  property("EthAddress length is 20 bytes")               = Prop( addr.bytes.length == 20 ); 
+  property("EthAddress length is 20 bytes")               = Prop( addr.bytes.widen.length == 20 ); // now ensured by types 
 
   property("Public Key verifies what the private key signs") = Prop.forAll { (message : Array[Byte]) => pub.verify( message, priv.sign( message ) ) };
 }
