@@ -46,6 +46,8 @@ import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq;
 
 import java.util.Arrays;
 
+import com.mchange.sc.v2.failable._;
+
 object EthPublicKey {
   val ByteLength = 2 * crypto.secp256k1.ValueByteLength;
 
@@ -61,7 +63,14 @@ object EthPublicKey {
 
   def computeBytes( priv : EthPrivateKey ) : Array[Byte] = crypto.secp256k1.computePublicKeyBytes( priv.toBigInteger )
 
-  def fromBytesWithUncompressedHeader( bytes : ByteSeqExact65 ) : EthPublicKey = apply( bytes.widen.toArray.drop(1) )
+  def fromBytesWithUncompressedHeader( bytes : ByteSeqExact65 ) : Failable[EthPublicKey] = {
+    val header = bytes.widen(0) 
+    if ( header == 0x04 ) {
+      succeed( apply( bytes.widen.toArray.drop(1) ) ) 
+    } else {
+      fail( s"Bad header for public key. We expressed the uncompressed marker, 0x04, found 0x${header.hex}" )
+    }
+  }
 }
 final class EthPublicKey private ( protected val _bytes : Array[Byte] ) extends ByteArrayValue {
   import EthPublicKey.ByteLength

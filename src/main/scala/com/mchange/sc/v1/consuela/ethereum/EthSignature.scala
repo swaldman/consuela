@@ -60,9 +60,6 @@ object EthSignature {
     }
     EthSignature( v, r, s )
   }
-  def fromBytesVRS( arr : Array[Byte], offset : Int ) : EthSignature = fromBytesVRS( arr, offset, false )
-  def fromBytesVRS( arr : Array[Byte] ) : EthSignature = fromBytesVRS( arr, 0 )
-  def fromBytesVRS( seq : Seq[Byte] )   : EthSignature = fromBytesVRS( seq.toArray )
   private def fromBytesRSV( arr : Array[Byte], offset : Int, vAsRecId : Boolean ) : EthSignature = {
     val r = {
       val tmp = Array.ofDim[Byte](32)
@@ -80,6 +77,9 @@ object EthSignature {
     }
     EthSignature( v, r, s )
   }
+  def fromBytesVRS( arr : Array[Byte], offset : Int ) : EthSignature = fromBytesVRS( arr, offset, false )
+  def fromBytesVRS( arr : Array[Byte] ) : EthSignature = fromBytesVRS( arr, 0 )
+  def fromBytesVRS( seq : Seq[Byte] )   : EthSignature = fromBytesVRS( seq.toArray )
   def fromBytesRSV( arr : Array[Byte], offset : Int ) : EthSignature = fromBytesRSV( arr, offset, false )
   def fromBytesRSV( arr : Array[Byte] ) : EthSignature = fromBytesRSV( arr, 0 )
   def fromBytesRSV( seq : Seq[Byte] )   : EthSignature = fromBytesRSV( seq.toArray )
