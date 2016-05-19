@@ -37,7 +37,7 @@ package com.mchange.sc.v1.consuela.ethereum.pow;
 
 import com.mchange.sc.v1.consuela._;
 import conf.Config;
-import hash.SHA3_256;
+import hash.Keccak256;
 
 import scala.reflect.ClassTag;
 
@@ -75,7 +75,7 @@ package object ethash23 {
 
   private[ethash23] implicit val SeedPrimer = Seed.Primer(
     Config.EthereumPowEthash23SeedPrimerEpochNumber,
-    SHA3_256.withBytes(Config.EthereumPowEthash23SeedPrimerValue.decodeHex)
+    Keccak256.withBytes(Config.EthereumPowEthash23SeedPrimerValue.decodeHex)
   );
 
   private[ethash23] implicit final class PlusModInt( val i : Int ) extends AnyVal {

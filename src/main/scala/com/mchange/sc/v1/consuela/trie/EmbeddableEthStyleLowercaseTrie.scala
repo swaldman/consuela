@@ -35,23 +35,23 @@
 
 package com.mchange.sc.v1.consuela.trie;
 
-import com.mchange.sc.v1.consuela.hash.SHA3_256;
+import com.mchange.sc.v1.consuela.hash.Keccak256;
 
 import EmbeddableEthStylePMTrie.EarlyInit;
 
 object EmbeddableEthStyleLowercaseTrie {
   val alphabet : IndexedSeq[Char] = IndexedSeq( 'a' to 'z' : _* );
-  val EmptyHash : SHA3_256 = SHA3_256.Zero;
+  val EmptyHash : Keccak256 = Keccak256.Zero;
 
-  class MapDatabase extends EmbeddableEthStylePMTrie.Database[Char,String,SHA3_256] {
+  class MapDatabase extends EmbeddableEthStylePMTrie.Database[Char,String,Keccak256] {
 
     import EmbeddableEthStylePMTrie.NodeSource;
 
-    private[this] val _map = scala.collection.mutable.Map.empty[SHA3_256,Node];
+    private[this] val _map = scala.collection.mutable.Map.empty[Keccak256,Node];
     _map += ( EmptyHash -> Empty );
 
-    def put( hash : SHA3_256, node : Node ) : Unit = this.synchronized{ _map += Tuple2( hash, node ) }
-    def apply( hash : SHA3_256 ) : Node = this.synchronized{ _map(hash) }; 
+    def put( hash : Keccak256, node : Node ) : Unit = this.synchronized{ _map += Tuple2( hash, node ) }
+    def apply( hash : Keccak256 ) : Node = this.synchronized{ _map(hash) }; 
 
     def dereference( source : NodeSource ) : Node = {
       source match {
@@ -69,21 +69,21 @@ object EmbeddableEthStyleLowercaseTrie {
     }
     def rootReference( node : Node ) : NodeSource = if (node == Empty) NodeSource.Empty else NodeSource.Hash( hash( node ) );
 
-    def EmptyHash : SHA3_256 = EmbeddableEthStyleLowercaseTrie.EmptyHash
+    def EmptyHash : Keccak256 = EmbeddableEthStyleLowercaseTrie.EmptyHash
 
-    private[this] def hash( node : Node ) : SHA3_256 = {
+    private[this] def hash( node : Node ) : Keccak256 = {
       import java.io._;
       import com.mchange.sc.v2.lang.borrow;
 
       def b( byte : Byte ) : Byte = byte; // force coercion of Int to Byte
       def subkeyToBytes( subkey : Subkey ) : Seq[Byte] = subkey.map( c=> ((c & 0xFF).toByte) );
-      def nseToBytes( nse : NodeSource.Embedded[Char,String,SHA3_256] ) : Seq[Byte] = nodeToBytes( nse.node );
-      def nshToBytes( nsh : NodeSource.Hash[Char,String,SHA3_256] ) : Seq[Byte] = nsh.hash.bytes;
+      def nseToBytes( nse : NodeSource.Embedded[Char,String,Keccak256] ) : Seq[Byte] = nodeToBytes( nse.node );
+      def nshToBytes( nsh : NodeSource.Hash[Char,String,Keccak256] ) : Seq[Byte] = nsh.hash.bytes;
       def strToBytes( str : String ) : Seq[Byte] = str.getBytes("UTF-8").toSeq;
       def osToBytes( mbStr : Option[String] ) : Seq[Byte] = mbStr.fold( Seq( b(0) ) )( str => (b(0) +: str.getBytes("UTF-8")).toSeq :+ b(0) );
       def nsToBytes( ns  : NodeSource ) : Seq[Byte] = (ns : @unchecked) match {
-        case nse : EmbeddableEthStylePMTrie.NodeSource.Embedded[Char,String,SHA3_256] => nseToBytes( nse );
-        case nsh : EmbeddableEthStylePMTrie.NodeSource.Hash[Char,String,SHA3_256] => nshToBytes( nsh );
+        case nse : EmbeddableEthStylePMTrie.NodeSource.Embedded[Char,String,Keccak256] => nseToBytes( nse );
+        case nsh : EmbeddableEthStylePMTrie.NodeSource.Hash[Char,String,Keccak256] => nshToBytes( nsh );
         case EmbeddableEthStylePMTrie.NodeSource.Empty => Seq.empty[Byte]
       }
       def nodeToBytes( node : Node ) : Seq[Byte] = {
@@ -112,19 +112,19 @@ object EmbeddableEthStyleLowercaseTrie {
           }
         }
       }
-      SHA3_256.hash( nodeToBytes( node ) )
+      Keccak256.hash( nodeToBytes( node ) )
     }
   }
 }
 
 class EmbeddableEthStyleLowercaseTrie( 
   mdb : EmbeddableEthStyleLowercaseTrie.MapDatabase = new EmbeddableEthStyleLowercaseTrie.MapDatabase, 
-  r : SHA3_256 = EmbeddableEthStyleLowercaseTrie.EmptyHash 
+  r : Keccak256 = EmbeddableEthStyleLowercaseTrie.EmptyHash 
 ) extends {
   val earlyInit = EarlyInit( EmbeddableEthStyleLowercaseTrie.alphabet, mdb, r );
-} with EmbeddableEthStylePMTrie[Char,String,SHA3_256,EmbeddableEthStyleLowercaseTrie] {
+} with EmbeddableEthStylePMTrie[Char,String,Keccak256,EmbeddableEthStyleLowercaseTrie] {
   import EmbeddableEthStyleLowercaseTrie._;
 
-  def instantiateSuccessor( newRootHash : SHA3_256 ) : EmbeddableEthStyleLowercaseTrie = new EmbeddableEthStyleLowercaseTrie( mdb, newRootHash );
+  def instantiateSuccessor( newRootHash : Keccak256 ) : EmbeddableEthStyleLowercaseTrie = new EmbeddableEthStyleLowercaseTrie( mdb, newRootHash );
 }
 

@@ -36,7 +36,7 @@
 package com.mchange.sc.v1.consuela.ethereum.pow.ethash23;
 
 import com.mchange.sc.v1.consuela._;
-import hash.{SHA3_256,SHA3_512}
+import hash.{Keccak256,Keccak512}
 
 import scala.util.Try;
 import scala.annotation.tailrec;
@@ -165,13 +165,13 @@ object Implementation {
       out
     }
 
-    private def sha3_512_readRow( stuff : Array[Byte] ) : Row = readRow( SHA3_512.rawHash( stuff ) )
+    private def keccak_512_readRow( stuff : Array[Byte] ) : Row = readRow( Keccak512.rawHash( stuff ) )
 
-    private def sha3_512_roundTrip( start : Array[Int] ) : Row = readRow( SHA3_512.rawHash( writeRow( start ) ) )
+    private def keccak_512_roundTrip( start : Array[Int] ) : Row = readRow( Keccak512.rawHash( writeRow( start ) ) )
 
-    private def sha3_512_roundTrip_DESTRUCTIVE( start : Array[Int] ) : Row = {
+    private def keccak_512_roundTrip_DESTRUCTIVE( start : Array[Int] ) : Row = {
       val asBytes = writeRow( start );
-      val asHash = SHA3_512.rawHash( asBytes )
+      val asHash = Keccak512.rawHash( asBytes )
 
       var len = start.length;
       var i = 0;
@@ -185,15 +185,15 @@ object Implementation {
     // this seems very arcane...
     protected def mkCache( cacheSize : Long, seed : Array[Byte] ) : Cache = {
       val n = requireValidInt( cacheSize / HashBytes );
-      val o = Array.iterate( sha3_512_readRow( seed ), n )( last => sha3_512_readRow( writeRow( last ) ) )
+      val o = Array.iterate( keccak_512_readRow( seed ), n )( last => keccak_512_readRow( writeRow( last ) ) )
       for (_ <- 0L until CacheRounds; i <- 0 until n ) {
         val v = (UP( o(i)(0) ) +% n).toInt;
-        o(i) = sha3_512_roundTrip_DESTRUCTIVE( zipWithXor(o( (i-1+n) % n ), o(v)) )
+        o(i) = keccak_512_roundTrip_DESTRUCTIVE( zipWithXor(o( (i-1+n) % n ), o(v)) )
       }
       o
     }
 
-    def hashCache( cache : Cache ) : SHA3_256 = SHA3_256.hash( cache.flatMap( writeRow ) )
+    def hashCache( cache : Cache ) : Keccak256 = Keccak256.hash( cache.flatMap( writeRow ) )
 
     def dumpDatasetBytes( os : OutputStream, dataset : Dataset ) : Unit = dataset.foreach( iarr => os.write( writeRow( iarr ) ) )
 
@@ -250,7 +250,7 @@ object Implementation {
       val mix = {
         val tmp = cache( i % n ).clone;
         tmp(0) = tmp(0) ^ i;
-        sha3_512_roundTrip_DESTRUCTIVE( tmp )
+        keccak_512_roundTrip_DESTRUCTIVE( tmp )
       }
 
       @tailrec
@@ -265,7 +265,7 @@ object Implementation {
         }
       }
 
-      sha3_512_roundTrip_DESTRUCTIVE( remix( mix ) )
+      keccak_512_roundTrip_DESTRUCTIVE( remix( mix ) )
     }
 
     protected[ethash23] def toDataset( array : Array[Row] ) : Dataset = array;
@@ -284,7 +284,7 @@ object Implementation {
       val w = MixBytesOverWordBytes;
       val mixHashes = MixBytesOverHashBytes;
 
-      val s = sha3_512_readRow( seedBytes );
+      val s = keccak_512_readRow( seedBytes );
       val len = s.length;
 
       val startMix : Row = replicateArray(s, len, mixHashes);
@@ -316,7 +316,7 @@ object Implementation {
       val compressedMix = Array.range(0, uncompressedMix.length, 4).map( i => compressNextFour( uncompressedMix, i ) );
 
       val mixDigest = writeRow( compressedMix );
-      val result = SHA3_256.rawHash( writeRow( s ++ compressedMix ) )
+      val result = Keccak256.rawHash( writeRow( s ++ compressedMix ) )
 
       new Hashimoto( ImmutableArraySeq.Byte( mixDigest ), Unsigned256( BigInt( 1, result ) ) )
     }
@@ -398,20 +398,20 @@ object Implementation {
       out
     }
 
-    private def sha3_512_readRow( stuff : Array[Byte] ) : Row = readRow( SHA3_512.rawHash( stuff ) )
+    private def keccak_512_readRow( stuff : Array[Byte] ) : Row = readRow( Keccak512.rawHash( stuff ) )
 
     // this seems very arcane...
     protected def mkCache( cacheSize : Long, seed : Array[Byte] ) : Cache = {
       val n = requireValidInt( cacheSize / HashBytes );
-      val o = Array.iterate( sha3_512_readRow( seed ), n )( lastLongs => sha3_512_readRow( writeRow( lastLongs ) ) )
+      val o = Array.iterate( keccak_512_readRow( seed ), n )( lastLongs => keccak_512_readRow( writeRow( lastLongs ) ) )
       for (_ <- 0L until CacheRounds; i <- 0 until n ) {
         val v = (o(i)(0) +% n).toInt;
-        o(i) = sha3_512_readRow( writeRow( zipWithXor(o((i-1+n) % n), o(v)) ) )
+        o(i) = keccak_512_readRow( writeRow( zipWithXor(o((i-1+n) % n), o(v)) ) )
       }
       o
     }
 
-    def hashCache( cache : Cache ) : SHA3_256 = SHA3_256.hash( cache.flatMap( writeRow ) )
+    def hashCache( cache : Cache ) : Keccak256 = Keccak256.hash( cache.flatMap( writeRow ) )
 
     //private def fourLittleEndianBytesAsUnsigned( src : Array[Byte], wordOffset : Int ) = IntegerUtils.toUnsigned( IntegerUtils.intFromByteArrayLittleEndian( src, wordOffset * 4 ) );
 
@@ -424,7 +424,7 @@ object Implementation {
       val mix = {
         val tmp = cache( i % n ).clone;
         tmp(0) = tmp(0) ^ i;
-        sha3_512_readRow( writeRow( tmp ) )
+        keccak_512_readRow( writeRow( tmp ) )
       }
 
       @tailrec
@@ -439,7 +439,7 @@ object Implementation {
         }
       }
 
-      sha3_512_readRow( writeRow( remix( mix ) ) )
+      keccak_512_readRow( writeRow( remix( mix ) ) )
     }
 
     protected[ethash23] def toDataset( array : Array[Row] ) : Dataset = array;
@@ -458,7 +458,7 @@ object Implementation {
       val w = MixBytesOverWordBytes;
       val mixHashes = MixBytesOverHashBytes;
 
-      val s = sha3_512_readRow( seedBytes );
+      val s = keccak_512_readRow( seedBytes );
       val len = s.length;
 
       val startMix : Row = replicateArray(s, len, mixHashes);
@@ -490,7 +490,7 @@ object Implementation {
       val compressedMix = Array.range(0, uncompressedMix.length, 4).map( i => compressNextFour( uncompressedMix, i ) );
 
       val mixDigest = writeRow( compressedMix );
-      val result = SHA3_256.rawHash( writeRow( s ++ compressedMix ) )
+      val result = Keccak256.rawHash( writeRow( s ++ compressedMix ) )
 
       new Hashimoto( ImmutableArraySeq.Byte( mixDigest ), Unsigned256( BigInt( 1, result ) ) )
     }
@@ -640,15 +640,15 @@ trait Implementation {
   /*
    * omit the last two elements, 
    * convert truncated header to RLP, 
-   * take SHA3_256 hash
+   * take Keccak256 hash
    */ 
-  def truncatedHeaderHash( header : EthBlock.Header ) : SHA3_256 = {
+  def truncatedHeaderHash( header : EthBlock.Header ) : Keccak256 = {
     val headerElement = RLP.toElement[EthBlock.Header]( header );
     val RLP.Element.Seq( fullSeq ) = headerElement;
     val numToKeep = fullSeq.length - 2;
     val truncSeq = fullSeq.take( numToKeep );
     val truncHeaderRLP = RLP.Element.encode( RLP.Element.Seq( truncSeq ) )
-    SHA3_256.hash( truncHeaderRLP )
+    Keccak256.hash( truncHeaderRLP )
   }
 
   // for memoization / caching to files
@@ -773,13 +773,13 @@ trait Implementation {
     out
   }
 
-  private def hashimotoLight( fullSize : Long, cache : Cache, truncatedHeaderHash : SHA3_256, nonce : Unsigned64 ) : Hashimoto = {
+  private def hashimotoLight( fullSize : Long, cache : Cache, truncatedHeaderHash : Keccak256, nonce : Unsigned64 ) : Hashimoto = {
     hashimoto( truncatedHeaderHash, nonce, fullSize, (i : Int) => calcDatasetRow( cache, i ) )
   }
-  private def hashimotoFull( fullSize : Long, dataset : Dataset, truncatedHeaderHash : SHA3_256, nonce : Unsigned64 ) : Hashimoto = {
+  private def hashimotoFull( fullSize : Long, dataset : Dataset, truncatedHeaderHash : Keccak256, nonce : Unsigned64 ) : Hashimoto = {
     hashimoto( truncatedHeaderHash, nonce, fullSize, (i : Int) => extractDatasetRow( dataset, i ) )
   }
-  private def hashimoto(truncatedHeaderHash : SHA3_256, nonce : Unsigned64 , fullSize : Long, datasetAccessor : Int => Row ) : Hashimoto = {
+  private def hashimoto(truncatedHeaderHash : Keccak256, nonce : Unsigned64 , fullSize : Long, datasetAccessor : Int => Row ) : Hashimoto = {
     hashimoto( ( truncatedHeaderHash.bytes ++ nonce.widen.unsignedBytes(8).reverse ).toArray, fullSize, datasetAccessor )
   }
 

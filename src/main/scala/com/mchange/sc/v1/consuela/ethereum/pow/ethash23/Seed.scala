@@ -39,14 +39,14 @@ import com.mchange.sc.v1.log.MLogger;
 import com.mchange.sc.v1.log.MLevel._;
 
 import com.mchange.sc.v1.consuela._;
-import com.mchange.sc.v1.consuela.hash.SHA3_256;
+import com.mchange.sc.v1.consuela.hash.Keccak256;
 
 object Seed {
   private implicit lazy val logger = MLogger( this );
 
-  case class Primer( epochNumber : Long, value : SHA3_256 );
+  case class Primer( epochNumber : Long, value : Keccak256 );
 
-  private val seedCache = new java.util.concurrent.ConcurrentSkipListMap[Long,SHA3_256];
+  private val seedCache = new java.util.concurrent.ConcurrentSkipListMap[Long,Keccak256];
 
   // we are doing some nonatomic stuff, but the worst a race will do is cause idempotent work to be duplicated
   def ensureCacheThruEpoch( thruEpochNumber : Long )( implicit  primer : Primer ) : Unit = {
@@ -67,7 +67,7 @@ object Seed {
     var lastKey  = lastPrecomputedKey;
     while ( lastKey < thruEpochNumber ) {
       var nextKey = lastKey + 1;
-      var nextHash = SHA3_256.hash( lastHash.bytes );
+      var nextHash = Keccak256.hash( lastHash.bytes );
       seedCache.put( nextKey, nextHash );
       lastHash = nextHash;
       lastKey = nextKey;

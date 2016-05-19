@@ -43,7 +43,7 @@ import com.mchange.sc.v1.consuela.ethereum._
 import com.mchange.sc.v1.consuela.ethereum.encoding._
 import com.mchange.sc.v1.consuela.ethereum.specification.Types.Unsigned64
 
-import com.mchange.sc.v1.consuela.hash.SHA3_256;
+import com.mchange.sc.v1.consuela.hash.Keccak256;
 
 /*
  * Values for these tests are taken from the Ethash23 specification (the tables in the appendix)
@@ -78,7 +78,7 @@ object Ethash23Properties extends Properties("ethash23") {
   val epochZeroCache = getCacheForEpoch( 0 );
 
   property("Expected Epoch Zero Cache Hash") = Prop{
-    Implementation.hashCache( epochZeroCache ) == SHA3_256.withBytes( "35ded12eecf2ce2e8da2e15c06d463aae9b84cb2530a00b932e4bbc484cde353".decodeHex );
+    Implementation.hashCache( epochZeroCache ) == Keccak256.withBytes( "35ded12eecf2ce2e8da2e15c06d463aae9b84cb2530a00b932e4bbc484cde353".decodeHex );
   }
 
   object Check1 {
@@ -92,7 +92,7 @@ object Ethash23Properties extends Properties("ethash23") {
   }
 
   property("Expected hash of (truncated) first example header (Check1)") = Prop( 
-    Check1.truncatedHeaderHash == SHA3_256.withBytes( "2a8de2adf89af77358250bf908bf04ba94a6e8c3ba87775564a41d269a05e4ce".decodeHex ) 
+    Check1.truncatedHeaderHash == Keccak256.withBytes( "2a8de2adf89af77358250bf908bf04ba94a6e8c3ba87775564a41d269a05e4ce".decodeHex ) 
   )
   property("Expected result for first example header (Check1)") = Prop( 
     Check1.hashimoto.result.widen == BigInt(1, "dd47fd2d98db51078356852d7c4014e6a5d6c387c35f40e2875b74a256ed7906".decodeHex)
@@ -112,7 +112,7 @@ object Ethash23Properties extends Properties("ethash23") {
   }
 
   property("Expected hash of (truncated) first example header (Check2)") = Prop( 
-    Check2.truncatedHeaderHash == SHA3_256.withBytes( "100cbec5e5ef82991290d0d93d758f19082e71f234cf479192a8b94df6da6bfe".decodeHex ) 
+    Check2.truncatedHeaderHash == Keccak256.withBytes( "100cbec5e5ef82991290d0d93d758f19082e71f234cf479192a8b94df6da6bfe".decodeHex ) 
   )
   property("Expected result for first example header (Check2)") = Prop( 
     Check2.hashimoto.result.widen == BigInt( 1, "ab9b13423cface72cbec8424221651bc2e384ef0f7a560e038fc68c8d8684829".decodeHex )

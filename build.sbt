@@ -38,14 +38,15 @@ publishTo <<= version {
 //       we are using the right version. Grr. For now we're staying at 1.51 to keep our tests working.
 
 libraryDependencies ++= Seq(
-  "com.mchange" %% "mlog-scala" % "0.3.7",
+  "com.mchange" %% "mlog-scala" % "0.3.8",
   "com.mchange" %% "restricted-type" % "0.0.2-SNAPSHOT" changing(),
   "com.mchange" %% "leftright" % "0.0.1",
-  "com.mchange" %% "mchange-commons-scala" % "0.4.1-SNAPSHOT" changing(),
+  "com.mchange" %% "mchange-commons-scala" % "0.4.1",
   "com.typesafe" % "config" % "1.2.1",
   "org.spire-math" %% "spire" % "0.9.1",
-  "org.bouncycastle" % "bcprov-jdk15on" % "1.51",
-  "com.madgag.spongycastle" % "prov" % "1.51.0.0" % "compile,optional", //only necessary on android
+  //"org.bouncycastle" % "bcprov-jdk15on" % "1.51",
+  "org.bouncycastle" % "bcprov-jdk15on" % "1.54",
+  "com.madgag.spongycastle" % "prov" % "1.54.0.0" % "compile,optional", //only necessary on android
   "com.mchange" %% "restricted-type-scalacheck-util" % "0.0.1" % "test",
   "org.specs2"  %% "specs2" % "2.4.6" % "test",
   "com.typesafe.play" %% "play-json" % "2.3.7" % "test",        // for loading ethereum-test suites defined as json
