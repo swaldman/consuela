@@ -30,13 +30,6 @@ publishTo <<= version {
 }
 
 
-// NOTE: Updating to bouncycastle 1.53 breaks ethereum compatability for now, because the padding of the Keccak algorithm
-//       was updated when it formally became SHA3, and so SHA3 hashing has changed.
-//
-//       We need to implement a new Keccak hash (AlgoName "KECCAK-256" I think, class name bouncycastle class name KeccakDigest)
-//       and let EthHash refer to that rather than SHA3_256! We'll have to be careful whenever we use SHA/KECCAK hashes to be sure
-//       we are using the right version. Grr. For now we're staying at 1.51 to keep our tests working.
-
 libraryDependencies ++= Seq(
   "com.mchange" %% "mlog-scala" % "0.3.8",
   "com.mchange" %% "restricted-type" % "0.0.2-SNAPSHOT" changing(),
@@ -44,7 +37,6 @@ libraryDependencies ++= Seq(
   "com.mchange" %% "mchange-commons-scala" % "0.4.1",
   "com.typesafe" % "config" % "1.2.1",
   "org.spire-math" %% "spire" % "0.9.1",
-  //"org.bouncycastle" % "bcprov-jdk15on" % "1.51",
   "org.bouncycastle" % "bcprov-jdk15on" % "1.54",
   "com.madgag.spongycastle" % "prov" % "1.54.0.0" % "compile,optional", //only necessary on android
   "com.mchange" %% "restricted-type-scalacheck-util" % "0.0.1" % "test",
