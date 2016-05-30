@@ -1,3 +1,5 @@
+/*
+
 package com.mchange.sc.v1.consuela.ethereum.jsonrpc20
 
 import scala.collection._
@@ -9,3 +11,4 @@ object Result {
 }
 sealed trait Result
 
+*/
