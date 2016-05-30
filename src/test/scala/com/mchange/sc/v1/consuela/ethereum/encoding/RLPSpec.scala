@@ -64,7 +64,6 @@ object RLPSpec {
       private[this] def parseIn( in : JsValue )( implicit charset : Charset ) : RLP.Element = {
         in match {
           case JsNull              => throw new AssertionError( s"Null input values not expected: ${JsNull}" );
-          case und   : JsUndefined => throw new AssertionError( s"Undefined input values not expected: ${und}" );
           case array : JsArray     => RLP.Element.Seq( List( array.value.map( parseIn ) : _*) );
           case bool  : JsBoolean   => throw new AssertionError( s"Boolean input values not expected: ${bool}" );
           case num   : JsNumber    => RLP.Element.UnsignedInt( num.value.toIntExact );
@@ -80,8 +79,8 @@ object RLPSpec {
       private[this] def parseOut( out : String ) : Seq[Byte] = ByteUtils.fromHexAscii( out ).toSeq;
       def apply( field : ( String, JsValue ) )( implicit charset : Charset ) : Item = apply( field._1, field._2 )( charset )
       def apply( name : String, jsv : JsValue )( implicit charset : Charset ) : Item = {
-        val in  = parseIn( jsv \ "in" );
-        val out = parseOut( (jsv \ "out").asInstanceOf[JsString].value );
+        val in  = parseIn( (jsv \ "in").get );                                // asserts that jsv \ "in" is defined
+        val out = parseOut( (jsv \ "out").get.asInstanceOf[JsString].value ); // asserts that jsv \ "out" is defined
         Item( name, in, out )
       }
     }

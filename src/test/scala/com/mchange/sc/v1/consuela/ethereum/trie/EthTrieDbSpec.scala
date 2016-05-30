@@ -133,8 +133,8 @@ object EthTrieDbSpec {
     private[this] def parseOut( out : String ) : Seq[Byte] = interpretHexString( out )
     def apply( field : ( String, JsValue ) ) : Item = apply( field._1, field._2 )
     def apply( name : String, jsv : JsValue ) : Item = {
-      val in  = parseIn( jsv \ "in" );
-      val rootHash = parseOut( (jsv \ "root").asInstanceOf[JsString].value );
+      val in  = parseIn( (jsv \ "in").get );                                          // asserts existence of jsv / "in"
+      val rootHash = parseOut( ( (jsv \ "root").get ).asInstanceOf[JsString].value ); // asserts existence of jsv / "root"
       Item( name, in, rootHash )
     }
   }

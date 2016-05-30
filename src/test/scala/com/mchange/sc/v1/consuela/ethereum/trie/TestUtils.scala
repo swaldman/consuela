@@ -40,7 +40,6 @@ import play.api.libs.json._;
 object TestUtils {
   val UnexpectedJsValue : PartialFunction[JsValue,Nothing] = {
     case JsNull              => throw new AssertionError( s"Null input value not expected: ${JsNull}" );
-    case und   : JsUndefined => throw new AssertionError( s"Undefined input value not expected: ${und}" );
     case array : JsArray     => throw new AssertionError( s"Array input value not expected: ${array}" );
     case bool  : JsBoolean   => throw new AssertionError( s"Boolean input value not expected: ${bool}" );
     case num   : JsNumber    => throw new AssertionError( s"Number input value not expected: ${num}" );

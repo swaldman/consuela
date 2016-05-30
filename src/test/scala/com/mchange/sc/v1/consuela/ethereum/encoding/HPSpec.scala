@@ -69,9 +69,9 @@ object HPSpec {
       }
     }
     def apply( name : String, info : JsObject ) : Item = {
-      val rawSeq : JsValue = info \ "seq";
-      val rawTerm : JsValue = info \ "term";
-      val rawOut : JsValue = info \ "out";
+      val rawSeq : JsValue = (info \ "seq").get;   // asserts existence
+      val rawTerm : JsValue = (info \ "term").get; // asserts existence
+      val rawOut : JsValue = (info \ "out").get;   // asserts existence
 
       def unrawSeq( value : JsValue ) : Seq[Int] = value.asInstanceOf[JsArray].value.map( _.asInstanceOf[JsNumber].value.toIntExact )
       def unrawTerm( value : JsValue ) : Boolean = value.asInstanceOf[JsBoolean].value
