@@ -2,10 +2,10 @@ package com.mchange.sc.v1.consuela.ethereum
 
 import scala.collection._
 
-import play.api.libs.json._
+// import play.api.libs.json._
 
 package object jsonrpc20 {
-  final case class Response( id : Int, result : JsObject );
+  //final case class Response( id : Int, result : JsObject );
 
   final case class CompilationInfo (
     source          : String,
@@ -39,9 +39,14 @@ package object jsonrpc20 {
 
   final object Doc {
     final object User {
+
       /*
       implicit final object Formatter extends Format[Doc.User] {
         def reads(json : JsValue): JsResult[Doc.User] = {
+          json match {
+            case jso : JsObject =>
+            case _ => JsError(  
+          }
         }
       }
       */ 
