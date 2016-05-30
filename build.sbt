@@ -38,10 +38,10 @@ libraryDependencies ++= Seq(
   "com.typesafe" % "config" % "1.2.1",
   "org.spire-math" %% "spire" % "0.9.1",
   "org.bouncycastle" % "bcprov-jdk15on" % "1.54",
+  "com.typesafe.play" %% "play-json" % "2.5.3",       
   "com.madgag.spongycastle" % "prov" % "1.54.0.0" % "compile,optional", //only necessary on android
   "com.mchange" %% "restricted-type-scalacheck-util" % "0.0.1" % "test",
   "org.specs2"  %% "specs2" % "2.4.6" % "test",
-  "com.typesafe.play" %% "play-json" % "2.3.7" % "test",        // for loading ethereum-test suites defined as json
   "ch.qos.logback" % "logback-classic" % "1.1.2" % "test"
 )
 
