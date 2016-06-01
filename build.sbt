@@ -39,6 +39,7 @@ libraryDependencies ++= Seq(
   "org.spire-math" %% "spire" % "0.9.1",
   "org.bouncycastle" % "bcprov-jdk15on" % "1.54",
   "com.typesafe.play" %% "play-json" % "2.5.3",
+  "com.typesafe.play" %% "play-ws" % "2.5.3",
   "com.madgag.spongycastle" % "prov" % "1.54.0.0" % "compile,optional", //only necessary on android
   "com.mchange" %% "restricted-type-scalacheck-util" % "0.0.1" % "test",
   "org.specs2"  %% "specs2" % "2.4.6" % "test",

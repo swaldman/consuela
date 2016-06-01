@@ -3,10 +3,10 @@ package com.mchange.sc.v1.consuela.ethereum
 import scala.collection._
 
 import play.api.libs.json._
-import play.api.data.validation.ValidationError
 
 package object jsonrpc20 {
-  final case class Response( id : Int, result : JsObject );
+
+  final case class Response( id : Int, result : JsValue );
 
   final object Compilation {
     final case class Info (
@@ -22,9 +22,9 @@ package object jsonrpc20 {
 
     final case class Contract( code : String, info : Info )
 
-    def apply( jso : JsObject ) : Option[Compilation] = Json.fromJson[immutable.Map[String,Compilation.Contract]]( jso ).asOpt.map( this.apply )
+    //def apply( jso : JsObject ) : Option[Compilation] = Json.fromJson[immutable.Map[String,Compilation.Contract]]( jso ).asOpt.map( this.apply )
   }
-  final case class Compilation( contracts : immutable.Map[String,Compilation.Contract] )
+  //final case class Compilation( contracts : immutable.Map[String,Compilation.Contract] )
 
   final object Abi {
     final case class Definition( functions : immutable.Seq[Function], events : immutable.Seq[Event] )
@@ -94,6 +94,7 @@ package object jsonrpc20 {
   implicit val CompilationInfoFormat = Json.format[Compilation.Info]
   implicit val CompilationContractFormat = Json.format[Compilation.Contract]
 
+
   implicit val MapStringCompilationContractFormat = new Format[immutable.Map[String,Compilation.Contract]] {
     def reads( jsv : JsValue ) : JsResult[immutable.Map[String,Compilation.Contract]] = {
       jsv match {
@@ -109,5 +110,4 @@ package object jsonrpc20 {
       JsObject( definition.map{ case ( k , v ) => ( k , Json.toJson(v) ) } ) 
     }
   }
-
 }
