@@ -1,4 +1,4 @@
-package com.mchange.sc.v1.consuela.ethereum.jsonrpc20.play_ws
+package com.mchange.sc.v1.consuela.ethereum.jsonrpc20.playws
 
 import scala.concurrent.{ExecutionContext,Future}
 
