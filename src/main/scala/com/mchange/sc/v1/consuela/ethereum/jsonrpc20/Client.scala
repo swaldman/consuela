@@ -11,7 +11,7 @@ object Client {
   class withExchanger( exchanger : Exchanger ) {
     val Eth = new Client.Eth {
       def compileSolidity( solidityText : String )( implicit ec : ExecutionContext ) : Future[Result.Eth.compileSolidity] = {
-        exchanger.exchange( JsString( solidityText ) ).map( Result.Eth.compileSolidity.apply )
+        exchanger.exchange( "eth_compileSolidity", JsString( solidityText ) ).map( Result.Eth.compileSolidity.apply )
       }
     }
   }
