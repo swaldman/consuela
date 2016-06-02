@@ -8,7 +8,9 @@ name := "consuela"
 
 version := "0.0.2-SNAPSHOT"
 
-scalaVersion := "2.11.4"
+scalaVersion := "2.11.8"
+
+crossScalaVersions := Seq("2.10.6", "2.11.8")
 
 scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked" /*, "-Xlog-implicits" */)
 
@@ -29,19 +31,20 @@ publishTo <<= version {
   }
 }
 
+val restrictedTypeVersion = "0.0.2-SNAPSHOT"
+
 
 libraryDependencies ++= Seq(
   "com.mchange" %% "mlog-scala" % "0.3.8",
-  "com.mchange" %% "restricted-type" % "0.0.2-SNAPSHOT" changing(),
+  "com.mchange" %% "restricted-type" %  restrictedTypeVersion changing(),
   "com.mchange" %% "leftright" % "0.0.1",
   "com.mchange" %% "mchange-commons-scala" % "0.4.1",
   "com.typesafe" % "config" % "1.2.1",
   "org.spire-math" %% "spire" % "0.9.1",
   "org.bouncycastle" % "bcprov-jdk15on" % "1.54",
-  "com.typesafe.play" %% "play-json" % "2.5.3",
-  "com.typesafe.play" %% "play-ws" % "2.5.3", // brings in whole play/akka ecosystem. consider segregating into subproject
+  "com.typesafe.play" %% "play-json" % "2.4.6",
   "com.madgag.spongycastle" % "prov" % "1.54.0.0" % "compile,optional", //only necessary on android
-  "com.mchange" %% "restricted-type-scalacheck-util" % "0.0.1" % "test",
+  "com.mchange" %% "restricted-type-scalacheck-util" % restrictedTypeVersion % "test",
   "org.specs2"  %% "specs2" % "2.4.6" % "test",
   "ch.qos.logback" % "logback-classic" % "1.1.2" % "test"
 )
