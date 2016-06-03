@@ -29,7 +29,12 @@ object Exchanger {
       htconn.setRequestProperty( "Content-Length", paramsBytes.length.toString );
 
       borrow( htconn.getOutputStream() )( _.write(paramsBytes) )
-      borrow( htconn.getInputStream() )( Json.parse ).as[Response].ensuring( _.id == id )
+      borrow( htconn.getInputStream() )( Json.parse ).as[Response].ensuring { response =>
+        response match {
+          case Right( success ) => success.id == id
+          case Left( error )    => false
+        }
+      }
     }
     def close() : Unit = ()
   }

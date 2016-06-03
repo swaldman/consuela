@@ -4,9 +4,12 @@ import scala.collection._
 
 import play.api.libs.json._
 
-package object jsonrpc20 {
+import com.mchange.sc.v2.failable._
+import com.mchange.leftright._
 
-  final case class Response( id : Int, result : JsValue );
+package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Response.Error.Empty ) {
+
+  type Response = Either[Response.Error,Response.Success]
 
   final object Compilation {
     final case class Info (
@@ -58,7 +61,25 @@ package object jsonrpc20 {
     final case class Developer( title : Option[String], methods : Option[immutable.Map[String, Developer.MethodInfo]] )
   }
 
-  implicit val ResposeFormat     = Json.format[Response]
+  implicit val SuccessResponseFormat = Json.format[Response.Success]
+
+  implicit val ErrorReportFormat   = Json.format[Response.Error.Report]
+  implicit val ErrorResponseFormat = Json.format[Response.Error]
+
+  implicit val ResponseFormat : Format[Response] = new Format[Response] {
+    def reads( jsv : JsValue ) : JsResult[Response] = {
+      jsv match {
+        case jso : JsObject if jso.keys("result") => SuccessResponseFormat.reads( jso ).map( Right(_) )
+        case jso : JsObject if jso.keys("error")  => ErrorResponseFormat.reads( jso ).map( Left(_) )
+        case jso : JsObject                       => JsError( s"Response is expected to contain either a 'result' or 'error' field" )
+        case _                                    => JsError( s"Response is expected as a JsObject, found ${jsv}" )
+      }
+    }
+    def writes( response : Response ) : JsValue = response match {
+      case Left( errorResponse ) => ErrorResponseFormat.writes( errorResponse )
+      case Right( goodResponse ) => SuccessResponseFormat.writes( goodResponse )
+    }
+  }
 
   implicit val AbiFunctionParameterFormat = Json.format[Abi.Function.Parameter]
   implicit val AbiFunctionFormat          = Json.format[Abi.Function]
@@ -94,7 +115,6 @@ package object jsonrpc20 {
   implicit val CompilationInfoFormat = Json.format[Compilation.Info]
   implicit val CompilationContractFormat = Json.format[Compilation.Contract]
 
-
   implicit val MapStringCompilationContractFormat = new Format[immutable.Map[String,Compilation.Contract]] {
     def reads( jsv : JsValue ) : JsResult[immutable.Map[String,Compilation.Contract]] = {
       jsv match {
@@ -110,4 +130,10 @@ package object jsonrpc20 {
       JsObject( definition.map{ case ( k , v ) => ( k , Json.toJson(v) ) } ) 
     }
   }
+
+  implicit final object ErrorResponseAsFailSource extends FailSource[Response.Error] {
+    def getMessage( source : Response.Error ) : String = source.error.message;
+  }
+  def toFailable( response : Response ) : Failable[Response.Success] = response.xmap( ErrorResponseAsFailSource.getFail( _ ) )
+
 }

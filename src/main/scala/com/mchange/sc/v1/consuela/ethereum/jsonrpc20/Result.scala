@@ -7,7 +7,7 @@ import play.api.libs.json._
 object Result {
   trait Factory[T <: Result] {
     def apply( result : JsValue ) : T;
-    def apply( response : Response ) : T = apply( response.result ) 
+    def apply( response : Response.Success ) : T = apply( response.result ) 
   }
   final object Eth {
     object compileSolidity extends Result.Factory[Result.Eth.compileSolidity]{
