@@ -12,11 +12,11 @@ import com.mchange.sc.v2.lang.borrow
 
 object Exchanger {
   class Simple( httpUrl : URL ) extends Exchanger {
-    def exchange( methodName : String, paramsValue : JsValue )( implicit ec : ExecutionContext ) : Future[Response] = Future {
+    def exchange( methodName : String, paramsArray : JsArray )( implicit ec : ExecutionContext ) : Future[Response] = Future {
 
       val id = scala.util.Random.nextInt()
 
-      val paramsJsObj = JsObject( Seq( "jsonrpc" -> JsString("2.0"), "method" -> JsString(methodName), "params" ->  paramsValue, "id" -> JsNumber(id) ) )
+      val paramsJsObj = JsObject( Seq( "jsonrpc" -> JsString("2.0"), "method" -> JsString(methodName), "params" ->  paramsArray, "id" -> JsNumber(id) ) )
       val paramsBytes = Json.asciiStringify( paramsJsObj ).getBytes( UTF_8 )
 
       val htconn = httpUrl.openConnection().asInstanceOf[HttpURLConnection]
@@ -32,7 +32,7 @@ object Exchanger {
       borrow( htconn.getInputStream() )( Json.parse ).as[Response].ensuring { response =>
         response match {
           case Right( success ) => success.id == id
-          case Left( error )    => false
+          case Left( error )    => true
         }
       }
     }
@@ -40,6 +40,6 @@ object Exchanger {
   }
 }
 trait Exchanger extends AutoCloseable {
-  def exchange( methodName : String, paramsValue : JsValue )( implicit ec : ExecutionContext ) : Future[Response]
+  def exchange( methodName : String, paramsArray : JsArray )( implicit ec : ExecutionContext ) : Future[Response]
   def close() : Unit
 }
