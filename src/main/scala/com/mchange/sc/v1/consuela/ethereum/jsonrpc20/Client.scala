@@ -26,7 +26,10 @@ object Client {
       }
     }
   }
-  class Simple( httpUrl : URL ) extends Client.withExchanger( new Exchanger.Simple( httpUrl ) )
+  final object Simple {
+    def apply( httpUrl : URL ) = new Client.Simple( httpUrl )
+  }
+  final class Simple( httpUrl : URL ) extends Client.withExchanger( new Exchanger.Simple( httpUrl ) )
 }
 trait Client {
   def Eth : Client.Eth;
