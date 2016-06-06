@@ -4,10 +4,13 @@ import scala.collection._
 
 import play.api.libs.json._
 
-import com.mchange.sc.v2.failable._
 import com.mchange.leftright._
 
 package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Response.Error.Empty ) {
+
+  final class Failure( val code : Int, val message : String ) extends Exception( s"${message} [code=${code}]" ) {
+    def this( errorResponse : Response.Error ) = this( errorResponse.error.code, errorResponse.error.message ) 
+  }
 
   type Response = Either[Response.Error,Response.Success]
 
@@ -30,12 +33,17 @@ package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Re
   //final case class Compilation( contracts : immutable.Map[String,Compilation.Contract] )
 
   final object Abi {
-    final case class Definition( functions : immutable.Seq[Function], events : immutable.Seq[Event] )
+    final case class Definition( functions : immutable.Seq[Function], events : immutable.Seq[Event], constructors : immutable.Seq[Constructor] )
 
     object Function {
       case class Parameter( name : String, `type` : String ) extends Abi.Parameter
     }
     final case class Function( name : String, inputs : immutable.Seq[Function.Parameter], outputs : immutable.Seq[Function.Parameter], constant : Boolean )
+
+    object Constructor {
+      case class Parameter( name : String, `type` : String ) extends Abi.Parameter
+    }
+    final case class Constructor( inputs : immutable.Seq[Function.Parameter] )
 
     object Event {
       final case class Parameter( name : String, `type` : String, indexed : Boolean ) extends Abi.Parameter
@@ -81,34 +89,47 @@ package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Re
     }
   }
 
-  implicit val AbiFunctionParameterFormat = Json.format[Abi.Function.Parameter]
-  implicit val AbiFunctionFormat          = Json.format[Abi.Function]
-  implicit val AbiEventParameterFormat    = Json.format[Abi.Event.Parameter]
-  implicit val AbiEventFormat             = Json.format[Abi.Event]
-  implicit val UserMethodInfoFormat       = Json.format[Doc.User.MethodInfo]
-  implicit val DeveloperMethodInfoFormat  = Json.format[Doc.Developer.MethodInfo]
-  implicit val UserDocFormat              = Json.format[Doc.User]
-  implicit val DeveloperDocFormat         = Json.format[Doc.Developer]
+  implicit val AbiFunctionParameterFormat    = Json.format[Abi.Function.Parameter]
+  implicit val AbiFunctionFormat             = Json.format[Abi.Function]
+  implicit val AbiEventParameterFormat       = Json.format[Abi.Event.Parameter]
+  implicit val AbiEventFormat                = Json.format[Abi.Event]
+  implicit val AbiConstructorParameterFormat = Json.format[Abi.Constructor.Parameter]
+  implicit val AbiConstructorFormat          = Json.format[Abi.Constructor]
+  implicit val UserMethodInfoFormat          = Json.format[Doc.User.MethodInfo]
+  implicit val DeveloperMethodInfoFormat     = Json.format[Doc.Developer.MethodInfo]
+  implicit val UserDocFormat                 = Json.format[Doc.User]
+  implicit val DeveloperDocFormat            = Json.format[Doc.Developer]
 
   // these we'll have to do ourselves
   implicit val AbiDefinitionFormat : Format[Abi.Definition] = new Format[Abi.Definition] {
     def reads( jsv : JsValue ) : JsResult[Abi.Definition] = {
       jsv match {
         case jsa : JsArray => {
-          try {
-            val ( functions, events ) = jsa.value.partition( jsv => ((jsv \ "type").get.as[String] == "function") ) // asserts existence of "type", or NoSuchElementException
-            JsSuccess( Abi.Definition( functions.map( _.as[Abi.Function] ).toVector, events.map( _.as[Abi.Event] ).toVector ) )
-          } catch {
-            case nse : NoSuchElementException => JsError( s"Failed to find a binding with key 'type' in some element of ${jsa}." )
+          val ( functions, events, constructors ) = {
+            def accumulate( tuple : Tuple3[List[JsValue],List[JsValue],List[JsValue]], jsv : JsValue ) : Tuple3[List[JsValue],List[JsValue],List[JsValue]] = { // ( functions, events, constructors )
+              try {
+                // MatchError for now if there is a specified, but unknown, type
+                (jsv \ "type").get.as[String] match {
+                  case "function"    => ( jsv :: tuple._1, tuple._2, tuple._3 )
+                  case "event"       => ( tuple._1, jsv :: tuple._2, tuple._3 )
+                  case "constructor" => ( tuple._1, tuple._2, jsv :: tuple._3 )
+                }
+              } catch {
+                case nse : NoSuchElementException => ( jsv :: tuple._1, tuple._2, tuple._3 ) // spec says default is function
+              }
+            }
+            jsa.value.foldLeft( ( Nil, Nil, Nil ) : Tuple3[List[JsValue],List[JsValue],List[JsValue]] )( accumulate )
           }
+          JsSuccess( Abi.Definition( functions.reverse.map( _.as[Abi.Function] ), events.reverse.map( _.as[Abi.Event] ), constructors.reverse.map( _.as[Abi.Constructor] ) ) )
         }
         case _ => JsError( s"abiDefinition is expected as a JsArray, found ${jsv}" )
       }
     }
     def writes( definition : Abi.Definition ) : JsValue = {
-      def makeFunction( abif : Abi.Function ) = Json.toJson(abif).asInstanceOf[JsObject] + ( "type", JsString("function") )
-      def makeEvent( abie : Abi.Event )       = Json.toJson(abie).asInstanceOf[JsObject] + ( "type", JsString("event") )
-      JsArray( immutable.Seq.empty[JsValue] ++ definition.functions.map( makeFunction ) ++ definition.events.map( makeEvent ) )
+      def makeFunction( abif : Abi.Function )       = Json.toJson(abif).asInstanceOf[JsObject] + ( "type", JsString("function") )
+      def makeEvent( abie : Abi.Event )             = Json.toJson(abie).asInstanceOf[JsObject] + ( "type", JsString("event") )
+      def makeConstructor( abic : Abi.Constructor ) = Json.toJson(abic).asInstanceOf[JsObject] + ( "type", JsString("constructor") )
+      JsArray( immutable.Seq.empty[JsValue] ++ definition.functions.map( makeFunction ) ++ definition.events.map( makeEvent ) ++ definition.constructors.map( makeConstructor ) )
     }
   }
 
@@ -130,10 +151,4 @@ package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Re
       JsObject( definition.map{ case ( k , v ) => ( k , Json.toJson(v) ) } ) 
     }
   }
-
-  implicit final object ErrorResponseAsFailSource extends FailSource[Response.Error] {
-    def getMessage( source : Response.Error ) : String = source.error.message;
-  }
-  def toFailable( response : Response ) : Failable[Response.Success] = response.xmap( ErrorResponseAsFailSource.getFail( _ ) )
-
 }

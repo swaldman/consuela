@@ -12,7 +12,7 @@ import com.mchange.sc.v2.lang.borrow
 
 object Exchanger {
   class Simple( httpUrl : URL ) extends Exchanger {
-    def exchange( methodName : String, paramsArray : JsArray )( implicit ec : ExecutionContext ) : Future[Response] = Future {
+    def exchange( methodName : String, paramsArray : JsArray )( implicit ec : ExecutionContext ) : Future[Response.Success] = Future {
 
       val id = scala.util.Random.nextInt()
 
@@ -29,17 +29,15 @@ object Exchanger {
       htconn.setRequestProperty( "Content-Length", paramsBytes.length.toString );
 
       borrow( htconn.getOutputStream() )( _.write(paramsBytes) )
-      borrow( htconn.getInputStream() )( Json.parse ).as[Response].ensuring { response =>
-        response match {
-          case Right( success ) => success.id == id
-          case Left( error )    => true
-        }
+      borrow( htconn.getInputStream() )( Json.parse ).as[Response] match { 
+        case Right( success ) => success.ensuring( _.id == id )
+        case Left( error )    => throw new Failure( error )
       }
     }
     def close() : Unit = ()
   }
 }
 trait Exchanger extends AutoCloseable {
-  def exchange( methodName : String, paramsArray : JsArray )( implicit ec : ExecutionContext ) : Future[Response]
+  def exchange( methodName : String, paramsArray : JsArray )( implicit ec : ExecutionContext ) : Future[Response.Success]
   def close() : Unit
 }
