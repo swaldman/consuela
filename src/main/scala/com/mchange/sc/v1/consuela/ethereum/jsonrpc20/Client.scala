@@ -22,7 +22,7 @@ object Client {
 
     val Eth = new Client.Eth {
       def compileSolidity( solidityText : String )( implicit ec : ExecutionContext ) : Future[Failable[Result.Eth.compileSolidity]] = {
-        doExchange( "eth_compileSolidity", Seq(JsString( solidityText )), Result.Eth.compileSolidity.apply )
+        doExchange( "eth_compileSolidity", Seq(JsString( solidityText )), success => success.result.as[Result.Eth.compileSolidity] )
       }
     }
   }
