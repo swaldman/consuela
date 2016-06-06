@@ -31,7 +31,7 @@ object Client {
   }
   final class Simple( httpUrl : URL ) extends Client.withExchanger( new Exchanger.Simple( httpUrl ) )
 }
-trait Client {
+trait Client extends AutoCloseable {
   def Eth : Client.Eth;
 
   def close()
