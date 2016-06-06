@@ -13,7 +13,7 @@ object Client {
   trait Eth {
     def compileSolidity( solidityText : String )( implicit ec : ExecutionContext ) : Future[Failable[Result.Eth.compileSolidity]]
   }
-  class withExchanger( exchanger : Exchanger ) {
+  class withExchanger( exchanger : Exchanger ) extends Client {
     private def doExchange[T <: Result]( methodName : String, params : Seq[JsValue], resultBuilder : Response.Success => T )( implicit ec : ExecutionContext ) : Future[Failable[T]] = {
       exchanger.exchange( methodName, JsArray( params ) )
         .map( response => toFailable( response ).map( resultBuilder ) )
@@ -25,6 +25,8 @@ object Client {
         doExchange( "eth_compileSolidity", Seq(JsString( solidityText )), success => success.result.as[Result.Eth.compileSolidity] )
       }
     }
+
+    def close() = exchanger.close()
   }
   final object Simple {
     def apply( httpUrl : URL ) = new Client.Simple( httpUrl )
