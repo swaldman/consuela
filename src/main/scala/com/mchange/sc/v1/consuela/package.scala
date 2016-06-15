@@ -37,7 +37,7 @@ package com.mchange.sc.v1;
 
 import com.mchange.lang.{ByteUtils,IntegerUtils,LongUtils};
 
-import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq;
+import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq
 import scala.language.implicitConversions;
 
 import scala.collection.immutable;
@@ -87,6 +87,7 @@ package object consuela {
     def toImmutableSeq : immutable.Seq[Byte] = ImmutableArraySeq.Byte( _bytes )
     def ^( other : Array[Byte] ) : Array[Byte] = xor( other )
   }
+
   implicit final class RichBigInt( val bi : BigInt ) extends AnyVal {
     /**
      * Ignores sign and converts the byte representation

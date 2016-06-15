@@ -7,19 +7,205 @@ import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact20,B
 
 import play.api.libs.json._
 
+import java.security.SecureRandom
+import java.util.UUID
 import javax.crypto.{Cipher, SecretKey, SecretKeyFactory}
 import javax.crypto.spec.{IvParameterSpec, PBEKeySpec, SecretKeySpec}
 
 import scala.io.Codec
 
+/*
+     Some stuff:
+
+     I haven't seen any kind of spec for the V3 wallet, so here are a few scrounged-from-github or
+     reverse engineered notes. 
+
+     See especially https://github.com/ethereumjs/ethereumjs-wallet#remarks-about-tov3
+
+     First, a sample wallet...
+
+       {
+         "address" : "4aa20155e73604737c6701235cd8f6a3d36287d7",
+         "crypto" : {
+           "cipher" :"aes-128-ctr",
+           "ciphertext" : "412839ad15ed865a3d206cdc0a804f575b70c56106e859c393a2c80aa7d4d114",
+           "cipherparams" : {
+             "iv" : "6b66e9c45cbd4ce7b44cc56899a7863c"
+           },
+           "kdf" : "scrypt",
+           "kdfparams" : {
+             "dklen" : 32,
+             "n" : 262144,
+             "p" : 1,
+             "r" : 8,
+             "salt" : "0984e3493604f9749c78ff86f6c436c52cab0807157394d0a0b6b2bcf30a01ef"
+           },
+           "mac" : "3d5af77596f683426332f0270f7b80a323aae79f4aaa55d4ff59c3452694dafd"
+         },
+         "id" : "3abe4274-d44b-4231-b176-24a97830dc82",
+         "version" : 3
+       }
+
+     The only supported cipher is "aes-128-ctr".
+
+     A V3 wallet is basically an EthPrivateKey encrypted using 128 AES CTR ("AES/CTR/NoPadding" in JCE-speak).
+
+     The key is always, therefore 16 bytes. 
+
+     However the key is not used directly, but derived from a passphrase
+     via a key derivation function, with "scrypt" or "pbkdf2"
+
+     A 16-byte initialization vector is also used to initialize the main AES cipher.
+
+     The two supported KDF functions (scrypt and pbkdf2) share the following parameters in common:
+
+         "salt"  - 32 bytes of hex-encoded randomness
+         "dklen" - a natural number, the length of the key that should be generated (default is 32)
+
+     dklen is VERY CONFUSING. After all, we know that we are trying to generate 16 byte keys.
+     You MUST choose a dklen of at least 32, however. 
+
+      - Bytes [0,16)  become the key.
+
+      - Bytes [16,32) are prepended to the ciphertext, the result of 
+        which is hashed using MAC Ethereum's usuall Keccak256 hash  
+        (aliased to EthHash in this library) to yield the MAC.
+
+     As far as I can tell, any key bytes beyond the initial 32 are simply ignored.
+
+     In addition to "salt" and "dklen", the two KDFs also accept the KDF-specific params. 
+
+     I'm taking these directly from https://github.com/ethereumjs/ethereumjs-wallet#remarks-about-tov3
+
+      - "scrypt"
+          "n" - Iteration count. Defaults to 262144.
+          "r" - Block size for the underlying hash. Defaults to 8.
+          "p" - Parallelization factor. Defaults to 1.
+
+      - "pbkdf2"
+          "c"   - Number of iterations. Defaults to 262144.
+          "prf" - The only supported (and default) value is "hmac-sha256".
+
+     Now that we have the basics, let's go throigh the wallet format. It is a JSON object
+     with:
+
+       "address" - A hex-encoded 20-byte String, public EthAddress associated with this wallet
+
+       "crypto"  - A JSON object containing all the cryptographic stuff, including fields:
+            "cipher"       - Must be "aes-128-ctr"
+            "ciphertext"   - A hex-encoded String, the aes-128-ctr-encoded EthPrivateKey
+            "cipherparams" - A JSON object containing precidely one field in the current version
+                "iv" - A hex-encoded String, the 16-byte initialization vector
+            "kdf"          - one of "scrypt" or "pbkdf2"
+            "kdfparams"    - A JSON object containing "dklen", "salt", and kdf-specific params, as described above
+            "mac"          - A hex-encoded String, 32 bytes. The MAC can be verified by computing the key with 
+                             the KDF, prepending bytes [16,32) of the derived key to the ciphertext, and then 
+                             hashing with EthHash (Keccak256)
+            
+       "id"      - A randomly-generated RFC 4122 Variant 4 UUID identifier of the wallet.
+                   See e.g. https://docs.oracle.com/javase/7/docs/api/java/util/UUID.html#randomUUID()
+
+       "version" - The number 3 is the only supported value
+
+ */ 
+
 object V3 {
   class WalletException( msg : String ) extends Exception( msg )
 
-  // taking a lot of this from https://github.com/ethereumjs/ethereumjs-wallet#remarks-about-tov3
-
   private val Pbkdf2AlgoName = "PBKDF2WithHmacSHA256"
 
-  private val MainKeyCryptAlgoName = "AES"
+  private val MainCryptAlgoWalletName = "aes-128-ctr"
+  private val MainCryptAlgoName       = "AES"
+  private val MainCryptAlgoNameFull   = "AES/CTR/NoPadding"
+
+  val Version = 3
+
+  def generateScryptWallet( passphrase : String, n : Int = 262144, r : Int = 8, p : Int = 1, dklen : Int = 32, privateKey : Option[EthPrivateKey] = None, random : SecureRandom = new SecureRandom )( implicit provider : jce.Provider ) : JsObject = {
+    fillInWalletJson( passphrase, scryptKdfAndParams( n, r, p, dklen, random ), privateKey, random )( provider )
+  }
+
+  def generatePbkdf2Wallet( passphrase : String, c : Int = 262144, dklen : Int = 32, privateKey : Option[EthPrivateKey] = None, random : SecureRandom = new SecureRandom )( implicit provider : jce.Provider ) : JsObject = {
+    fillInWalletJson( passphrase, pbkdf2KdfAndParams( c, dklen, random ), privateKey, random )( provider )
+  }
+
+  // yields { "salt" : ???, "dklen" : ??? }
+  private def saltDklenKdfParams( dklen : Int, random : SecureRandom ) : JsObject = {
+    val saltBytes = {
+      val tmp = Array.ofDim[Byte]( 32 )
+      random.nextBytes( tmp )
+      tmp
+    }
+
+    JsObject( Seq( "salt" -> JsString( saltBytes.hex ), "dklen" -> JsNumber( dklen ) ) )
+  }
+
+  // yields { "crypto" : { "kdf" : "scrypt", "kdfparams" : { "n" : ???, "r" : ???, "p" : ???, "salt" : ???, "dklen" : ??? } } }
+  private def scryptKdfAndParams( n : Int, r : Int, p : Int, dklen : Int, random : SecureRandom ) = {
+    val kdfParams = {
+      saltDklenKdfParams( dklen, random ) +
+        ("n" -> JsNumber(n)) +
+        ("r" -> JsNumber(r)) +
+        ("p" -> JsNumber(p))
+    }
+    JsObject( Seq( "crypto" -> JsObject( Seq( "kdf" -> JsString("scrypt"), "kdfparams" -> kdfParams ) ) ) )
+  }
+
+
+  // yields { "crypto" : { "kdf" : "pbkdf2", "kdfparams" : { "c" : ???, "prf" : "hmac-sha256", "salt" : ???, "dklen" : ??? } } }
+  private def pbkdf2KdfAndParams( c : Int, dklen : Int, random : SecureRandom ) = {
+    val kdfParams : JsObject = {
+      saltDklenKdfParams( dklen, random ) +
+        ("c" -> JsNumber(c)) +
+        ("prf" -> JsString("hmac-sha256"))
+    }
+    JsObject( Seq( "crypto" -> JsObject( Seq( "kdf" -> JsString("pbkdf2"), "kdfparams" -> kdfParams ) ) ) )
+  }
+
+  private def fillInWalletJson( passphrase : String, kdfAndKdfParamsOnly : JsObject, privateKey : Option[EthPrivateKey], random : SecureRandom )( implicit provider : jce.Provider ) : JsObject = {
+
+    val pkey = privateKey.getOrElse( EthPrivateKey( random ) )
+
+    val address = pkey.toPublicKey.toAddress
+
+    val iv = {
+      val tmp = Array.ofDim[Byte]( 16 )
+      random.nextBytes( tmp )
+      tmp
+    }
+
+    val keyMac = findKeyMac( kdfAndKdfParamsOnly, passphrase )( provider )
+
+    val ciphertextBytes = encodePrivateKey( pkey, iv, keyMac )( provider )
+
+    val macBytes = keyMac.mac( ciphertextBytes )
+
+    val uuid = UUID.randomUUID()
+
+    val crypto = {
+      (kdfAndKdfParamsOnly \ "crypto").as[JsObject] +
+        ( "cipher", JsString( MainCryptAlgoWalletName ) ) +
+        ( "ciphertext", JsString( ciphertextBytes.hex ) ) +
+        ( "cipherparams", JsObject( Seq( "iv" -> JsString( iv.hex ) ) ) ) +
+        ( "mac", JsString( macBytes.hex ) )
+    }
+
+    JsObject(
+      Seq(
+        ( "address", JsString( address.bytes.widen.hex ) ),
+        ( "crypto", crypto ),
+        ( "id", JsString( uuid.toString ) ),
+        ( "version", JsNumber( Version ) )
+      )
+    )
+  }
+
+  private def encodePrivateKey( privateKey : EthPrivateKey, iv : Array[Byte], keyMac : KeyMac )( implicit provider : jce.Provider ) : Array[Byte] = {
+    val plaintext = privateKey.bytes.widen.toArray
+
+    val cipher = Cipher.getInstance( MainCryptAlgoNameFull, provider.name )
+    cipher.init( Cipher.ENCRYPT_MODE, keyMac.key, new IvParameterSpec( iv ) )
+    cipher.doFinal( plaintext )
+  }
 
   def decodePrivateKey( jsv : JsValue, passphrase : String )( implicit provider : jce.Provider ) : EthPrivateKey = {
 
@@ -36,7 +222,7 @@ object V3 {
     val _mac = mac( jsv )
 
     if ( _keyMac.mac( _ciphertext ) != _mac )
-      throw new V3.WalletException( s"Message authetication code mismatch: KDF-derived MAC: ${_keyMac.mac( _ciphertext )}, expected MAC: ${_mac}" )
+      throw new V3.WalletException( s"Message authetication code mismatch: KDF-derived MAC: ${_keyMac.mac( _ciphertext ).hex}, expected MAC: ${_mac.hex}" )
 
     val out = decodePrivateKey( _cipher, _keyMac.key, _ivParameterSpec, _ciphertext )
 
@@ -115,7 +301,7 @@ object V3 {
   }
 
   private final class KeyMac( rawKey : Array[Byte] ) {
-    val key = new SecretKeySpec( rawKey.slice(0,16), MainKeyCryptAlgoName )
+    val key = new SecretKeySpec( rawKey.slice(0,16), MainCryptAlgoName )
     def mac( ciphertext : Array[Byte] ) = EthHash.hash(rawKey.slice(16,32) ++ ciphertext).bytes
   }
 
@@ -126,8 +312,8 @@ object V3 {
   private def ciphertext( jsv : JsValue ) : Array[Byte] = assertByteArray( jsv \ "crypto" \ "ciphertext" )
 
   private def cipher( jsv : JsValue)( implicit provider : jce.Provider ) : Cipher = ( jsv \ "crypto" \ "cipher" ).as[String] match {
-    case "aes-128-ctr" => Cipher.getInstance( "AES/CTR/NoPadding", provider.name )
-    case other         => throw new WalletException( s"Unexpected cipher: ${other}" )
+    case MainCryptAlgoWalletName => Cipher.getInstance( MainCryptAlgoNameFull, provider.name )
+    case other                   => throw new WalletException( s"Unexpected cipher: ${other}" )
   }
 
   private def kdf( jsv : JsValue ) : String = ( jsv \ "crypto" \ "kdf" ).as[String]
