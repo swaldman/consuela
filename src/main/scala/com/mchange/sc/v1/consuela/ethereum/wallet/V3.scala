@@ -118,7 +118,60 @@ object V3 {
   private val MainCryptAlgoName       = "AES"
   private val MainCryptAlgoNameFull   = "AES/CTR/NoPadding"
 
-  val Version = 3
+  private val Version = 3
+
+  // TODO: Refactor this stuff out, into a geth-specific thing
+  private final object GethKeyStore {
+    val TimestampPattern = "yyyy-MM-dd'T'HH-mm-ss.SSS"
+    val TimeZone         = java.util.TimeZone.getTimeZone("UTC")
+
+    val DirName = "keystore"
+
+    def extraDigits( n : Int ) : String = (0 to n).map( _ => scala.util.Random.nextInt(10) ).mkString("")
+
+    def generateFileName( jsv : JsValue ) : String = {
+      def filename( timestamp : String, addressHexNoPrefix : String ) : String = s"UTC--${timestamp}${extraDigits(5)}Z--${addressHexNoPrefix}"
+
+      val df = new java.text.SimpleDateFormat(GethKeyStore.TimestampPattern)
+      df.setTimeZone(GethKeyStore.TimeZone)
+      val addressHexNoPrefix = address( jsv )
+      filename( df.format( new java.util.Date() ), addressHexNoPrefix.bytes.widen.hex )
+    }
+
+    lazy val directory : Option[java.io.File] = {
+      val osName = Option( System.getProperty("os.name") ).map( _.toLowerCase )
+      osName.flatMap { osn =>
+        if ( osn.indexOf( "win" ) >= 0 ) {
+          Option( System.getenv("APPDATA") ).map( ad => new java.io.File(ad, DirName) )
+        } else if ( osn.indexOf( "mac" ) >= 0 ) {
+          Option( System.getProperty("user.home") ).map( home => new java.io.File( s"${home}/Library/Ethereum", DirName) )
+        } else {
+          Option( System.getProperty("user.home") ).map( home => new java.io.File( s"${home}/.ethereum", DirName) )
+        }
+      }
+    }
+  }
+
+  def generateGethKeyStoreFileNameForWallet( jsv : JsValue ) : String = GethKeyStore.generateFileName( jsv )
+
+  def gethKeyStoreDirectory = GethKeyStore.directory
+
+  // XXX: Not a good API... do better after refactor
+  def gethNew( passphrase : String ) : Option[JsValue] = {
+    import com.mchange.sc.v2.lang.borrow
+    import java.io._
+
+    val wallet = generateScryptWallet( passphrase )
+
+    gethKeyStoreDirectory.map { dir =>
+      borrow( new BufferedWriter( new OutputStreamWriter( new FileOutputStream( new File( dir, generateGethKeyStoreFileNameForWallet( wallet ) ) ), "UTF-8" ) ) ) { writer =>
+        writer.write( Json.stringify( wallet ) )
+        wallet
+      }
+    }
+  }
+
+  // END TODO: Refactor this stuff out, into a geth-specific thing
 
   def generateScryptWallet( passphrase : String, n : Int = 262144, r : Int = 8, p : Int = 1, dklen : Int = 32, privateKey : Option[EthPrivateKey] = None, random : SecureRandom = new SecureRandom )( implicit provider : jce.Provider ) : JsObject = {
     fillInWalletJson( passphrase, scryptKdfAndParams( n, r, p, dklen, random ), privateKey, random )( provider )
