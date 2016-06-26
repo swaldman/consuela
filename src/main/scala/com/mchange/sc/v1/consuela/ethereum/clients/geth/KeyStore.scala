@@ -4,10 +4,10 @@ import com.mchange.sc.v1.consuela._
 import com.mchange.sc.v1.consuela.ethereum.EthAddress
 
 final object KeyStore {
-  val TimestampPattern = "yyyy-MM-dd'T'HH-mm-ss.SSS"
-  val TimeZone         = java.util.TimeZone.getTimeZone("UTC")
+  private val TimestampPattern = "yyyy-MM-dd'T'HH-mm-ss.SSS"
+  private val TimeZone         = java.util.TimeZone.getTimeZone("UTC")
 
-  val DirName = "keystore"
+  private val DirName = "keystore"
 
   def extraDigits( n : Int ) : String = (0 to n).map( _ => scala.util.Random.nextInt(10) ).mkString("")
 
