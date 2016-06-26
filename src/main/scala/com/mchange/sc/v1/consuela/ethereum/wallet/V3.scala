@@ -2,7 +2,7 @@ package com.mchange.sc.v1.consuela.ethereum.wallet
 
 import com.mchange.sc.v1.consuela._
 import com.mchange.sc.v1.consuela.crypto.jce
-import com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash,EthPrivateKey}
+import com.mchange.sc.v1.consuela.ethereum.{clients,EthAddress,EthHash,EthPrivateKey}
 import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact20,ByteSeqExact32}
 
 import play.api.libs.json._
@@ -120,41 +120,9 @@ object V3 {
 
   private val Version = 3
 
-  // TODO: Refactor this stuff out, into a geth-specific thing
-  private final object GethKeyStore {
-    val TimestampPattern = "yyyy-MM-dd'T'HH-mm-ss.SSS"
-    val TimeZone         = java.util.TimeZone.getTimeZone("UTC")
+  def generateGethKeyStoreFileNameForWallet( jsv : JsValue ) : String = clients.geth.KeyStore.generateFileName( address(jsv) )
 
-    val DirName = "keystore"
-
-    def extraDigits( n : Int ) : String = (0 to n).map( _ => scala.util.Random.nextInt(10) ).mkString("")
-
-    def generateFileName( jsv : JsValue ) : String = {
-      def filename( timestamp : String, addressHexNoPrefix : String ) : String = s"UTC--${timestamp}${extraDigits(5)}Z--${addressHexNoPrefix}"
-
-      val df = new java.text.SimpleDateFormat(GethKeyStore.TimestampPattern)
-      df.setTimeZone(GethKeyStore.TimeZone)
-      val addressHexNoPrefix = address( jsv )
-      filename( df.format( new java.util.Date() ), addressHexNoPrefix.bytes.widen.hex )
-    }
-
-    lazy val directory : Option[java.io.File] = {
-      val osName = Option( System.getProperty("os.name") ).map( _.toLowerCase )
-      osName.flatMap { osn =>
-        if ( osn.indexOf( "win" ) >= 0 ) {
-          Option( System.getenv("APPDATA") ).map( ad => new java.io.File(ad, DirName) )
-        } else if ( osn.indexOf( "mac" ) >= 0 ) {
-          Option( System.getProperty("user.home") ).map( home => new java.io.File( s"${home}/Library/Ethereum", DirName) )
-        } else {
-          Option( System.getProperty("user.home") ).map( home => new java.io.File( s"${home}/.ethereum", DirName) )
-        }
-      }
-    }
-  }
-
-  def generateGethKeyStoreFileNameForWallet( jsv : JsValue ) : String = GethKeyStore.generateFileName( jsv )
-
-  def gethKeyStoreDirectory = GethKeyStore.directory
+  def gethKeyStoreDirectory = clients.geth.KeyStore.directory
 
   // XXX: Not a good API... do better after refactor
   def gethNew( passphrase : String ) : Option[JsValue] = {
