@@ -116,7 +116,7 @@ import scala.io.Codec
 object V3 {
   class Exception( msg : String ) extends JException( msg )
 
-  // not currently used, because BouncyCastle (non-FIPS) doesn't support
+  // not currently used, because BouncyCastle (non-FIPS) doesn't support.
   // "custom" implemented with BouncyCastle primitives
   private val Pbkdf2AlgoName = "PBKDF2WithHmacSHA256" 
 

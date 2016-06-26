@@ -54,8 +54,12 @@ final object KeyStore {
 
   def listAddresses() : Failable[immutable.Seq[EthAddress]] = directory.map( dir => ImmutableArraySeq.createNoCopy( dir.list.map( parseAddress ).filter( _.isDefined ).map( _.get ) ) )
 
-  def walletForAddress( address : EthAddress ) : Failable[wallet.V3] = {
-    val goodFileNames = directory.map( dir => dir.list.filter( fname => parseAddress( fname ).isDefined ).filter( _.toLowerCase.endsWith( address.bytes.widen.hex.toLowerCase ) ) )
+  def walletForAddress( dir : File, address : EthAddress ) : Failable[wallet.V3] = _walletForAddress( succeed( dir ), address )
+
+  def walletForAddress( address : EthAddress ) : Failable[wallet.V3] = _walletForAddress( directory, address )
+
+  private def _walletForAddress( dir : Failable[File], address : EthAddress ) : Failable[wallet.V3] = {
+    val goodFileNames = directory.map( d => d.list.filter( fname => parseAddress( fname ).isDefined ).filter( _.toLowerCase.endsWith( address.bytes.widen.hex.toLowerCase ) ) )
 
     val goodName = {
       goodFileNames.flatMap { names =>
@@ -69,7 +73,7 @@ final object KeyStore {
     file.map( wallet.V3.apply )
   }
 
-  lazy val directory : Failable[java.io.File] = {
+  lazy val directory : Failable[File] = {
     val osName = Option( System.getProperty("os.name") ).map( _.toLowerCase ).toFailable("geth.Keystore.directory: Couldn't detect OS, System property 'os.name' not available.")
     osName.flatMap { osn =>
       if ( osn.indexOf( "win" ) >= 0 ) {
