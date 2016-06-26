@@ -7,6 +7,8 @@ import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact20,B
 
 import play.api.libs.json._
 
+import java.io.OutputStream
+import java.lang.{Exception => JException}
 import java.security.SecureRandom
 import java.util.UUID
 import javax.crypto.{Cipher, SecretKey, SecretKeyFactory}
@@ -110,9 +112,11 @@ import scala.io.Codec
  */ 
 
 object V3 {
-  class WalletException( msg : String ) extends Exception( msg )
+  class Exception( msg : String ) extends JException( msg )
 
-  private val Pbkdf2AlgoName = "PBKDF2WithHmacSHA256"
+  // not currently used, because BouncyCastle (non-FIPS) doesn't support
+  // "custom" implemented with BouncyCastle primitives
+  private val Pbkdf2AlgoName = "PBKDF2WithHmacSHA256" 
 
   private val MainCryptAlgoWalletName = "aes-128-ctr"
   private val MainCryptAlgoName       = "AES"
@@ -120,32 +124,49 @@ object V3 {
 
   private val Version = 3
 
-  def generateGethKeyStoreFileNameForWallet( jsv : JsValue ) : String = clients.geth.KeyStore.generateFileName( address(jsv) )
-
-  def gethKeyStoreDirectory = clients.geth.KeyStore.directory
-
-  // XXX: Not a good API... do better after refactor
-  def gethNew( passphrase : String ) : Option[JsValue] = {
-    import com.mchange.sc.v2.lang.borrow
-    import java.io._
-
-    val wallet = generateScryptWallet( passphrase )
-
-    gethKeyStoreDirectory.map { dir =>
-      borrow( new BufferedWriter( new OutputStreamWriter( new FileOutputStream( new File( dir, generateGethKeyStoreFileNameForWallet( wallet ) ) ), "UTF-8" ) ) ) { writer =>
-        writer.write( Json.stringify( wallet ) )
-        wallet
-      }
-    }
+  def generateScrypt(
+    passphrase : String,
+    n          : Int = 262144,
+    r          : Int = 8,
+    p          : Int = 1,
+    dklen      : Int = 32,
+    privateKey : Option[EthPrivateKey] = None,
+    random     : SecureRandom = new SecureRandom
+  )( implicit provider : jce.Provider ) : V3 = {
+    val jso = generateScryptWalletJson( passphrase, n, r, p, dklen, privateKey, random )( provider )
+    V3( jso )
   }
 
-  // END TODO: Refactor this stuff out, into a geth-specific thing
+  def generatePbkdf2(
+    passphrase : String,
+    c          : Int = 262144,
+    dklen      : Int = 32,
+    privateKey : Option[EthPrivateKey] = None,
+    random     : SecureRandom = new SecureRandom
+  )( implicit provider : jce.Provider ) : V3 = {
+    val jso = generatePbkdf2WalletJson( passphrase, c, dklen, privateKey, random )( provider )
+    V3( jso )
+  }
 
-  def generateScryptWallet( passphrase : String, n : Int = 262144, r : Int = 8, p : Int = 1, dklen : Int = 32, privateKey : Option[EthPrivateKey] = None, random : SecureRandom = new SecureRandom )( implicit provider : jce.Provider ) : JsObject = {
+  private def generateScryptWalletJson(
+    passphrase : String,
+    n          : Int,
+    r          : Int,
+    p          : Int,
+    dklen      : Int,
+    privateKey : Option[EthPrivateKey],
+    random     : SecureRandom
+  )( implicit provider : jce.Provider ) : JsObject = {
     fillInWalletJson( passphrase, scryptKdfAndParams( n, r, p, dklen, random ), privateKey, random )( provider )
   }
 
-  def generatePbkdf2Wallet( passphrase : String, c : Int = 262144, dklen : Int = 32, privateKey : Option[EthPrivateKey] = None, random : SecureRandom = new SecureRandom )( implicit provider : jce.Provider ) : JsObject = {
+  private def generatePbkdf2WalletJson(
+    passphrase : String,
+    c          : Int,
+    dklen      : Int,
+    privateKey : Option[EthPrivateKey],
+    random     : SecureRandom
+  )( implicit provider : jce.Provider ) : JsObject = {
     fillInWalletJson( passphrase, pbkdf2KdfAndParams( c, dklen, random ), privateKey, random )( provider )
   }
 
@@ -233,7 +254,7 @@ object V3 {
     val _version = version( jsv )
 
     if (_version != 3)
-      throw new WalletException( s"Excepted a V3 wallet but found version ${_version}" )
+      throw new V3.Exception( s"Excepted a V3 wallet but found version ${_version}" )
 
     val _cipher          = cipher( jsv )( provider )
     val _keyMac          = findKeyMac( jsv, passphrase )( provider )
@@ -243,7 +264,7 @@ object V3 {
     val _mac = mac( jsv )
 
     if ( _keyMac.mac( _ciphertext ) != _mac )
-      throw new V3.WalletException( s"Message authetication code mismatch: KDF-derived MAC: ${_keyMac.mac( _ciphertext ).hex}, expected MAC: ${_mac.hex}" )
+      throw new V3.Exception( s"Message authetication code mismatch: KDF-derived MAC: ${_keyMac.mac( _ciphertext ).hex}, expected MAC: ${_mac.hex}" )
 
     val out = decodePrivateKey( _cipher, _keyMac.key, _ivParameterSpec, _ciphertext )
 
@@ -251,7 +272,7 @@ object V3 {
     val pvtKeyAddress   = out.toPublicKey.toAddress
 
     if ( pvtKeyAddress != expectedAddress ) {
-      throw new WalletException( s"Wallet is for address ${expectedAddress}, but decoded a private key for address '${pvtKeyAddress}'" )
+      throw new V3.Exception( s"Wallet is for address ${expectedAddress}, but decoded a private key for address '${pvtKeyAddress}'" )
     } else {
       out
     }
@@ -334,7 +355,7 @@ object V3 {
 
   private def cipher( jsv : JsValue)( implicit provider : jce.Provider ) : Cipher = ( jsv \ "crypto" \ "cipher" ).as[String] match {
     case MainCryptAlgoWalletName => Cipher.getInstance( MainCryptAlgoNameFull, provider.name )
-    case other                   => throw new WalletException( s"Unexpected cipher: ${other}" )
+    case other                   => throw new V3.Exception( s"Unexpected cipher: ${other}" )
   }
 
   private def kdf( jsv : JsValue ) : String = ( jsv \ "crypto" \ "kdf" ).as[String]
@@ -360,36 +381,17 @@ object V3 {
     def prfAsAlgoName( jsv : JsValue ) : String = {
       ( jsv \ "crypto" \ "kdfparams" \ "prf" ).as[String] match {
         case "hmac-sha256" => Pbkdf2AlgoName
-        case other         => throw new WalletException( s"Unexpected prf value '${other}'" )
+        case other         => throw new V3.Exception( s"Unexpected prf value '${other}'" )
       }
     }
   }
 }
-
-
-/*
-  final object Cipher {
-    final object 
+case class V3( jso : JsObject ) {
+  def address = V3.address( jso )
+  def write( os : OutputStream ) : Unit = {
+    val bytes = Json.stringify( jso ).getBytes( Codec.UTF8.charSet )
+    os.write( bytes )
   }
-  abstract class Cipher[T <: CipherParams]( name : String ) {
-    def create( params : T ) : javax.crypto.Cipher;
-  }
+}
 
-  final object Kdf {
-    final object scrypt {
-    }
-  }
-  sealed trait Kdf {
-    val name : String
-  }
-
-
-  object CipherParams {
-    case class Aes128Ctr( iv : ByteSeqExact16 ) extends CipherParams
-  }
-  sealed trait CipherParams;
-
-  case class Crypto( cipher : Cipher, ciphertext : immutable.Seq[Byte], cipherparams : CipherParams, kdf : Kdf, kdfparams : KdfParams, mac : immutable.Seq[Byte] )
-  case class Wallet( address : EthAddress, crypto : Crypto, id : String, version : Int )
- */ 
 
