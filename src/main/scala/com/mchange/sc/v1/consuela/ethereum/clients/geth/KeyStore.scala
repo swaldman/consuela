@@ -9,7 +9,7 @@ final object KeyStore {
 
   private val DirName = "keystore"
 
-  def extraDigits( n : Int ) : String = (0 to n).map( _ => scala.util.Random.nextInt(10) ).mkString("")
+  private def extraDigits( n : Int ) : String = (0 to n).map( _ => scala.util.Random.nextInt(10) ).mkString("")
 
   def generateFileName( address : EthAddress ) : String = {
     def filename( timestamp : String, addressHexNoPrefix : String ) : String = s"UTC--${timestamp}${extraDigits(5)}Z--${addressHexNoPrefix}"
