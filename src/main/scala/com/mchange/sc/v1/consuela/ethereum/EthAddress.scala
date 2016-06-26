@@ -43,8 +43,11 @@ import com.mchange.sc.v1.consuela.ethereum.specification.Types.ByteSeqExact20;
 object EthAddress {
   val ByteLength = 20;
 
-  def apply( pub   : EthPublicKey )   : EthAddress = new EthAddress( this.computeBytes( pub ) );
+  def apply( pub   : EthPublicKey ) : EthAddress = new EthAddress( this.computeBytes( pub ) );
+
   def computeBytes( pub : EthPublicKey ) : ByteSeqExact20 = ByteSeqExact20( EthHash.hash(pub.bytes.widen).toByteArray.drop(12) );
+
+  def apply( hexString : String ) : EthAddress = EthAddress( ByteSeqExact20( hexString.decodeHex ) )
 }
 final case class EthAddress( val bytes : ByteSeqExact20 ) {
   lazy val toNibbles : IndexedSeq[Nibble] = encoding.toNibbles( bytes.widen )
