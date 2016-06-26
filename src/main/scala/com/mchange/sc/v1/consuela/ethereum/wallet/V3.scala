@@ -5,9 +5,11 @@ import com.mchange.sc.v1.consuela.crypto.jce
 import com.mchange.sc.v1.consuela.ethereum.{clients,EthAddress,EthHash,EthPrivateKey}
 import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact20,ByteSeqExact32}
 
+import com.mchange.sc.v2.lang.borrow
+
 import play.api.libs.json._
 
-import java.io.OutputStream
+import java.io.{InputStream,BufferedInputStream,File,FileInputStream,OutputStream}
 import java.lang.{Exception => JException}
 import java.security.SecureRandom
 import java.util.UUID
@@ -123,6 +125,15 @@ object V3 {
   private val MainCryptAlgoNameFull   = "AES/CTR/NoPadding"
 
   private val Version = 3
+
+  private val BufferSize = 2048
+
+  /**
+    * Does not validate the wallet, but will fail with an Exception if not a JSON object
+    */ 
+  def apply( is : InputStream ) : V3 = V3( Json.parse(is).asInstanceOf[JsObject] )
+
+  def apply( file : File ) : V3 = borrow ( new BufferedInputStream( new FileInputStream( file ) ) )( apply )
 
   def generateScrypt(
     passphrase : String,
