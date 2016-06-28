@@ -1,5 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum
 
+import com.mchange.sc.v1.consuela._
+
 import scala.collection._
 
 import play.api.libs.json._
@@ -7,6 +9,16 @@ import play.api.libs.json._
 import com.mchange.leftright._
 
 package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Response.Error.Empty ) {
+
+  private[jsonrpc20] def encodeQuantity( quantity : Long )  : JsString = JsString( "0x" + quantity.toHexString )
+
+  private[jsonrpc20] def decodeQuantity( encoded : JsString ) : Long = {
+    require( encoded.value.startsWith("0x") )
+    java.lang.Long.parseLong( encoded.value.substring(2), 16 )
+  }
+
+  private[jsonrpc20] def encodeBytes( bytes : Seq[Byte] )  : JsString            = JsString( "0x" + bytes.hex )
+  private[jsonrpc20] def decodeBytes( encoded : JsString ) : immutable.Seq[Byte] = encoded.value.decodeHex.toImmutableSeq
 
   final class Failure( val code : Int, val message : String ) extends Exception( s"${message} [code=${code}]" ) {
     def this( errorResponse : Response.Error ) = this( errorResponse.error.code, errorResponse.error.message ) 
