@@ -10,15 +10,17 @@ import com.mchange.leftright._
 
 package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Response.Error.Empty ) {
 
-  private[jsonrpc20] def encodeQuantity( quantity : Long )  : JsString = JsString( "0x" + quantity.toHexString )
+  private[jsonrpc20] def encodeQuantity( quantity : BigInt )  : JsString = JsString( "0x" + quantity.toString(16) )
 
-  private[jsonrpc20] def decodeQuantity( encoded : JsString ) : Long = {
-    require( encoded.value.startsWith("0x") )
-    java.lang.Long.parseLong( encoded.value.substring(2), 16 )
+  private[jsonrpc20] def decodeQuantity( encoded : JsString ) : BigInt = {
+    require( encoded.value.startsWith("0x"), s"Ethereum JSON-RPC expects hex-encoded quantities to begin with '0x', '${encoded.value} does not." )
+    BigInt( encoded.value.substring(2), 16 )
   }
 
   private[jsonrpc20] def encodeBytes( bytes : Seq[Byte] )  : JsString            = JsString( "0x" + bytes.hex )
   private[jsonrpc20] def decodeBytes( encoded : JsString ) : immutable.Seq[Byte] = encoded.value.decodeHex.toImmutableSeq
+
+  private[jsonrpc20] def encodeAddress( address : EthAddress ) : JsString = encodeBytes( address.bytes.widen )
 
   final class Failure( val code : Int, val message : String ) extends Exception( s"${message} [code=${code}]" ) {
     def this( errorResponse : Response.Error ) = this( errorResponse.error.code, errorResponse.error.message ) 

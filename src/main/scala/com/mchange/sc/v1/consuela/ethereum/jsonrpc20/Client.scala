@@ -2,6 +2,7 @@ package com.mchange.sc.v1.consuela.ethereum.jsonrpc20
 
 import com.mchange.sc.v1.consuela.ethereum.EthAddress
 
+import scala.collection.immutable
 import scala.concurrent.{ExecutionContext,Future}
 
 import java.net.URL
@@ -15,15 +16,26 @@ object Client {
     final case object Latest   extends BlockNumber( JsString( "latest" ) )
     final case object Pending  extends BlockNumber( JsString( "pending" ) )
 
-    final case class Quantity( number : Long ) extends BlockNumber( encodeQuantity( number ) )
+    final case class Quantity( number : BigInt ) extends BlockNumber( encodeQuantity( number ) )
 
-    def apply( number : Long ) : BlockNumber = Quantity( number )
+    def apply( number : BigInt ) : BlockNumber = Quantity( number ) // just create quantity as e.g. BlockNumber(0)
   }
   sealed abstract class BlockNumber( val jsValue : JsValue )
 
 
   trait eth {
-    def compileSolidity( solidityText : String )( implicit ec : ExecutionContext )                               : Future[Result.eth.compileSolidity]
+    def compileSolidity( solidityText : String )( implicit ec : ExecutionContext ) : Future[Result.eth.compileSolidity]
+
+    def estimateGas(
+      from     : Option[EthAddress],
+      to       : Option[EthAddress],
+      gas      : Option[BigInt],
+      gasPrice : Option[BigInt],
+      value    : Option[BigInt],
+      data     : Option[immutable.Seq[Byte]],
+      blockNumber : BlockNumber
+    )( implicit ec : ExecutionContext ) : Future[Result.eth.estimateGas] 
+
     def gasPrice()( implicit ec : ExecutionContext )                                                             : Future[Result.eth.gasPrice]
     def getCompilers()( implicit ec : ExecutionContext )                                                         : Future[Result.eth.getCompilers]
     def getTransactionCount( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[Result.eth.getTransactionCount]
@@ -37,6 +49,28 @@ object Client {
       def compileSolidity( solidityText : String )( implicit ec : ExecutionContext ) : Future[Result.eth.compileSolidity] = {
         doExchange( "eth_compileSolidity", Seq(JsString( solidityText )) )( _.result.as[Result.eth.compileSolidity] )
       }
+      def estimateGas(
+        from     : Option[EthAddress],
+        to       : Option[EthAddress],
+        gas      : Option[BigInt],
+        gasPrice : Option[BigInt],
+        value    : Option[BigInt],
+        data     : Option[immutable.Seq[Byte]],
+        blockNumber : BlockNumber
+      )( implicit ec : ExecutionContext ) : Future[Result.eth.estimateGas] = {
+        val params = {
+          def listify[T <: JsValue]( key : String, mb : Option[T] ) = mb.fold( Nil : List[Tuple2[String,T]] )( t => List( Tuple2( key, t ) ) )
+
+          val _from     = listify("from", from.map( encodeAddress ))
+          val _to       = listify("to", to.map( encodeAddress ))
+          val _gas      = listify("gas", gas.map( encodeQuantity ))
+          val _gasPrice = listify("gasPrice", gasPrice.map( encodeQuantity ))
+          val _value    = listify("value", value.map( encodeQuantity ))
+          val _data     = listify("data", data.map( encodeBytes ))
+          JsObject( _from ::: _to ::: _gas ::: _gasPrice ::: _value ::: _data ::: Nil )
+        }
+        doExchange( "eth_estimateGas", Seq(params, blockNumber.jsValue) )( _.result.as[Result.eth.estimateGas] )
+      }
       def gasPrice()( implicit ec : ExecutionContext ) : Future[Result.eth.gasPrice] = {
         doExchange( "eth_gasPrice", Seq() )( _.result.as[Result.eth.gasPrice] )
       }
@@ -44,7 +78,7 @@ object Client {
         doExchange( "eth_getCompilers", Seq() )( _.result.as[Result.eth.getCompilers] )
       }
       def getTransactionCount( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[Result.eth.getTransactionCount] = {
-        doExchange( "eth_getTransactionCount", Seq( encodeBytes( address.bytes.widen ), blockNumber.jsValue ) )( _.result.as[Result.eth.getTransactionCount] )
+        doExchange( "eth_getTransactionCount", Seq( encodeAddress( address ), blockNumber.jsValue ) )( _.result.as[Result.eth.getTransactionCount] )
       }
     }
 
