@@ -260,7 +260,11 @@ object V3 {
     cipher.doFinal( plaintext )
   }
 
-  def decodePrivateKey( jsv : JsValue, passphrase : String )( implicit provider : jce.Provider ) : EthPrivateKey = {
+  def decodePrivateKey( walletV3 : V3, passphrase : String )( implicit provider : jce.Provider ) : EthPrivateKey = {
+    decodePrivateKey( walletV3.jso, passphrase )( provider )
+  }
+
+  private def decodePrivateKey( jsv : JsValue, passphrase : String )( implicit provider : jce.Provider ) : EthPrivateKey = {
 
     val _version = version( jsv )
 
