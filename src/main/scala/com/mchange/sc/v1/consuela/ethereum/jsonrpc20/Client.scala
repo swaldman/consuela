@@ -50,12 +50,12 @@ object Client {
         doExchange( "eth_compileSolidity", Seq(JsString( solidityText )) )( _.result.as[Result.eth.compileSolidity] )
       }
       def estimateGas(
-        from     : Option[EthAddress],
-        to       : Option[EthAddress],
-        gas      : Option[BigInt],
-        gasPrice : Option[BigInt],
-        value    : Option[BigInt],
-        data     : Option[immutable.Seq[Byte]],
+        from     : Option[EthAddress]          = None,
+        to       : Option[EthAddress]          = None,
+        gas      : Option[BigInt]              = None,
+        gasPrice : Option[BigInt]              = None,
+        value    : Option[BigInt]              = None,
+        data     : Option[immutable.Seq[Byte]] = None,
         blockNumber : BlockNumber
       )( implicit ec : ExecutionContext ) : Future[Result.eth.estimateGas] = {
         val params = {
