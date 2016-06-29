@@ -57,6 +57,9 @@ object EthPrivateKey {
     val bytes = ByteSeqExact32( ImmutableArraySeq.Byte.random( ByteLength )( random ) )
     EthPrivateKey( bytes )
   }
+  def apply( hexString : String ) : EthPrivateKey = {
+    EthPrivateKey( ByteSeqExact32( hexString.decodeHex ) )
+  }
 }
 
 final case class EthPrivateKey( val bytes : ByteSeqExact32 ) {
