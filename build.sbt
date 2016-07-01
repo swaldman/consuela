@@ -10,6 +10,8 @@ version := "0.0.2-SNAPSHOT"
 
 scalaVersion := "2.11.8"
 
+// annoyingly, tests have 2.11 dependencies for now, so they won't run
+// unless crossScalaVersions is commented out
 crossScalaVersions := Seq("2.10.6", "2.11.8")
 
 scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked" /*, "-Xlog-implicits" */)

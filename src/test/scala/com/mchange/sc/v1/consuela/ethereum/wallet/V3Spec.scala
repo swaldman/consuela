@@ -53,10 +53,10 @@ s2"""
 
   def e1 : Boolean = {
     try {
-      V3.decodePrivateKey( jsonScrypt, passphraseScrypt )
+      V3.decodePrivateKey( V3( jsonScrypt.asInstanceOf[JsObject] ), passphraseScrypt )
       true
     } catch {
-      case we : V3.WalletException => {
+      case we : V3.Exception => {
         SEVERE.log("Addresses fail to match, probably, see Exception",we)
         false
       }
@@ -65,10 +65,10 @@ s2"""
 
   def e2 : Boolean = {
     try {
-      V3.decodePrivateKey( jsonPbkdf2, passphrasePbkdf2 )
+      V3.decodePrivateKey( V3( jsonPbkdf2.asInstanceOf[JsObject] ), passphrasePbkdf2 )
       true
     } catch {
-      case we : V3.WalletException => {
+      case we : V3.Exception => {
         SEVERE.log("Addresses fail to match, probably, see Exception",we)
         false
       }
