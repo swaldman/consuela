@@ -10,7 +10,10 @@ import java.net.URL
 
 import play.api.libs.json._
 
+import com.mchange.sc.v1.log.MLevel._
+
 object Client {
+  implicit lazy val logger = mlogger( this )
 
   final object BlockNumber {
     final case object Earliest extends BlockNumber( JsString( "earliest" ) )
@@ -33,8 +36,7 @@ object Client {
       gas      : Option[BigInt]     = None,
       gasPrice : Option[BigInt]     = None,
       value    : Option[BigInt]     = None,
-      data     : Option[Seq[Byte]]  = None,
-      blockNumber : BlockNumber
+      data     : Option[Seq[Byte]]  = None
     )( implicit ec : ExecutionContext ) : Future[BigInt] 
 
     def gasPrice()( implicit ec : ExecutionContext )                                                             : Future[BigInt]
@@ -49,6 +51,7 @@ object Client {
     def extractBigInt( success : Response.Success ) : BigInt = decodeQuantity( success.result.as[String] )
 
     private def doExchange[T]( methodName : String, params : Seq[JsValue] )( resultBuilder : Response.Success => T )( implicit ec : ExecutionContext ) : Future[T] = {
+      TRACE.log( s"methodName = ${methodName}; params = ${params}" )
       exchanger.exchange( methodName, JsArray( params ) ).map( resultBuilder )
     }
 
@@ -57,15 +60,14 @@ object Client {
         doExchange( "eth_compileSolidity", Seq(JsString( solidityText )) )( _.result.as[immutable.Map[String,Compilation.Contract]] )
       }
       def estimateGas(
-        from     : Option[EthAddress]          = None,
-        to       : Option[EthAddress]          = None,
-        gas      : Option[BigInt]              = None,
-        gasPrice : Option[BigInt]              = None,
-        value    : Option[BigInt]              = None,
-        data     : Option[Seq[Byte]] = None,
-        blockNumber : BlockNumber
+        from     : Option[EthAddress] = None,
+        to       : Option[EthAddress] = None,
+        gas      : Option[BigInt]     = None,
+        gasPrice : Option[BigInt]     = None,
+        value    : Option[BigInt]     = None,
+        data     : Option[Seq[Byte]]  = None
       )( implicit ec : ExecutionContext ) : Future[BigInt] = {
-        val params = {
+        val props = {
           def listify[T <: JsValue]( key : String, mb : Option[T] ) = mb.fold( Nil : List[Tuple2[String,T]] )( t => List( Tuple2( key, t ) ) )
 
           val _from     = listify("from", from.map( encodeAddress ))
@@ -76,7 +78,7 @@ object Client {
           val _data     = listify("data", data.map( encodeBytes ))
           JsObject( _from ::: _to ::: _gas ::: _gasPrice ::: _value ::: _data ::: Nil )
         }
-        doExchange( "eth_estimateGas", Seq(params, blockNumber.jsValue) )( extractBigInt )
+        doExchange( "eth_estimateGas", Seq(props) )( extractBigInt )
       }
       def gasPrice()( implicit ec : ExecutionContext ) : Future[BigInt] = {
         doExchange( "eth_gasPrice", Seq() )( extractBigInt )

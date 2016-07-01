@@ -35,26 +35,25 @@
 
 package com.mchange.sc.v1.consuela;
 
-import ethereum.encoding._;
-import RLPSerializing.asElement;  // implicit conversion
-import RLPSerializing.asElements; // not implicit 
+import ethereum.encoding._
+import RLPSerializing.asElement  // implicit conversion
+import RLPSerializing.asElements // not implicit 
 
 import ethereum.specification.Types.{SignatureV, SignatureR, SignatureS, ByteSeqMax1024, ByteSeqExact20, ByteSeqExact32, ByteSeqExact256, Unsigned64, Unsigned256, Unsigned2048}
 
-import com.mchange.sc.v1.consuela.hash.Keccak256;
-import com.mchange.sc.v1.consuela.bloom.BitSetBloom;
+import com.mchange.sc.v1.consuela.hash.Keccak256
+import com.mchange.sc.v1.consuela.bloom.BitSetBloom
 
-import com.mchange.sc.v2.failable._;
+import com.mchange.sc.v2.failable._
 
-import scala.collection._;
+import scala.collection._
 
-import scala.util.Try;
+import scala.util.Try
 
-import com.mchange.sc.v1.log._;
-import MLevel._;
+import com.mchange.sc.v1.log.MLevel._
 
 package object ethereum {
-  implicit lazy val logger = MLogger( this );
+  implicit lazy val logger = mlogger( this )
 
   class EthereumException( message : String, t : Throwable = null ) extends ConsuelaException( message, t );
   class UnexpectedSignatureFormatException( message : String, t : Throwable = null ) extends EthereumException( message, t );
