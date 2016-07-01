@@ -128,7 +128,7 @@ package object ethereum {
       def fromMbToElement( mbToElement : RLP.Element.Basic ) : Failable[Option[EthAddress]] = {
         mbToElement match {
           case RLP.Element.ByteSeq( mbToBytes ) => Try( if (mbToBytes.isEmpty) None else Some( EthAddress( ByteSeqExact20( mbToBytes ) ) ) ).toFailable;
-          case whatever                           => failNotLeaf( whatever );
+          case whatever                         => failNotLeaf( whatever );
         }
       }
       element match {

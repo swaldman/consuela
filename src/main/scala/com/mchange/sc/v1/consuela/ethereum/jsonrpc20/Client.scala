@@ -1,6 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum.jsonrpc20
 
-import com.mchange.sc.v1.consuela.ethereum.EthAddress
+import com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash,EthTransaction}
+import com.mchange.sc.v1.consuela.ethereum.encoding.RLP
 
 import scala.collection.immutable
 import scala.concurrent.{ExecutionContext,Future}
@@ -39,6 +40,10 @@ object Client {
     def gasPrice()( implicit ec : ExecutionContext )                                                             : Future[BigInt]
     def getCompilers()( implicit ec : ExecutionContext )                                                         : Future[immutable.Set[String]]
     def getTransactionCount( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[BigInt]
+
+    def sendRawTransaction( bytes : Seq[Byte] )( implicit ec : ExecutionContext ) : Future[EthHash]
+
+    def sendSignedTransaction( signedTransaction : EthTransaction.Signed )( implicit ec : ExecutionContext ) : Future[EthHash]
   }
   class withExchanger( exchanger : Exchanger ) extends Client {
     def extractBigInt( success : Response.Success ) : BigInt = decodeQuantity( success.result.as[String] )
@@ -78,6 +83,12 @@ object Client {
       }
       def getCompilers()( implicit ec : ExecutionContext ) : Future[immutable.Set[String]] = {
         doExchange( "eth_getCompilers", Seq() )( _.result.as[immutable.Set[String]] )
+      }
+      def sendRawTransaction( bytes : Seq[Byte] )( implicit ec : ExecutionContext ) : Future[EthHash] = {
+        doExchange( "eth_sendRawTransaction", Seq( encodeBytes( bytes ) ) )( success => EthHash.withBytes( decodeBytes( success.result.as[String] ) ) )
+      }
+      def sendSignedTransaction( signedTransaction : EthTransaction.Signed )( implicit ec : ExecutionContext ) : Future[EthHash] = {
+        sendRawTransaction( RLP.encode( signedTransaction : EthTransaction ) )
       }
       def getTransactionCount( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[BigInt] = {
         doExchange( "eth_getTransactionCount", Seq( encodeAddress( address ), blockNumber.jsValue ) )( extractBigInt )

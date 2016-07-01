@@ -20,7 +20,10 @@ package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Re
   }
 
   private[jsonrpc20] def encodeBytes( bytes : Seq[Byte] )  : JsString            = JsString( "0x" + bytes.hex )
-  private[jsonrpc20] def decodeBytes( encoded : JsString ) : immutable.Seq[Byte] = encoded.value.decodeHex.toImmutableSeq
+
+  private[jsonrpc20] def decodeBytes( encoded : JsString ) : immutable.Seq[Byte] = decodeBytes( encoded.value )
+
+  private[jsonrpc20] def decodeBytes( encoded : String ) : immutable.Seq[Byte] = encoded.decodeHex.toImmutableSeq
 
   private[jsonrpc20] def encodeAddress( address : EthAddress ) : JsString = encodeBytes( address.bytes.widen )
 
