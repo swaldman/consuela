@@ -90,16 +90,16 @@ object EthTransaction {
     val base      : Unsigned;
     val signature : EthSignature;
 
-    lazy val signedHash = EthHash.hash(RLP.encode[EthTransaction](base));
+    lazy val signedBytes = RLP.encode[EthTransaction](base)
 
     def v : SignatureV = signature.v;
     def r : SignatureR = signature.r;
     def s : SignatureS = signature.s;
 
     lazy val senderPublicKey : EthPublicKey = {
-      def fail : EthPublicKey = throw new EthereumException(s"Could not recover public key for signature ${signature} with signed hash '${signedHash}'");
-      val mbPubKeyBytes = crypto.secp256k1.recoverPublicKeyBytesV( v.widen, r.widen.bigInteger, s.widen.bigInteger, signedHash.toByteArray );
-      mbPubKeyBytes.fold( fail )( pubKeyBytes => EthPublicKey( ByteSeqExact64 ( pubKeyBytes ) ) );
+      def fail : EthPublicKey = throw new EthereumException(s"Could not recover public key for signature ${signature} with signed bytes '${signedBytes}'");
+      val mbPubKey = signature.wasSigned( signedBytes.toArray )
+      mbPubKey.getOrElse( fail )
     }
     lazy val sender : EthAddress = senderPublicKey.toAddress;
 
