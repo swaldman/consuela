@@ -12,9 +12,11 @@ package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Re
 
   private[jsonrpc20] def encodeQuantity( quantity : BigInt )  : JsString = JsString( "0x" + quantity.toString(16) )
 
-  private[jsonrpc20] def decodeQuantity( encoded : JsString ) : BigInt = {
-    require( encoded.value.startsWith("0x"), s"Ethereum JSON-RPC expects hex-encoded quantities to begin with '0x', '${encoded.value} does not." )
-    BigInt( encoded.value.substring(2), 16 )
+  private[jsonrpc20] def decodeQuantity( encoded : JsString ) : BigInt = decodeQuantity( encoded.value )
+
+  private[jsonrpc20] def decodeQuantity( encoded : String ) : BigInt = {
+    require( encoded.startsWith("0x"), s"Ethereum JSON-RPC expects hex-encoded quantities to begin with '0x', '${encoded}' does not." )
+    BigInt( encoded.substring(2), 16 )
   }
 
   private[jsonrpc20] def encodeBytes( bytes : Seq[Byte] )  : JsString            = JsString( "0x" + bytes.hex )
