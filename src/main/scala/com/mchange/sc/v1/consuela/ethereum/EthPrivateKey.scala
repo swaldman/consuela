@@ -71,15 +71,10 @@ final case class EthPrivateKey( val bytes : ByteSeqExact32 ) {
 
   def signRawBytes( rawBytes : Array[Byte] ) : EthSignature = {
     import crypto.secp256k1._;
-    signature( s.bigInteger, rawBytes ) match {
-      case Left( badbytes ) => throw new UnexpectedSignatureFormatException( badbytes.hex );
-      case Right( Signature( r, s, Some( v ) ) ) => EthSignature( SignatureV( v ), SignatureR( BigInt(r) ), SignatureS( BigInt(s) ) );
-      case Right( Signature( r, s, None ) )      => {
-        val mbRecovered = recoverPublicKeyAndV( r, s, rawBytes );
-        mbRecovered.fold( throw new EthereumException( s"Could find only partial signature [ v -> ???, r -> ${r}, s -> ${s} ]" ) ) { recovered =>
-          EthSignature( SignatureV( recovered.v ), SignatureR( BigInt( r ) ), SignatureS( BigInt( s ) ) )
-        }
-      }
+    recoverableCompleteSignature( s.bigInteger, rawBytes ) match {
+      case Left( badbytes )                              => throw new UnexpectedSignatureFormatException( badbytes.hex );
+      case Right( Signature( r, s, Some( v ) ) )         => EthSignature( SignatureV( v ), SignatureR( BigInt(r) ), SignatureS( BigInt(s) ) );
+      case Right( incomplete @ Signature( r, s, None ) ) => throw new UnexpectedSignatureFormatException( s"We expect a complete signature. Missing v: ${incomplete}" );
     }
   }
   def signEthHash( hash : EthHash ) = signRawBytes( hash.toByteArray );

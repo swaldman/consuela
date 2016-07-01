@@ -50,6 +50,8 @@ import scala.util.hashing.MurmurHash3;
 
 import com.mchange.sc.v1.consuela.hash.Hash;
 
+import scala.annotation.tailrec
+
 package object crypto {
   class InvalidSignatureException( message : String, t : Throwable = null ) extends ConsuelaException( message, t );
   class ForbiddenProviderException( message : String, t : Throwable = null ) extends ConsuelaException( message, t );
@@ -134,8 +136,43 @@ package object crypto {
       parser.encode( signature );
     }
 
-    def signature( privateKeyAsS : BigInteger, signMe : Array[Byte] )( implicit provider : jce.Provider ) : Either[Array[Byte],Signature] = {
+    def uncheckedSignature( privateKeyAsS : BigInteger, signMe : Array[Byte] )( implicit provider : jce.Provider ) : Either[Array[Byte],Signature] = {
       parseSignature( signatureBytes( privateKeyAsS : BigInteger, signMe : Array[Byte] )( provider ) )( provider )
+    }
+
+    // ensure that the signature is complete and the public key is recoverable
+    //
+    // i don't know if there is a way to reliably compute signatures that are always recoverable (or complete)
+    //
+    // so far this is the best i can do
+    def recoverableCompleteSignature( privateKeyAsS : BigInteger, signMe : Array[Byte] )( implicit provider : jce.Provider ) : Either[Array[Byte],Signature] = {
+      val publicKeyBytes = computePublicKeyBytes( privateKeyAsS )( provider )
+
+      @tailrec
+      def iterate : Either[Array[Byte],Signature] = {
+        val mbOut : Option[Either[Array[Byte],Signature]] = {
+          uncheckedSignature( privateKeyAsS : BigInteger, signMe : Array[Byte] )( provider ) match {
+            case badbytes : Left[Array[Byte], Signature]           => Some( badbytes )
+            case complete @ Right( Signature( r, s, Some( v ) ) )  => {
+              val check = recoverPublicKeyBytesV( v, r, s, signMe )( provider )
+              check.fold( None : Option[Either[Array[Byte],Signature]] )( bytes => if ( bytes.sameElements( publicKeyBytes ) ) Some( complete ) else None )
+            }
+            case Right( Signature( r, s, None ) ) => {
+              val mbRecovered = recoverPublicKeyAndV( r, s, signMe )( provider )
+              mbRecovered.fold( None : Option[Either[Array[Byte],Signature]] ){ recoveredPublicKeyAndV =>
+                if ( recoveredPublicKeyAndV.publicKeyBytes.sameElements( publicKeyBytes ) ) {
+                  Some( Right( Signature( r, s, Some( recoveredPublicKeyAndV.v.toByte ) ) ) )
+                } else {
+                  None
+                }
+              }
+            }
+          }
+        }
+        if ( mbOut.isDefined ) mbOut.get else iterate
+      }
+
+      iterate
     }
 
     private def findSignatureParser( implicit provider : jce.Provider ) : SignatureParser = {
