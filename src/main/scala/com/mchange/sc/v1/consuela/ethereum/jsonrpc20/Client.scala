@@ -90,6 +90,8 @@ object Client {
         doExchange( "eth_sendRawTransaction", Seq( encodeBytes( bytes ) ) )( success => EthHash.withBytes( decodeBytes( success.result.as[String] ) ) )
       }
       def sendSignedTransaction( signedTransaction : EthTransaction.Signed )( implicit ec : ExecutionContext ) : Future[EthHash] = {
+        TRACE.log( s"sendSignedTransaction: ${signedTransaction}" )
+        TRACE.log( s"recovered sender address: ${signedTransaction.sender}" )
         sendRawTransaction( RLP.encode( signedTransaction : EthTransaction ) )
       }
       def getTransactionCount( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[BigInt] = {
