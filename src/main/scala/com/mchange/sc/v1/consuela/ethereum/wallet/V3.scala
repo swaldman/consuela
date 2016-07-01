@@ -261,7 +261,7 @@ object V3 {
   }
 
   def decodePrivateKey( walletV3 : V3, passphrase : String )( implicit provider : jce.Provider ) : EthPrivateKey = {
-    decodePrivateKey( walletV3.jso, passphrase )( provider )
+    decodePrivateKey( walletV3.withLowerCaseKeys, passphrase )( provider )
   }
 
   private def decodePrivateKey( jsv : JsValue, passphrase : String )( implicit provider : jce.Provider ) : EthPrivateKey = {
@@ -401,10 +401,22 @@ object V3 {
     }
   }
 }
-case class V3( jso : JsObject ) {
-  def address = V3.address( jso )
+case class V3( rawJson : JsObject ) {
+
+  // we depend upon lower case keys, but some wallets are generated mixed-case
+  lazy val withLowerCaseKeys = { 
+    def decaseObjectKeys( jsv : JsValue ) : JsValue = {
+      jsv match {
+        case o : JsObject => JsObject( o.value.map( tup => ( tup._1.toLowerCase, decaseObjectKeys( tup._2 ) ) ) )
+        case whatevs      => whatevs
+      }
+    }
+    decaseObjectKeys( this.rawJson ).asInstanceOf[JsObject]
+  }
+
+  def address = V3.address( this.withLowerCaseKeys )
   def write( os : OutputStream ) : Unit = {
-    val bytes = Json.stringify( jso ).getBytes( Codec.UTF8.charSet )
+    val bytes = Json.stringify( rawJson ).getBytes( Codec.UTF8.charSet )
     os.write( bytes )
   }
 }
