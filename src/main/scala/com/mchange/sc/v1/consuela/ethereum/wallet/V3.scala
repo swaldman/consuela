@@ -2,7 +2,7 @@ package com.mchange.sc.v1.consuela.ethereum.wallet
 
 import com.mchange.sc.v1.consuela._
 import com.mchange.sc.v1.consuela.crypto.jce
-import com.mchange.sc.v1.consuela.ethereum.{clients,EthAddress,EthHash,EthPrivateKey}
+import com.mchange.sc.v1.consuela.ethereum.{clients,EthAddress,EthHash,EthPrivateKey,EthereumException}
 import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact20,ByteSeqExact32}
 
 import com.mchange.sc.v2.lang.borrow
@@ -10,7 +10,6 @@ import com.mchange.sc.v2.lang.borrow
 import play.api.libs.json._
 
 import java.io.{InputStream,BufferedInputStream,File,FileInputStream,OutputStream}
-import java.lang.{Exception => JException}
 import java.security.SecureRandom
 import java.util.UUID
 import javax.crypto.{Cipher, SecretKey, SecretKeyFactory}
@@ -114,7 +113,7 @@ import scala.io.Codec
  */ 
 
 object V3 {
-  class Exception( msg : String ) extends JException( msg )
+  class Exception( msg : String ) extends EthereumException( msg )
 
   // not currently used, because BouncyCastle (non-FIPS) doesn't support.
   // "custom" implemented with BouncyCastle primitives

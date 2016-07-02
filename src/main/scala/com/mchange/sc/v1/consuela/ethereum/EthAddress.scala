@@ -52,5 +52,7 @@ object EthAddress {
 final case class EthAddress( val bytes : ByteSeqExact20 ) {
   lazy val toNibbles : IndexedSeq[Nibble] = encoding.toNibbles( bytes.widen )
 
+  def hex = bytes.widen.hex
+
   def matches( pub : EthPublicKey ) : Boolean = bytes == EthAddress.computeBytes( pub );
 }

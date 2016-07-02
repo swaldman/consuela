@@ -65,6 +65,11 @@ package object ethereum {
   val EmptyByteSeqHash = EthHash.hash( encoding.RLP.Encoded.EmptyByteSeq );
   val AllZeroesEthHash = EthHash.withBytes( Array.ofDim[Byte]( EthHashLen ) );
 
+  final object Homestead {
+    val StartBlock = 1150000
+    val LimitSignatureS = specification.Types.Limit.SignatureR / 2
+  }
+
   implicit final object EthHash_RLPSerializing extends RLPSerializing.ByteArrayValue[EthHash]( EthHash.withBytes );
 
   // I'm not sure why the compiler fails to find, requires me to supply, the RLPSerializing implicit parameter explicitly here

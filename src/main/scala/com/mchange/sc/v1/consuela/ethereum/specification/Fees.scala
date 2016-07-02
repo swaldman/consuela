@@ -26,6 +26,7 @@ object Fees {
       val exp            =    10;
       val expbyte        =    10;
       val memory         =     3;
+      val txcreate       = 32000; // homestead addition
       val txdatazero     =     4;
       val txdatanonzero  =    68;
       val transaction    = 21000;
@@ -61,6 +62,7 @@ object Fees {
       val exp            = scala.BigInt( Fees.Int.G.exp );
       val expbyte        = scala.BigInt( Fees.Int.G.expbyte );
       val memory         = scala.BigInt( Fees.Int.G.memory );
+      val txcreate       = scala.BigInt( Fees.Int.G.txcreate );
       val txdatazero     = scala.BigInt( Fees.Int.G.txdatazero );
       val txdatanonzero  = scala.BigInt( Fees.Int.G.txdatanonzero );
       val transaction    = scala.BigInt( Fees.Int.G.transaction );

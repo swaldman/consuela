@@ -111,4 +111,6 @@ final case class EthSignature( val v : SignatureV, val r : SignatureR, val s : S
   lazy val exportBytesRSI : ByteSeqExact65 = ByteSeqExact65.assert( Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) :+ recId.widen : _* ) );
 
   val recId : SignatureRecId = SignatureRecId( crypto.secp256k1.recIdFromV( v.widen ) )
+
+  val isHomesteadCompatible = (r.widen < Homestead.LimitSignatureS)
 }

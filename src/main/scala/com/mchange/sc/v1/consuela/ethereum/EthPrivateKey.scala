@@ -33,18 +33,20 @@
  * 
  */
 
-package com.mchange.sc.v1.consuela.ethereum;
+package com.mchange.sc.v1.consuela.ethereum
 
-import com.mchange.sc.v1.consuela._;
-import com.mchange.sc.v1.consuela.crypto;
+import com.mchange.sc.v1.consuela._
+import com.mchange.sc.v1.consuela.crypto
 
 import specification.Types.{ByteSeqExact32, SignatureV, SignatureR, SignatureS}
 
-import com.mchange.sc.v1.consuela.util.ByteSeqValue;
+import com.mchange.sc.v1.consuela.util.ByteSeqValue
 
-import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq;
+import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq
 
-import java.security.SecureRandom;
+import java.security.SecureRandom
+
+import scala.annotation.tailrec
 
 object EthPrivateKey {
   val ByteLength = 32 // crypto.secp256k1.ValueByteLength
@@ -69,13 +71,20 @@ final case class EthPrivateKey( val bytes : ByteSeqExact32 ) {
   // default signing scheme
   def sign( document : Array[Byte] ) : EthSignature = signHashedDocument( document );
 
-  def signRawBytes( rawBytes : Array[Byte] ) : EthSignature = {
+  private def internalSignRawBytes( rawBytes : Array[Byte] ) : EthSignature = {
     import crypto.secp256k1._;
     recoverableCompleteSignature( s.bigInteger, rawBytes ) match {
       case Left( badbytes )                              => throw new UnexpectedSignatureFormatException( badbytes.hex );
       case Right( Signature( r, s, Some( v ) ) )         => EthSignature( SignatureV( v ), SignatureR( BigInt(r) ), SignatureS( BigInt(s) ) );
       case Right( incomplete @ Signature( r, s, None ) ) => throw new UnexpectedSignatureFormatException( s"We expect a complete signature. Missing v: ${incomplete}" );
     }
+  }
+
+  // restrict to Homestead compatible signatures
+  @tailrec
+  def signRawBytes( rawBytes : Array[Byte] ) : EthSignature = {
+    val check = internalSignRawBytes( rawBytes )
+    if ( check.isHomesteadCompatible ) check else signRawBytes( rawBytes )
   }
   def signEthHash( hash : EthHash ) = signRawBytes( hash.toByteArray );
   def signHashedDocument( document : Array[Byte] ) : EthSignature = signEthHash( EthHash.hash( document ) );

@@ -44,9 +44,15 @@ import java.nio.charset.StandardCharsets
 import scala.collection._;
 
 object Types {
+
   final object Min { // inclusive minima
-    val SignatureV : Byte = 27;
+    val SignatureR : BigInt = BigInt(1)
+    val SignatureS : BigInt = Min.SignatureR
+    val SignatureV : Byte   = 27;
   }
+
+  // following Ethereum Homestead (Block 1,150,000), the maximum value of SignatureS should be SignatureR/2
+  // but we leave that out of its general type, so that older signatures remain readable
   final object Limit { // exclusive maxima
     val SignatureR     : BigInt = BigInt("115792089237316195423570985008687907852837564279074904382605163141518161494337", 10);
     val SignatureS     : BigInt = { val TWO = BigInt(2); (TWO.pow(256)) - (TWO.pow(32)) - BigInt(977) }
@@ -67,10 +73,10 @@ object Types {
   final object Unsigned256    extends RestrictedBigInt.UnsignedWithBitLength[Unsigned256]( 256 )   { override protected def create( value : BigInt ) = new Unsigned256( value ); }
   final object Unsigned2048   extends RestrictedBigInt.UnsignedWithBitLength[Unsigned2048]( 2048 ) { override protected def create( value : BigInt ) = new Unsigned2048( value ); }
 
-  final object SignatureR     extends RestrictedBigInt.ZeroUntil[SignatureR]( Limit.SignatureR )              { override protected def create( value : BigInt ) = new SignatureR( value ); }
-  final object SignatureS     extends RestrictedBigInt.ZeroUntil[SignatureS]( Limit.SignatureS )              { override protected def create( value : BigInt ) = new SignatureS( value ); }
-  final object SignatureV     extends RestrictedByte.MinUntil[SignatureV]( Min.SignatureV, Limit.SignatureV ) { override protected def create( value : Byte   ) = new SignatureV( value ); }
-  final object SignatureRecId extends RestrictedByte.ZeroUntil[SignatureRecId]( Limit.SignatureRecId )        { override protected def create( value : Byte   ) = new SignatureRecId( value ); }
+  final object SignatureR     extends RestrictedBigInt.MinUntil[SignatureR]( Min.SignatureR, Limit.SignatureR ) { override protected def create( value : BigInt ) = new SignatureR( value ); }
+  final object SignatureS     extends RestrictedBigInt.MinUntil[SignatureS]( Min.SignatureS, Limit.SignatureS ) { override protected def create( value : BigInt ) = new SignatureS( value ); }
+  final object SignatureV     extends RestrictedByte.MinUntil[SignatureV]( Min.SignatureV, Limit.SignatureV )   { override protected def create( value : Byte   ) = new SignatureV( value ); }
+  final object SignatureRecId extends RestrictedByte.ZeroUntil[SignatureRecId]( Limit.SignatureRecId )          { override protected def create( value : Byte   ) = new SignatureRecId( value ); }
 
   final object ByteSeqExact4   extends RestrictedByteSeq.ExactLength[ByteSeqExact4]( 4 )       { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact4( value ); }
   final object ByteSeqExact8   extends RestrictedByteSeq.ExactLength[ByteSeqExact8]( 8 )       { override protected def create( value : immutable.Seq[Byte] ) = new ByteSeqExact8( value ); }
