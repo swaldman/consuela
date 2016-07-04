@@ -19,7 +19,7 @@ package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Re
     BigInt( encoded.substring(2), 16 )
   }
 
-  private[jsonrpc20] def encodeBytes( bytes : Seq[Byte] )  : JsString            = JsString( "0x" + bytes.hex )
+  private[jsonrpc20] def encodeBytes( bytes : Seq[Byte] )  : JsString = JsString( "0x" + bytes.hex )
 
   private[jsonrpc20] def decodeBytes( encoded : JsString ) : immutable.Seq[Byte] = decodeBytes( encoded.value )
 
@@ -27,7 +27,7 @@ package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Re
 
   private[jsonrpc20] def encodeAddress( address : EthAddress ) : JsString = encodeBytes( address.bytes.widen )
 
-  final class Failure( val code : Int, val message : String ) extends Exception( s"${message} [code=${code}]" ) {
+  final class Exception( val code : Int, val message : String ) extends EthereumException( s"${message} [code=${code}]" ) {
     def this( errorResponse : Response.Error ) = this( errorResponse.error.code, errorResponse.error.message ) 
   }
 

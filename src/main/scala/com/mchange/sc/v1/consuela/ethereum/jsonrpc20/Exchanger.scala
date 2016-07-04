@@ -10,6 +10,9 @@ import play.api.libs.json._
 
 import com.mchange.sc.v2.lang.borrow
 
+// a bit annoying to have to do this, just to refer to jsonrpc20, the current package
+import com.mchange.sc.v1.consuela.ethereum.jsonrpc20
+
 object Exchanger {
   class Simple( httpUrl : URL ) extends Exchanger {
     def exchange( methodName : String, paramsArray : JsArray )( implicit ec : ExecutionContext ) : Future[Response.Success] = Future {
@@ -31,7 +34,7 @@ object Exchanger {
       borrow( htconn.getOutputStream() )( _.write(paramsBytes) )
       borrow( htconn.getInputStream() )( Json.parse ).as[Response] match { 
         case Right( success ) => success.ensuring( _.id == id )
-        case Left( error )    => throw new Failure( error )
+        case Left( error )    => throw new jsonrpc20.Exception( error )
       }
     }
     def close() : Unit = ()
