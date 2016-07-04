@@ -112,5 +112,5 @@ final case class EthSignature( val v : SignatureV, val r : SignatureR, val s : S
 
   val recId : SignatureRecId = SignatureRecId( crypto.secp256k1.recIdFromV( v.widen ) )
 
-  val isHomesteadCompatible = (r.widen < Homestead.LimitSignatureS)
+  val isHomesteadCompatible = (s.widen < Homestead.LimitSignatureS)
 }
