@@ -77,6 +77,8 @@ object EthTransaction {
       def to       : EthAddress          = base.to; 
       def value    : Unsigned256         = base.value;
       def data     : immutable.Seq[Byte] = base.data;
+
+      override def toString() = s"Signed.Message(nonce=${nonce},gasPrice=${gasPrice},gasLimit=${gasLimit},to=${to},value=${value},data=${data},signature=${signature})"
     }
     final case class ContractCreation( base : Unsigned.ContractCreation, val signature : EthSignature ) extends Signed  with EthTransaction.ContractCreation {
       def nonce    : Unsigned256         = base.nonce;
@@ -84,6 +86,8 @@ object EthTransaction {
       def gasLimit : Unsigned256         = base.gasLimit;
       def value    : Unsigned256         = base.value;
       def init     : immutable.Seq[Byte] = base.init;
+
+      override def toString() = s"Signed.ContractCreation(nonce=${nonce},gasPrice=${gasPrice},gasLimit=${gasLimit},,value=${value},init=${init},signature=${signature})"
     }
   }
   sealed trait Signed extends EthTransaction {
