@@ -2,7 +2,11 @@ package com.mchange.sc.v1.consuela.ethereum
 
 import com.mchange.sc.v1.consuela._
 
+import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact32,Unsigned256}
+
 import scala.collection._
+
+import scala.util.control.NonFatal
 
 import play.api.libs.json._
 
@@ -170,4 +174,85 @@ package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Re
       JsObject( definition.map{ case ( k , v ) => ( k , Json.toJson(v) ) } ) 
     }
   }
+  implicit val EthLogEntryFormat = new Format[EthLogEntry] {
+    def reads( jsv : JsValue ) : JsResult[EthLogEntry] = jsv match {
+      case jso : JsObject => {
+        try {
+          val fields = jso.value
+          val address = EthAddress( fields( "address" ).as[String] )
+          val topics = fields( "topics" ).as[JsArray].value.map( jsv => ByteSeqExact32( decodeBytes( jsv.as[String] ) ) ).toVector
+          val data = decodeBytes( fields( "data" ).as[String] )
+          JsSuccess( EthLogEntry( address, topics, data ) )
+        } catch {
+          case NonFatal( t ) => JsError( t.toString() )
+        }
+      }
+      case _ => JsError( s"EthLogEntry expected as a JsObject, found ${jsv}" )
+    }
+    def writes( entry : EthLogEntry ) : JsValue = {
+      JsObject( immutable.Map( "address" -> encodeBytes( entry.address.bytes.widen ), "topics" -> JsArray( entry.topics.map( topic => encodeBytes( topic.widen ) ) ), "data" -> encodeBytes( entry.data ) ) )
+    }
+  }
+
+  case class ClientTransactionReceipt (
+    transactionHash   : EthHash,
+    transactionIndex  : Unsigned256,
+    blockHash         : EthHash,
+    blockNumber       : Unsigned256,
+    cumulativeGasUsed : Unsigned256,
+    gasUsed           : Unsigned256,
+    contractAddress   : Option[EthAddress],
+    logs              : immutable.Seq[EthLogEntry]
+  )
+
+
+  implicit val EthHashFormat = new Format[EthHash] {
+    def reads( jsv : JsValue ) : JsResult[EthHash] = {
+      try {
+        JsSuccess( EthHash.withBytes( decodeBytes( jsv.as[String] ) ) )
+      } catch {
+        case NonFatal( t ) => JsError( t.toString() )
+      }
+    }
+    def writes( hash : EthHash ) : JsValue = encodeBytes( hash.bytes )
+  }
+  implicit val EthAddressFormat = new Format[EthAddress] {
+    def reads( jsv : JsValue ) : JsResult[EthAddress] = {
+      try {
+        JsSuccess( EthAddress( jsv.as[String] ) )
+      } catch {
+        case NonFatal( t ) => JsError( t.toString() )
+      }
+    }
+    def writes( address : EthAddress ) : JsValue = encodeBytes( address.bytes.widen )
+  }
+  implicit val Unsigned256Format = new Format[Unsigned256] {
+    def reads( jsv : JsValue ) : JsResult[Unsigned256] = {
+      try {
+        JsSuccess( Unsigned256( decodeQuantity( jsv.as[String] ) ) )
+      } catch {
+        case NonFatal( t ) => JsError( t.toString() )
+      }
+    }
+    def writes( num : Unsigned256 ) : JsValue = encodeQuantity( num.widen )
+  }
+  implicit val ClientTransactionReceiptFormat = Json.format[ClientTransactionReceipt]
+
+  class OptionFormat[T : Format] extends Format[Option[T]] {
+    def reads( jsv : JsValue ) : JsResult[Option[T]] = {
+      try {
+        JsSuccess {
+          if ( jsv == JsNull ) None else Some( jsv.as[T] )
+        }
+      } catch {
+        case NonFatal( t ) => JsError( t.toString() )
+      }
+    }
+    def writes( mbReceipt : Option[T] ) : JsValue = mbReceipt match {
+      case Some( receipt ) => Json.toJson( receipt )
+      case None            => JsNull
+    }
+  }
+
+  implicit def toOptionFormat[T : Format] = new OptionFormat[T]
 }

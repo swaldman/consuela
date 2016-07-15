@@ -42,6 +42,7 @@ object Client {
     def gasPrice()( implicit ec : ExecutionContext )                                                             : Future[BigInt]
     def getCompilers()( implicit ec : ExecutionContext )                                                         : Future[immutable.Set[String]]
     def getTransactionCount( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[BigInt]
+    def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext )                     : Future[Option[ClientTransactionReceipt]]
 
     def sendRawTransaction( bytes : Seq[Byte] )( implicit ec : ExecutionContext ) : Future[EthHash]
 
@@ -85,6 +86,9 @@ object Client {
       }
       def getCompilers()( implicit ec : ExecutionContext ) : Future[immutable.Set[String]] = {
         doExchange( "eth_getCompilers", Seq() )( _.result.as[immutable.Set[String]] )
+      }
+      def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext ) : Future[Option[ClientTransactionReceipt]] = {
+        doExchange( "eth_getTransactionReceipt", Seq( encodeBytes( transactionHash.bytes ) ) )( _.result.as[Option[ClientTransactionReceipt]] )
       }
       def sendRawTransaction( bytes : Seq[Byte] )( implicit ec : ExecutionContext ) : Future[EthHash] = {
         doExchange( "eth_sendRawTransaction", Seq( encodeBytes( bytes ) ) )( success => EthHash.withBytes( decodeBytes( success.result.as[String] ) ) )
