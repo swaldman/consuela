@@ -115,6 +115,19 @@ import scala.io.Codec
 object V3 {
   class Exception( msg : String ) extends EthereumException( msg )
 
+  final object Default {
+    final object Scrypt {
+      val N     = 262144
+      val R     = 8
+      val P     = 1
+      val DkLen = 32
+    }
+    final object Pbkdf2 {
+      val C     = 262144
+      val DkLen = 32
+    }
+  }
+
   // not currently used, because BouncyCastle (non-FIPS) doesn't support.
   // "custom" implemented with BouncyCastle primitives
   private val Pbkdf2AlgoName = "PBKDF2WithHmacSHA256" 
@@ -136,10 +149,10 @@ object V3 {
 
   def generateScrypt(
     passphrase : String,
-    n          : Int = 262144,
-    r          : Int = 8,
-    p          : Int = 1,
-    dklen      : Int = 32,
+    n          : Int = Default.Scrypt.N,
+    r          : Int = Default.Scrypt.R,
+    p          : Int = Default.Scrypt.P,
+    dklen      : Int = Default.Scrypt.DkLen,
     privateKey : Option[EthPrivateKey] = None,
     random     : SecureRandom = new SecureRandom
   )( implicit provider : jce.Provider ) : V3 = {
@@ -149,8 +162,8 @@ object V3 {
 
   def generatePbkdf2(
     passphrase : String,
-    c          : Int = 262144,
-    dklen      : Int = 32,
+    c          : Int = Default.Pbkdf2.C,
+    dklen      : Int = Default.Pbkdf2.DkLen,
     privateKey : Option[EthPrivateKey] = None,
     random     : SecureRandom = new SecureRandom
   )( implicit provider : jce.Provider ) : V3 = {
