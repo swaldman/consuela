@@ -1,6 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum.clients.geth
 
 import com.mchange.sc.v1.consuela._
+import com.mchange.sc.v1.consuela.io.createUserOnlyEmptyFile
 import com.mchange.sc.v1.consuela.ethereum.{wallet,EthAddress}
 import com.mchange.sc.v1.consuela.ethereum.specification.Types.ByteSeqExact20
 
@@ -25,12 +26,12 @@ final object KeyStore {
 
   private def extraDigits( n : Int ) : String = (0 to n).map( _ => scala.util.Random.nextInt(10) ).mkString("")
 
-  private def generateWalletFileName( address : EthAddress ) : String = {
+  def generateWalletFileName( address : EthAddress ) : String = {
     def filename( timestamp : String, addressHexNoPrefix : String ) : String = s"UTC--${timestamp}${extraDigits(5)}Z--${addressHexNoPrefix}"
 
     val df = new java.text.SimpleDateFormat(KeyStore.TimestampPattern)
     df.setTimeZone(KeyStore.TimeZone)
-    filename( df.format( new java.util.Date() ), address.bytes.widen.hex )
+    filename( df.format( new java.util.Date() ), address.hex )
   }
 
   private def parseAddress( fname : String ) : Option[EthAddress] = {
@@ -40,26 +41,31 @@ final object KeyStore {
     }
   }
 
-  def addNew( passphrase : String ) : Failable[wallet.V3] = {
-    Failable {
-      val w = wallet.V3.generateScrypt( passphrase )
-      directory.map { dir =>
-        borrow( new BufferedOutputStream( new FileOutputStream( new File( dir, generateWalletFileName( w.address ) ) ), BufferSize ) ){ os =>
+  def addNew( passphrase : String ) : Failable[wallet.V3] = Directory.flatMap( addNew( _, passphrase ) )
+
+  def addNew( dir : File, passphrase : String ) : Failable[wallet.V3] = Failable {
+    val w = wallet.V3.generateScrypt( passphrase )
+    val newFile = new File( dir, generateWalletFileName( w.address ) )
+    if (!newFile.exists()) {
+      createUserOnlyEmptyFile( newFile ) map { f =>
+        borrow( new BufferedOutputStream( new FileOutputStream( f, true ), BufferSize ) ){ os =>
           w.write( os )
           w
         }
       }
-    }.flatten
-  }
+    } else {
+      throw new Exception( s"Huh? The timestamped, somewhat randomly named file we are creating (${newFile}) already exists?" )
+    }
+  }.flatten
 
-  def listAddresses() : Failable[immutable.Seq[EthAddress]] = directory.map( dir => ImmutableArraySeq.createNoCopy( dir.list.map( parseAddress ).filter( _.isDefined ).map( _.get ) ) )
+  def listAddresses() : Failable[immutable.Seq[EthAddress]] = Directory.map( dir => ImmutableArraySeq.createNoCopy( dir.list.map( parseAddress ).filter( _.isDefined ).map( _.get ) ) )
 
   def walletForAddress( dir : File, address : EthAddress ) : Failable[wallet.V3] = _walletForAddress( succeed( dir ), address )
 
-  def walletForAddress( address : EthAddress ) : Failable[wallet.V3] = _walletForAddress( directory, address )
+  def walletForAddress( address : EthAddress ) : Failable[wallet.V3] = _walletForAddress( Directory, address )
 
   private def _walletForAddress( dir : Failable[File], address : EthAddress ) : Failable[wallet.V3] = {
-    val goodFileNames = directory.map( d => d.list.filter( fname => parseAddress( fname ).isDefined ).filter( _.toLowerCase.endsWith( address.bytes.widen.hex.toLowerCase ) ) )
+    val goodFileNames = Directory.map( d => d.list.filter( fname => parseAddress( fname ).isDefined ).filter( _.toLowerCase.endsWith( address.bytes.widen.hex.toLowerCase ) ) )
 
     val goodName = {
       goodFileNames.flatMap { names =>
@@ -68,20 +74,20 @@ final object KeyStore {
         else fail ( s"""Multiple wallets found for address 0x${address.bytes.widen.hex} -- ${names.mkString(",")}""" )
       }
     }
-    val file = goodName.flatMap( name => directory.map( dir => new File( dir, name ) ) )
+    val file = goodName.flatMap( name => Directory.map( dir => new File( dir, name ) ) )
 
     file.map( wallet.V3.apply )
   }
 
-  lazy val directory : Failable[File] = {
-    val osName = Option( System.getProperty("os.name") ).map( _.toLowerCase ).toFailable("geth.Keystore.directory: Couldn't detect OS, System property 'os.name' not available.")
+  lazy val Directory : Failable[File] = {
+    val osName = Option( System.getProperty("os.name") ).map( _.toLowerCase ).toFailable("geth.Keystore.Directory: Couldn't detect OS, System property 'os.name' not available.")
     osName.flatMap { osn =>
       if ( osn.indexOf( "win" ) >= 0 ) {
-        Option( System.getenv("APPDATA") ).map( ad => new java.io.File(ad, DirName) ).toFailable("geth.Keystore.directory: On Windows, but could not find environment variable 'APPDATA'")
+        Option( System.getenv("APPDATA") ).map( ad => new java.io.File(ad, DirName) ).toFailable("geth.Keystore.Directory: On Windows, but could not find environment variable 'APPDATA'")
       } else if ( osn.indexOf( "mac" ) >= 0 ) {
-        Option( System.getProperty("user.home") ).map( home => new java.io.File( s"${home}/Library/Ethereum", DirName) ).toFailable("geth.Keystore.directory: On Mac, but could not find System property 'user.home'")
+        Option( System.getProperty("user.home") ).map( home => new java.io.File( s"${home}/Library/Ethereum", DirName) ).toFailable("geth.Keystore.Directory: On Mac, but could not find System property 'user.home'")
       } else {
-        Option( System.getProperty("user.home") ).map( home => new java.io.File( s"${home}/.ethereum", DirName) ).toFailable("geth.Keystore.directory: On Unix, but could not find System property 'user.home'")
+        Option( System.getProperty("user.home") ).map( home => new java.io.File( s"${home}/.ethereum", DirName) ).toFailable("geth.Keystore.Directory: On Unix, but could not find System property 'user.home'")
       }
     }
   }
