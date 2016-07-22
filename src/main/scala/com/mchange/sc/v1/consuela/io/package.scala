@@ -18,40 +18,31 @@ import com.mchange.sc.v2.util.Platform
 
 package object io {
 
-  def ensureUserOnlyDirectory( path : Path ) : Failable[Path] = {
-    Platform.Current match {
-      case Some( Platform.Mac ) | Some( Platform.Unix ) => Posix.ensureUserOnlyDirectory( path )
-      case Some( Platform.Windows )                     => Windows.ensureUserOnlyDirectory( path )
-      case Some( unknownPlatform )                      => fail( s"No handler for platform '${unknownPlatform}'" )
-      case None                                         => fail( "Unable to detect platform in order to restrict directory access to user." )
-    }
-  }
-
+  def ensureUserOnlyDirectory( path : Path ) : Failable[Path] = doWithPlatformHelper( path )( ( path, helper ) => helper.ensureUserOnlyDirectory( path ) )
   def ensureUserOnlyDirectory( file : File ) : Failable[File] = ensureUserOnlyDirectory( file.toPath ).map( _.toFile )
 
-  def createUserOnlyEmptyFile( path : Path ) : Failable[Path] = {
-    Platform.Current match {
-      case Some( Platform.Mac ) | Some( Platform.Unix ) => Posix.createUserOnlyEmptyFile( path )
-      case Some( Platform.Windows )                     => Windows.createUserOnlyEmptyFile( path )
-      case Some( unknownPlatform )                      => fail( s"No handler for platform '${unknownPlatform}'" )
-      case None                                         => fail( "Unable to detect platform in order to restrict directory access to user." )
-    }
-  }
-
+  def createUserOnlyEmptyFile( path : Path ) : Failable[Path] = doWithPlatformHelper( path )( ( path, helper ) => helper.createUserOnlyEmptyFile( path ) )
   def createUserOnlyEmptyFile( file : File ) : Failable[File] = createUserOnlyEmptyFile( file.toPath ).map( _.toFile )
 
-  def createUserReadOnlyEmptyFile( path : Path ) : Failable[Path] = {
+  def createUserReadOnlyEmptyFile( path : Path ) : Failable[Path] = doWithPlatformHelper( path )( ( path, helper ) => helper.createUserReadOnlyEmptyFile( path ) )
+  def createUserReadOnlyEmptyFile( file : File ) : Failable[File] = createUserReadOnlyEmptyFile( file.toPath ).map( _.toFile )
+
+  private def doWithPlatformHelper( path : Path )( f : (Path, UserOnlyHelper ) => Failable[Path] ) : Failable[Path] = {
     Platform.Current match {
-      case Some( Platform.Mac ) | Some( Platform.Unix ) => Posix.createUserReadOnlyEmptyFile( path )
-      case Some( Platform.Windows )                     => Windows.createUserReadOnlyEmptyFile( path )
+      case Some( Platform.Mac ) | Some( Platform.Unix ) => f( path, Posix )
+      case Some( Platform.Windows )                     => f( path, Windows )
       case Some( unknownPlatform )                      => fail( s"No handler for platform '${unknownPlatform}'" )
       case None                                         => fail( "Unable to detect platform in order to restrict directory access to user." )
     }
   }
 
-  def createUserReadOnlyEmptyFile( file : File ) : Failable[File] = createUserReadOnlyEmptyFile( file.toPath ).map( _.toFile )
+  private trait UserOnlyHelper {
+    def ensureUserOnlyDirectory( path : Path )     : Failable[Path]
+    def createUserOnlyEmptyFile( path : Path )     : Failable[Path]
+    def createUserReadOnlyEmptyFile( path : Path ) : Failable[Path]
+  }
 
-  private final object Posix {
+  private final object Posix extends UserOnlyHelper {
     private val AcceptableUserOnlyDirectoryPermissions = List( EnumSet.of( OWNER_READ, OWNER_WRITE, OWNER_EXECUTE ).asScala, EnumSet.of( OWNER_READ, OWNER_WRITE ).asScala )
     private val UserOnlyFileAttribute                  = PosixFilePermissions.asFileAttribute( EnumSet.of( OWNER_READ, OWNER_WRITE ) )
     private val UserReadOnlyFileAttribute              = PosixFilePermissions.asFileAttribute( EnumSet.of( OWNER_READ ) )
@@ -83,7 +74,7 @@ package object io {
 
   // this was very helpful: http://jakubstas.com/creating-files-and-directories-nio2/
 
-  private final object Windows {
+  private final object Windows extends UserOnlyHelper {
 
     private val UserOnlyDirectoryCreatePermissions = EnumSet.of( LIST_DIRECTORY, ADD_FILE, DELETE_CHILD, READ_ACL ).asScala
     private val UserOnlyFileCreatePermissions      = EnumSet.of( READ_DATA, WRITE_DATA, APPEND_DATA, DELETE, READ_ACL ).asScala
