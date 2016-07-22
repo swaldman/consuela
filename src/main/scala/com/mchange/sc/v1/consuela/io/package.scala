@@ -40,9 +40,21 @@ package object io {
 
   def createUserOnlyEmptyFile( file : File ) : Failable[File] = createUserOnlyEmptyFile( file.toPath ).map( _.toFile )
 
+  def createUserReadOnlyEmptyFile( path : Path ) : Failable[Path] = {
+    Platform.Current match {
+      case Some( Platform.Mac ) | Some( Platform.Unix ) => Posix.createUserReadOnlyEmptyFile( path )
+      case Some( Platform.Windows )                     => Windows.createUserReadOnlyEmptyFile( path )
+      case Some( unknownPlatform )                      => fail( s"No handler for platform '${unknownPlatform}'" )
+      case None                                         => fail( "Unable to detect platform in order to restrict directory access to user." )
+    }
+  }
+
+  def createUserReadOnlyEmptyFile( file : File ) : Failable[File] = createUserReadOnlyEmptyFile( file.toPath ).map( _.toFile )
+
   private final object Posix {
     private val AcceptableUserOnlyDirectoryPermissions = List( EnumSet.of( OWNER_READ, OWNER_WRITE, OWNER_EXECUTE ).asScala, EnumSet.of( OWNER_READ, OWNER_WRITE ).asScala )
-    private val MinimalUserOnlyFileAttribute           = PosixFilePermissions.asFileAttribute( EnumSet.of( OWNER_READ, OWNER_WRITE ) )
+    private val UserOnlyFileAttribute                  = PosixFilePermissions.asFileAttribute( EnumSet.of( OWNER_READ, OWNER_WRITE ) )
+    private val UserReadOnlyFileAttribute              = PosixFilePermissions.asFileAttribute( EnumSet.of( OWNER_READ ) )
 
     def ensureUserOnlyDirectory( path : Path ) : Failable[Path] = {
       val filePermissions = Files.getPosixFilePermissions( path )
@@ -55,13 +67,17 @@ package object io {
         }
       }
 
-      def createWithPermissions = Failable( Files.createDirectory( path, MinimalUserOnlyFileAttribute ) )
+      def createWithPermissions = Failable( Files.createDirectory( path, UserOnlyFileAttribute ) )
 
       if ( Files.exists( path ) ) checkPermissions else createWithPermissions
     }
 
     def createUserOnlyEmptyFile( path : Path ) : Failable[Path] = Failable {
-      Files.createFile( path, MinimalUserOnlyFileAttribute )
+      Files.createFile( path, UserOnlyFileAttribute )
+    }
+
+    def createUserReadOnlyEmptyFile( path : Path ) : Failable[Path] = Failable {
+      Files.createFile( path, UserReadOnlyFileAttribute )
     }
   }
 
@@ -71,6 +87,7 @@ package object io {
 
     private val UserOnlyDirectoryCreatePermissions = EnumSet.of( LIST_DIRECTORY, ADD_FILE, DELETE_CHILD, READ_ACL ).asScala
     private val UserOnlyFileCreatePermissions      = EnumSet.of( READ_DATA, WRITE_DATA, APPEND_DATA, DELETE, READ_ACL ).asScala
+    private val UserReadOnlyFileCreatePermissions  = EnumSet.of( READ_DATA, READ_ACL ).asScala
 
     private def findJvmUserPrincipal : Failable[UserPrincipal] = Failable {
       val fs            = FileSystems.getDefault()
@@ -135,5 +152,10 @@ package object io {
       }
     }
 
+    def createUserReadOnlyEmptyFile( path : Path ) : Failable[Path] = {
+      findJvmUserPrincipal.flatMap { userPrincipal =>
+        Failable( Files.createFile( path, fileAttribute( userPrincipal, UserReadOnlyFileCreatePermissions ) ) )
+      }
+    }
   }
 }
