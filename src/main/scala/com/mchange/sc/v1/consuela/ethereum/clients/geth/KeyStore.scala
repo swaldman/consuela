@@ -79,18 +79,6 @@ final object KeyStore {
     file.map( wallet.V3.apply )
   }
 
-  lazy val Directory : Failable[File] = {
-    val osName = Option( System.getProperty("os.name") ).map( _.toLowerCase ).toFailable("geth.Keystore.Directory: Couldn't detect OS, System property 'os.name' not available.")
-    osName.flatMap { osn =>
-      if ( osn.indexOf( "win" ) >= 0 ) {
-        Option( System.getenv("APPDATA") ).map( ad => new java.io.File(ad, DirName) ).toFailable("geth.Keystore.Directory: On Windows, but could not find environment variable 'APPDATA'")
-      } else if ( osn.indexOf( "mac" ) >= 0 ) {
-        Option( System.getProperty("user.home") ).map( home => new java.io.File( s"${home}/Library/Ethereum", DirName) ).toFailable("geth.Keystore.Directory: On Mac, but could not find System property 'user.home'")
-      } else {
-        Option( System.getProperty("user.home") ).map( home => new java.io.File( s"${home}/.ethereum", DirName) ).toFailable("geth.Keystore.Directory: On Unix, but could not find System property 'user.home'")
-      }
-    }
-  }
-
+  lazy val Directory : Failable[File] = Home.Directory.map( home => new File( home, DirName ) )
 }
 
