@@ -108,7 +108,7 @@ object Manager {
 
               override def run : Unit = {
                 try {
-                  implementation.cacheDataset( seed, bd.dataset ).warn( s"Tried but failed to cache in-memory dataset for epoch number ${epochNumber} to ethash DAG file." )
+                  implementation.cacheDataset( seed, bd.dataset ).xwarn( s"Tried but failed to cache in-memory dataset for epoch number ${epochNumber} to ethash DAG file." )
                 } finally {
                   unmidpersistEpoch( epochNumber )
                 }
@@ -123,7 +123,7 @@ object Manager {
       }
     }
     private[this] def cacheEpoch( epochNumber : Long ) : Unit = {
-      implementation.streamDagFileForEpochNumber( epochNumber ).warn(s"Failed to stream and cache ethash DAG file for epoch number ${epochNumber}.");
+      implementation.streamDagFileForEpochNumber( epochNumber ).xwarn(s"Failed to stream and cache ethash DAG file for epoch number ${epochNumber}.");
     }
   }
 
@@ -229,7 +229,7 @@ object Manager {
 
     private def acquireDataset( epochNumber : Long, seed : Array[Byte], cache : implementation.Cache ) : implementation.Dataset = {
       val persistedDataset = implementation.loadDagFile( seed );
-      persistedDataset.warn("Failed to load DAG file. Will create.").getOrElse {
+      persistedDataset.xwarn("Failed to load DAG file. Will create.").getOrElse {
         val fullSize = implementation.getFullSizeForEpoch( epochNumber );
         buildDataset( epochNumber, seed, cache, fullSize ).dataset
       }
