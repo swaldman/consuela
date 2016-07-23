@@ -5,7 +5,10 @@ import com.mchange.sc.v1.consuela.crypto.jce
 import com.mchange.sc.v1.consuela.ethereum.{clients,EthAddress,EthHash,EthPrivateKey,EthereumException}
 import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact20,ByteSeqExact32}
 
+import com.mchange.sc.v2.failable._
 import com.mchange.sc.v2.lang.borrow
+
+import com.mchange.sc.v1.log.MLevel._
 
 import play.api.libs.json._
 
@@ -113,6 +116,9 @@ import scala.io.Codec
  */ 
 
 object V3 {
+
+  private implicit lazy val logger = mlogger( this )
+
   class Exception( msg : String ) extends EthereumException( msg )
 
   final object Default {
@@ -146,6 +152,29 @@ object V3 {
   def apply( is : InputStream ) : V3 = V3( Json.parse(is).asInstanceOf[JsObject] )
 
   def apply( file : File ) : V3 = borrow ( new BufferedInputStream( new FileInputStream( file ) ) )( apply )
+
+  def keyStoreMap( dir : File ) : Map[EthAddress,V3] = {
+    require( dir.isDirectory, s"Invalid key store directory, '${dir}': Not a directory." )
+
+    def binding( fileName : String ) : Failable[(EthAddress,V3)] = {
+      val file = new File( dir, fileName )
+      val out = Failable {
+        val w = apply( file )
+        ( w.address, w )
+      }
+      out.xwarn( s"Skipping... '${file}' appears not to be a valid V3 wallet" )
+    }
+    dir.list()
+      .map( binding )
+      .filter( _.isSucceeded )
+      .map( _.get )
+      .foldLeft( Map.empty[EthAddress,V3] ){ ( map, binding ) =>
+      if ( map.contains( binding._1 ) ) {
+        WARNING.log( s"'${dir}' contains multiple wallet for address ${binding._1}. Only the final one will be available." )
+      }
+      map + binding
+    }
+  }
 
   def generateScrypt(
     passphrase : String,
