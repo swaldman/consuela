@@ -427,10 +427,10 @@ case class V3( rawJson : JsObject ) {
   }
 
   def address = V3.address( this.withLowerCaseKeys )
-  def write( os : OutputStream ) : Unit = {
-    val bytes = Json.stringify( rawJson ).getBytes( Codec.UTF8.charSet )
-    os.write( bytes )
-  }
+
+  def toByteArray = Json.stringify( rawJson ).getBytes( Codec.UTF8.charSet )
+
+  def write( os : OutputStream ) : Unit = os.write( this.toByteArray )
 }
 
 

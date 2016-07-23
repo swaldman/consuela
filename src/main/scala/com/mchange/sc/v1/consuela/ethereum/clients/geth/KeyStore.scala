@@ -1,7 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum.clients.geth
 
 import com.mchange.sc.v1.consuela._
-import com.mchange.sc.v1.consuela.io.createUserOnlyEmptyFile
+import com.mchange.sc.v1.consuela.io.createReadOnlyFile
 import com.mchange.sc.v1.consuela.ethereum.{wallet,EthAddress}
 import com.mchange.sc.v1.consuela.ethereum.specification.Types.ByteSeqExact20
 
@@ -9,7 +9,7 @@ import com.mchange.sc.v2.failable._
 import com.mchange.sc.v2.lang.borrow
 import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq
 
-import java.io.{BufferedOutputStream,File,FileOutputStream}
+import java.io.File
 
 import scala.collection.immutable
 
@@ -43,16 +43,12 @@ final object KeyStore {
 
   def addNew( passphrase : String ) : Failable[wallet.V3] = Directory.flatMap( addNew( _, passphrase ) )
 
-  def addNew( dir : File, passphrase : String ) : Failable[wallet.V3] = Failable {
-    val w = wallet.V3.generateScrypt( passphrase )
+  def addNew( dir : File, passphrase : String ) : Failable[wallet.V3] = add( dir, wallet.V3.generateScrypt( passphrase ) )
+
+  def add( dir : File, w : wallet.V3 ) : Failable[wallet.V3] = Failable {
     val newFile = new File( dir, generateWalletFileName( w.address ) )
     if (!newFile.exists()) {
-      createUserOnlyEmptyFile( newFile ) map { f =>
-        borrow( new BufferedOutputStream( new FileOutputStream( f, true ), BufferSize ) ){ os =>
-          w.write( os )
-          w
-        }
-      }
+      createReadOnlyFile( newFile, w.toByteArray ).map( _ => w )
     } else {
       throw new Exception( s"Huh? The timestamped, somewhat randomly named file we are creating (${newFile}) already exists?" )
     }

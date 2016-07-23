@@ -8,9 +8,12 @@ import java.nio.file.attribute._
 import PosixFilePermission._
 import AclEntryPermission._
 import AclEntryFlag._
+import StandardOpenOption._
 
 import java.util.{ArrayList, EnumSet, List => JList}
 import java.io.File
+
+import com.mchange.sc.v2.lang.borrow
 
 import com.mchange.sc.v2.failable._
 
@@ -24,8 +27,24 @@ package object io {
   def createUserOnlyEmptyFile( path : Path ) : Failable[Path] = doWithPlatformHelper( path )( ( path, helper ) => helper.createUserOnlyEmptyFile( path ) )
   def createUserOnlyEmptyFile( file : File ) : Failable[File] = createUserOnlyEmptyFile( file.toPath ).map( _.toFile )
 
-  def createUserReadOnlyEmptyFile( path : Path ) : Failable[Path] = doWithPlatformHelper( path )( ( path, helper ) => helper.createUserReadOnlyEmptyFile( path ) )
-  def createUserReadOnlyEmptyFile( file : File ) : Failable[File] = createUserReadOnlyEmptyFile( file.toPath ).map( _.toFile )
+  def setUserReadOnlyFilePermissions( path : Path ) : Failable[Path] = doWithPlatformHelper( path )( ( path, helper ) => helper.setUserReadOnlyFilePermissions( path ) )
+  def setUserReadOnlyFilePermissions( file : File ) : Failable[File] = setUserReadOnlyFilePermissions( file.toPath ).map( _.toFile )
+
+  def createReadOnlyFile( path : Path, bytes : Array[Byte] ) : Failable[Path] = {
+    for {
+      emptyFilePath  <- createUserOnlyEmptyFile( path )
+      fullFilePath   <- fillPath( emptyFilePath, bytes )
+      sealedFilePath <- setUserReadOnlyFilePermissions( fullFilePath )
+    } yield {
+      sealedFilePath
+    }
+  }
+  def createReadOnlyFile( file : File, bytes : Array[Byte] ) : Failable[File] = createReadOnlyFile( file.toPath, bytes ).map( _.toFile )
+
+  def fillPath( path : Path, bytes : Array[Byte] ) : Failable[Path] = Failable {
+    borrow( Files.newOutputStream( path, WRITE, APPEND ) )( _.write( bytes ) )
+    path
+  }
 
   private def doWithPlatformHelper( path : Path )( f : (Path, UserOnlyHelper ) => Failable[Path] ) : Failable[Path] = {
     Platform.Current match {
@@ -39,26 +58,27 @@ package object io {
   private trait UserOnlyHelper {
     def ensureUserOnlyDirectory( path : Path )     : Failable[Path]
     def createUserOnlyEmptyFile( path : Path )     : Failable[Path]
-    def createUserReadOnlyEmptyFile( path : Path ) : Failable[Path]
+    def setUserReadOnlyFilePermissions( path : Path )  : Failable[Path]
   }
 
   private final object Posix extends UserOnlyHelper {
-    private val AcceptableUserOnlyDirectoryPermissions = List( EnumSet.of( OWNER_READ, OWNER_WRITE, OWNER_EXECUTE ).asScala, EnumSet.of( OWNER_READ, OWNER_WRITE ).asScala )
-    private val UserOnlyFileAttribute                  = PosixFilePermissions.asFileAttribute( EnumSet.of( OWNER_READ, OWNER_WRITE ) )
-    private val UserReadOnlyFileAttribute              = PosixFilePermissions.asFileAttribute( EnumSet.of( OWNER_READ ) )
+    private val UserOnlyDirectoryPermissions = EnumSet.of( OWNER_READ, OWNER_WRITE, OWNER_EXECUTE )
+    private val UserOnlyDirectoryAttribute   = PosixFilePermissions.asFileAttribute( UserOnlyDirectoryPermissions )
+    private val UserOnlyFileAttribute        = PosixFilePermissions.asFileAttribute( EnumSet.of( OWNER_READ, OWNER_WRITE ) )
+    private val UserReadOnlyFilePermission   = EnumSet.of( OWNER_READ )
 
     def ensureUserOnlyDirectory( path : Path ) : Failable[Path] = {
-      val filePermissions = Files.getPosixFilePermissions( path )
 
       def checkPermissions = {
-        if ( AcceptableUserOnlyDirectoryPermissions.exists( _ == filePermissions ) ) {
+        val filePermissions = Files.getPosixFilePermissions( path )
+        if ( UserOnlyDirectoryPermissions.asScala == filePermissions.asScala ) { // use asScala, so we are doing a value rather than identity check
           succeed( path )
         } else {
           fail( s"Directory '${path}' must be readable and writable only by its owner, but in fact has permissions ${filePermissions}" )
         }
       }
 
-      def createWithPermissions = Failable( Files.createDirectory( path, UserOnlyFileAttribute ) )
+      def createWithPermissions = Failable( Files.createDirectory( path, UserOnlyDirectoryAttribute ) )
 
       if ( Files.exists( path ) ) checkPermissions else createWithPermissions
     }
@@ -67,18 +87,38 @@ package object io {
       Files.createFile( path, UserOnlyFileAttribute )
     }
 
-    def createUserReadOnlyEmptyFile( path : Path ) : Failable[Path] = Failable {
-      Files.createFile( path, UserReadOnlyFileAttribute )
+    //def createUserReadOnlyEmptyFile( path : Path ) : Failable[Path] = Failable {
+    //  Files.createFile( path, UserReadOnlyFileAttribute )
+    //}
+
+    def setUserReadOnlyFilePermissions( path : Path ) : Failable[Path] = Failable {
+      Files.setPosixFilePermissions( path, UserReadOnlyFilePermission )
+      path
     }
+
   }
 
   // this was very helpful: http://jakubstas.com/creating-files-and-directories-nio2/
 
   private final object Windows extends UserOnlyHelper {
 
-    private val UserOnlyDirectoryCreatePermissions = EnumSet.of( LIST_DIRECTORY, ADD_FILE, DELETE_CHILD, READ_ACL ).asScala
-    private val UserOnlyFileCreatePermissions      = EnumSet.of( READ_DATA, WRITE_DATA, APPEND_DATA, DELETE, READ_ACL ).asScala
-    private val UserReadOnlyFileCreatePermissions  = EnumSet.of( READ_DATA, READ_ACL ).asScala
+    // XXX: Remove once warned deficiency regarding read-only files is fixed
+    import com.mchange.sc.v1.log.MLevel._
+
+    // XXX: Remove once warned deficiency regarding read-only files is fixed
+    implicit lazy val logger = mlogger( this )
+
+    /*
+     *  maybe a more restrictive set would be better, but trying that yields directories
+     *  that won't let users write (don't know about read). Since the directory permissions
+     *  will be restricted to the user, I don't think that it's a problem.
+     */ 
+    private val UserOnlyDirectoryCreatePermissions = EnumSet.allOf( classOf[AclEntryPermission] ).asScala 
+    private val UserOnlyFileCreatePermissions      = EnumSet.allOf( classOf[AclEntryPermission] ).asScala // EnumSet.of( READ_DATA, WRITE_DATA, APPEND_DATA, DELETE, READ_ACL ).asScala
+
+
+    private val UserReadOnlyFileCreatePermissions  = UserOnlyFileCreatePermissions // XXX: DEBUG WHY READ-ACCESS TO AN ACTUALLY READ-ONLY SET FAILS (then remove logged warning)
+    //private val UserReadOnlyFileCreatePermissions  = EnumSet.of( READ_DATA, READ_ATTRIBUTES, READ_NAMED_ATTRS, READ_ACL, DELETE ).asScala
 
     private def findJvmUserPrincipal : Failable[UserPrincipal] = Failable {
       val fs            = FileSystems.getDefault()
@@ -97,7 +137,7 @@ package object io {
 
       builder.setPermissions(permissions.asJava)
       builder.setPrincipal(userPrincipal)
-      builder.setType(AclEntryType.DENY)
+      builder.setType(AclEntryType.ALLOW)
 
       val entry = builder.build()
 
@@ -143,9 +183,24 @@ package object io {
       }
     }
 
-    def createUserReadOnlyEmptyFile( path : Path ) : Failable[Path] = {
+    // def createUserReadOnlyEmptyFile( path : Path ) : Failable[Path] = {
+    //   findJvmUserPrincipal.flatMap { userPrincipal =>
+    //     Failable( Files.createFile( path, fileAttribute( userPrincipal, UserReadOnlyFileCreatePermissions ) ) )
+    //   }
+    // }
+
+    def setUserReadOnlyFilePermissions( path : Path ) : Failable[Path] = {
       findJvmUserPrincipal.flatMap { userPrincipal =>
-        Failable( Files.createFile( path, fileAttribute( userPrincipal, UserReadOnlyFileCreatePermissions ) ) )
+        Failable {
+          val view = Files.getFileAttributeView( path, classOf[AclFileAttributeView] )
+          val entries = aclEntryList( userPrincipal, UserReadOnlyFileCreatePermissions )
+          view.setAcl( entries )
+
+          // XXX: Remove once warned deficiency regarding read-only files is fixed
+          WARNING.log("The file could not be made read-only, because doing so would render it inaccessible on Windows. Access is restricted to the current user, however.")
+
+          path
+        }
       }
     }
   }
