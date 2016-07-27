@@ -6,6 +6,28 @@ import spire.implicits._ // for ** operator
 
 // from yellow paper, sec 2.1
 object Denominations {
+  sealed abstract class Denomination( multiplier : scala.BigDecimal ) {
+    val unitName : String
+
+    def fromWei( wei : BigInt ) : BigDecimal = {
+      BigDecimal( wei ) / multiplier
+    }
+  }
+  final object Wei extends Denomination( Multiplier.BigDecimal.Wei ) {
+    val unitName : String = "wei"
+
+    override def fromWei( wei : BigInt ) : BigDecimal = BigDecimal(wei)
+  }
+  final object Szabo extends Denomination( Multiplier.BigDecimal.Szabo ) {
+    val unitName : String = "szabo"
+  }
+  final object Finney extends Denomination( Multiplier.BigDecimal.Finney ) {
+    val unitName : String = "finney"
+  }
+  final object Ether extends Denomination( Multiplier.BigDecimal.Ether ) {
+    val unitName : String = "ether"
+  }
+
   final object Multiplier {
     final object Long extends Multiplier[scala.Long] {
       val Wei    = 10L ** 0;
@@ -18,6 +40,12 @@ object Denominations {
       val Szabo  = scala.BigInt( Long.Szabo );
       val Finney = scala.BigInt( Long.Finney );
       val Ether  = scala.BigInt( Long.Ether );
+    }
+    final object BigDecimal extends Multiplier[scala.BigDecimal] {
+      val Wei    = scala.BigDecimal( BigInt.Wei );
+      val Szabo  = scala.BigDecimal( BigInt.Szabo );
+      val Finney = scala.BigDecimal( BigInt.Finney );
+      val Ether  = scala.BigDecimal( BigInt.Ether );
     }
   }
   trait Multiplier[T] {
