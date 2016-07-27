@@ -40,6 +40,7 @@ object Client {
     )( implicit ec : ExecutionContext ) : Future[BigInt] 
 
     def gasPrice()( implicit ec : ExecutionContext )                                                             : Future[BigInt]
+    def getBalance( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext )          : Future[BigInt]
     def getCompilers()( implicit ec : ExecutionContext )                                                         : Future[immutable.Set[String]]
     def getTransactionCount( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[BigInt]
     def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext )                     : Future[Option[ClientTransactionReceipt]]
@@ -83,6 +84,9 @@ object Client {
       }
       def gasPrice()( implicit ec : ExecutionContext ) : Future[BigInt] = {
         doExchange( "eth_gasPrice", Seq() )( extractBigInt )
+      }
+      def getBalance( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[BigInt] = {
+        doExchange( "eth_getBalance", Seq( encodeAddress( address ), blockNumber.jsValue ) )( extractBigInt )
       }
       def getCompilers()( implicit ec : ExecutionContext ) : Future[immutable.Set[String]] = {
         doExchange( "eth_getCompilers", Seq() )( _.result.as[immutable.Set[String]] )
