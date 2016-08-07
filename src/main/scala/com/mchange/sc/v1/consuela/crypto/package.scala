@@ -68,16 +68,16 @@ package object crypto {
 
     private val ECGenParamSpec      = new ECGenParameterSpec( ECParamBundleName );
 
-
-    val ECParamSpec = {
-      val algorithmParameters = AlgorithmParameters.getInstance( KeyAlgoName );
+    // XXX: Maybe memoize this?!
+    def ecParamSpec( implicit provider : jce.Provider ) = {
+      val algorithmParameters = AlgorithmParameters.getInstance( KeyAlgoName, provider.name );
       algorithmParameters.init( ECGenParamSpec );
       algorithmParameters.getParameterSpec( classOf[ECParameterSpec] )
     }
 
     def generate_jce_keypair( randomness : SecureRandom )( implicit provider : jce.Provider ) : KeyPair = {
       val generator = KeyPairGenerator.getInstance(KeyAlgoName, provider.name);
-      generator.initialize( ECParamSpec, randomness );
+      generator.initialize( ecParamSpec( provider ), randomness );
       generator.generateKeyPair();
     }
 
@@ -107,14 +107,14 @@ package object crypto {
 
     def jce_private_key_from_S( privateKeyAsS : BigInteger )( implicit provider : jce.Provider ) : ECPrivateKey = {
       val kf = KeyFactory.getInstance( KeyAlgoName, provider.name ); // XXX: is this KeyFactory immutable or thread-safe? can i cache it?
-      val privSpec = new ECPrivateKeySpec( privateKeyAsS, ECParamSpec );
+      val privSpec = new ECPrivateKeySpec( privateKeyAsS, ecParamSpec( provider ) );
       kf.generatePrivate( privSpec ).asInstanceOf[ECPrivateKey];
     }
 
     def jce_public_key_from_XY( pubKeyX : BigInteger, pubKeyY : BigInteger )( implicit provider : jce.Provider ) : ECPublicKey = {
       val kf = KeyFactory.getInstance( KeyAlgoName, provider.name ); // XXX: is this KeyFactory immutable or thread-safe? can i cache it?
       val pubKeyAsPointW = new ECPoint( pubKeyX, pubKeyY );
-      val pubSpec = new ECPublicKeySpec( pubKeyAsPointW, ECParamSpec );
+      val pubSpec = new ECPublicKeySpec( pubKeyAsPointW, ecParamSpec( provider ) );
       kf.generatePublic( pubSpec ).asInstanceOf[ECPublicKey];
     }
 
