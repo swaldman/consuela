@@ -38,6 +38,14 @@ package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Re
   type Response = Either[Response.Error,Response.Success]
 
   final object Compilation {
+
+    def opt( str : String ) : Option[String] = if( str.trim == "" ) None else Some( str )
+
+    def str[T : Format]( t : T ) : String = Json.stringify( Json.toJson( t ) )
+
+    def opt[T <: MaybeEmpty : Format ]( t : T ) : Option[String] = if ( t.isEmpty ) None else Some( str( t ) )
+
+
     final case class Info (
       source          : String,
       language        : String,
@@ -47,7 +55,16 @@ package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Re
       abiDefinition   : Abi.Definition,
       userDoc         : Doc.User,
       developerDoc    : Doc.Developer
-    )
+    ) {
+      def mbSource          = opt( source )
+      def mbLanguage        = opt( language )
+      def mbLanguageVersion = opt( languageVersion )
+      def mbCompilerVersion = opt( compilerVersion )
+      def mbCompilerOptions = opt( compilerOptions )
+      def mbAbiDefinition   = opt( abiDefinition )
+      def mbUserDoc         = opt( userDoc )
+      def mbDeveloperDoc    = opt( developerDoc )
+    }
 
     final case class Contract( code : String, info : Info )
 
@@ -55,8 +72,14 @@ package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Re
   }
   //final case class Compilation( contracts : immutable.Map[String,Compilation.Contract] )
 
+  trait MaybeEmpty {
+    def isEmpty : Boolean
+  }
+
   final object Abi {
-    final case class Definition( functions : immutable.Seq[Function], events : immutable.Seq[Event], constructors : immutable.Seq[Constructor] )
+    final case class Definition( functions : immutable.Seq[Function], events : immutable.Seq[Event], constructors : immutable.Seq[Constructor] ) extends MaybeEmpty {
+      def isEmpty : Boolean = functions.isEmpty && events.isEmpty && constructors.isEmpty
+    }
 
     object Function {
       case class Parameter( name : String, `type` : String ) extends Abi.Parameter
@@ -84,12 +107,16 @@ package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Re
     final object User {
       final case class MethodInfo( notice : Option[String] )
     }
-    final case class User( methods : Option[immutable.Map[String,User.MethodInfo]] )
+    final case class User( methods : Option[immutable.Map[String,User.MethodInfo]] ) extends MaybeEmpty {
+      def isEmpty : Boolean = methods.isEmpty || methods.get.isEmpty
+    }
 
     final object Developer {
       final case class MethodInfo( details : Option[String], params : Option[immutable.Map[String,String]] )
     }
-    final case class Developer( title : Option[String], methods : Option[immutable.Map[String, Developer.MethodInfo]] )
+    final case class Developer( title : Option[String], methods : Option[immutable.Map[String, Developer.MethodInfo]] ) extends MaybeEmpty {
+      def isEmpty : Boolean = title.isEmpty && ( methods.isEmpty || methods.get.isEmpty )
+    }
   }
 
   implicit val SuccessResponseFormat = Json.format[Response.Success]
