@@ -63,14 +63,45 @@ package object math {
     }
   }
 
+  def asFixedLengthSignedByteArray( bi : BigInt, desiredLength : Int ) : Array[Byte] = {
+    val bytes = bi.toByteArray;
+    val len = bytes.length;
+    if ( len == desiredLength ) {
+      bytes
+    } else {
+      val neg = bi.signum < 0
+      val minimized = if ( neg ) bytes.dropWhile( _ == 1 ) else bytes.dropWhile( _ == 0 );
+      val minimizedLength = minimized.length;
+      if ( minimizedLength == desiredLength ) {
+        minimized
+      } else if ( minimizedLength < desiredLength ) {
+        if (neg) negOnePad( minimized, minimizedLength, desiredLength ) else zeroPad( minimized, minimizedLength, desiredLength )
+      } else {
+        throw new IllegalArgumentException( s"BigInt '${bi}' requires a representation larger than the desired length of ${desiredLength}." )
+      }
+    }
+  }
+
   def zeroPadLeft( bytes : Array[Byte], desiredLength : Int ) : Array[Byte] = {
     val len = bytes.length;
     require( len <= desiredLength );
     zeroPad( bytes, len, desiredLength );
   }
 
+  def negOnePadLeft( bytes : Array[Byte], desiredLength : Int ) : Array[Byte] = {
+    val len = bytes.length;
+    require( len <= desiredLength );
+    negOnePad( bytes, len, desiredLength );
+  }
+
   private[this] def zeroPad( bytes : Array[Byte], bytesLength : Int, desiredLength : Int ) : Array[Byte] = {
     val out = Array.ofDim[Byte]( desiredLength ); // we're relying on the fact that the default Byte value is zero
+    Array.copy( bytes, 0, out, desiredLength - bytesLength, bytesLength )
+    out
+  }
+
+  private[this] def negOnePad( bytes : Array[Byte], bytesLength : Int, desiredLength : Int ) : Array[Byte] = {
+    val out = Array.fill[Byte]( desiredLength )( -1 );
     Array.copy( bytes, 0, out, desiredLength - bytesLength, bytesLength )
     out
   }
