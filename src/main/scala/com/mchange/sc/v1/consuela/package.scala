@@ -54,11 +54,15 @@ package object consuela {
     def hex : String = ByteUtils.toLowercaseHexAscii( byte ) 
   }
   implicit final class RichString( val string : String ) extends AnyVal {
-    def decodeHex : Array[Byte] = {
-      val hexstring = if ( string.startsWith( "0x" ) ) string.substring(2) else string;
+    def decodeHex( allowPrefix : Boolean ) : Array[Byte] = {
+      val hexstring = if ( allowPrefix && string.startsWith( "0x" ) ) string.substring(2) else string;
       ByteUtils.fromHexAscii( hexstring ); // should we switch to the DatatypeConverter implementation of hex encoding/decoding?
     }
-    def decodeHexAsSeq = ImmutableArraySeq.Byte.createNoCopy( this.decodeHex );
+    def decodeHex : Array[Byte] = decodeHex( allowPrefix = true )
+
+    def decodeHexAsSeq( allowPrefix : Boolean ) : immutable.Seq[Byte] = ImmutableArraySeq.Byte.createNoCopy( this.decodeHex( allowPrefix ) );
+    def decodeHexAsSeq : immutable.Seq[Byte] = decodeHexAsSeq( allowPrefix = true )
+
     def decodeBase64 : Array[Byte] = DatatypeConverter.parseBase64Binary( string );
   }
   trait RichBytes { // if we accept code duplication, we can inline this stuff and let the subclasses extend AnyVal. Hmmm....
