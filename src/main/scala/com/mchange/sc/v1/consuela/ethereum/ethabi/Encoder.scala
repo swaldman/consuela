@@ -35,14 +35,24 @@ object Encoder {
     def encode( representation : Boolean ) : Failable[immutable.Seq[Byte]] = {
       succeed( (0 until 31).map( _ => ZeroByte ) :+ (if ( representation ) OneByte else ZeroByte) )
     }
-    def decode( bytes : Seq[Byte] ) : Failable[Boolean] = {
+    private def decodeCompleteNoLengthCheck( bytes : Seq[Byte] ) : Failable[Boolean] = {
       for {
-        _ <- ( bytes.length == 32 ).toFailable( s"bool must be represented as 32 bytes, found ${bytes.length}" )
         _ <- allZero( bytes.init ).toFailable( s"All but the last byte of an encoded bool should be zero! ${bytes.hex}" )
         _ <- ( bytes.tail == 0 || bytes.tail == 1 ).toFailable("The last byte of encoded bool should be 0 or 1.")
       } yield {
         if ( bytes.tail == 0 ) true else false
       }
+    }
+    def decode( bytes : immutable.Seq[Byte] ) : ( Failable[Boolean], immutable.Seq[Byte] ) = {
+      if ( bytes.length >= 32 ) {
+        val split = bytes.splitAt( 32 )
+        ( decodeCompleteNoLengthCheck( split._1 ), split._2 )
+      } else {
+        ( fail( s"Insufficient number of bytes, 32 required, found ${bytes.length}." ), immutable.Seq.empty[Byte] )
+      }
+    }
+    def decodeComplete( bytes : Seq[Byte] ) : Failable[Boolean] = {
+      ( bytes.length == 32 ).toFailable( s"bool must be represented as 32 bytes, found ${bytes.length}" ).flatMap( _ => decodeCompleteNoLengthCheck( bytes ) )
     }
   }
 
@@ -62,7 +72,6 @@ object Encoder {
         bytes
       }
     }
-
     def format( representation : immutable.Seq[Byte] ) : Failable[String] = {
       checkLen( representation ).map( _ =>  representation.map( unsignedPromote ).mkString("[",",","]") )
     }
@@ -78,17 +87,27 @@ object Encoder {
         padded
       }
     }
-
-    def decode( bytes : Seq[Byte] ) : Failable[immutable.Seq[Byte]] = {
+    private def decodeCompleteNoLengthCheck( bytes : Seq[Byte] ) : Failable[immutable.Seq[Byte]] = {
+      val ( good, pad ) = bytes.splitAt( len )
+      if ( allZero( pad ) ) {
+        succeed( good.toImmutableSeq )
+      } else {
+        fail( s"Expected byte string of length ${len}, span of nozero bytes (from left) is more than that: ${bytes.hex}" )
+      }
+    }
+    def decode( bytes : immutable.Seq[Byte] ) : ( Failable[immutable.Seq[Byte]], immutable.Seq[Byte] ) = {
+      if ( bytes.length >= 32 ) {
+        val split = bytes.splitAt( 32 )
+        ( decodeCompleteNoLengthCheck( split._1 ), split._2 )
+      } else {
+        ( fail( s"Insufficient number of bytes, 32 required, found ${bytes.length}." ), immutable.Seq.empty[Byte] )
+      }
+    }
+    def decodeComplete( bytes : Seq[Byte] ) : Failable[immutable.Seq[Byte]] = {
       if ( bytes.length != 32 ) {
         fail( "A predefined byte array should be encoded as exactly 32 bytes" )
       } else {
-        val ( good, pad ) = bytes.splitAt( len )
-        if ( allZero( pad ) ) {
-          succeed( good.toImmutableSeq )
-        } else {
-          fail( s"Expected byte string of length ${len}, span of nozero bytes (from left) is more than that: ${bytes.hex}" )
-        }
+        decodeCompleteNoLengthCheck( bytes )
       }
     }
   }
@@ -97,14 +116,17 @@ trait Encoder[REP] {
   def parse( str : String )          : Failable[REP]
   def format( representation : REP ) : Failable[String]
 
-  def encode( representation : REP ) : Failable[immutable.Seq[Byte]]
-  def decode( bytes : Seq[Byte] )    : Failable[REP]
+  def encode( representation : REP )        : Failable[immutable.Seq[Byte]]
+  def decode( bytes : immutable.Seq[Byte] ) : ( Failable[REP], immutable.Seq[Byte] )
+
+  def decodeComplete( bytes : Seq[Byte] ) : Failable[REP]
 
   def parseEncode( str : String ) : Failable[immutable.Seq[Byte]] = {
     parse( str ).flatMap( encode )
   }
-  def decodeFormat( bytes : Seq[Byte] ) : Failable[String] = {
-    decode( bytes ).flatMap( format )
+  def decodeFormat( bytes : immutable.Seq[Byte] ) : ( Failable[String], immutable.Seq[Byte] ) = {
+    val tup = decode( bytes )
+    ( tup._1.flatMap( format ), tup._2 )
   }
 }
 
