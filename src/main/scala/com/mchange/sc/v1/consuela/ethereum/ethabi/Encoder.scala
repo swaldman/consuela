@@ -5,6 +5,9 @@ import scala.collection._
 import com.mchange.sc.v1.consuela._
 import com.mchange.sc.v1.consuela.math._
 
+import com.mchange.sc.v1.consuela.ethereum.EthAddress
+import com.mchange.sc.v1.consuela.ethereum.specification.Types.ByteSeqExact20
+
 import com.mchange.sc.v2.failable._
 
 import com.mchange.lang.ByteUtils.unsignedPromote
@@ -31,8 +34,10 @@ object Encoder {
     val defaultUIntBinding : Tuple2[String,Encoder[_]] = "uint" -> uintBindings.last._2
     val  defaultIntBinding : Tuple2[String,Encoder[_]] = "int"  -> intBindings.last._2
 
+    val addressBinding = "address" -> Encoder.Address
+
     val allBindings : List[Tuple2[String,Encoder[_]]] = {
-      fixedLenByteArrayBindings.toList ::: uintBindings.toList ::: intBindings.toList ::: byteBinding :: boolBinding :: defaultUIntBinding :: defaultIntBinding :: Nil
+      fixedLenByteArrayBindings.toList ::: uintBindings.toList ::: intBindings.toList ::: byteBinding :: boolBinding :: defaultUIntBinding :: defaultIntBinding :: addressBinding :: Nil
     }
     Map( allBindings : _* )
   }
@@ -56,6 +61,22 @@ object Encoder {
         if ( bytes.tail == 0 ) true else false
       }
     }
+  }
+  final object Address extends Encoder[EthAddress] {
+    private val internal = new UInt(160) // we could reuse the UInt(160) we generate above but this seems complicated
+
+    private def toAddress( bi : BigInt )         : EthAddress = EthAddress( ByteSeqExact20( asFixedLengthUnsignedByteArray( bi, 20 ).toImmutableSeq ) )
+    private def toBigInt( address : EthAddress ) : BigInt     = BigInt( 1, address.bytes.widen.toArray )
+
+    def parse( str : String ) : Failable[EthAddress]             = internal.parse( str ).map( toAddress )
+    def format( representation : EthAddress ) : Failable[String] = internal.format( toBigInt( representation ) )
+
+    def encode( representation : EthAddress ) : Failable[immutable.Seq[Byte]]                 = internal.encode( toBigInt( representation ) )
+    def decode( bytes : immutable.Seq[Byte] ) : ( Failable[EthAddress], immutable.Seq[Byte] ) = {
+      val tup = internal.decode( bytes )
+      ( tup._1.map( toAddress ), tup._2 )
+    }
+    def decodeComplete( bytes : Seq[Byte] ) : Failable[EthAddress] = internal.decodeComplete( bytes ).map( toAddress )
   }
   final class UInt( bitLen : Int ) extends FixedLengthRepresentation[BigInt]( 32 ) {
     require( bitLen % 8 == 0 )
