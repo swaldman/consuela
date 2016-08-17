@@ -136,7 +136,15 @@ object Encoder {
     val inner = encoderForSolidityType( elementTypeName ).get // asserts availability of elementTypeName
 
     def parse( str : String ) : Failable[ArrayRep] = {
-      val len = str.length
+
+      val strim    = str.trim
+      val strimLen = strim.length
+
+      if ( strim.length < 2 ) return fail( "A String representation of an array must have at least two characters, [ and ]!" )
+      if ( strim.charAt(0) != '[' || strim.charAt( strimLen - 1 ) != ']' ) return fail( "A String representation of an array must begin with '[' and end with ']'!" )
+
+      val uncapped = strim.substring( 1, strimLen - 1 )
+      val len = uncapped.length
 
       /*
        * Note: We'll use Exceptions for parse errors in findTopCommas
@@ -148,11 +156,11 @@ object Encoder {
           quoteState match {
             case NoQuote                                   => NoQuote
             case InQuote                                   => InQuote
-            case InQuoteEscape( escapeState, escapeIndex ) => throw new Exception( s"""'${c}' invalid in String escape. [At character ${index} of "${str}"]""" )
+            case InQuoteEscape( escapeState, escapeIndex ) => throw new Exception( s"""'${c}' invalid in String escape. [At character ${index} of "${uncapped}"]""" )
           }
         }
         if ( index < len ) {
-          str.charAt( index ) match {
+          uncapped.charAt( index ) match {
             case ',' => {
               val newFound = if ( arrayLevel == 0 && quoteState == NoQuote ) index :: found else found
               val newQuoteState = invalidEscapeCharQuoteTransition(',')
@@ -174,7 +182,7 @@ object Encoder {
                   case NoQuote                         => InQuote
                   case InQuote                         => NoQuote
                   case InQuoteEscape( AfterSlash, -1 ) => InQuote
-                  case InQuoteEscape( _, _ )           => throw new Exception( s"""'"' at invalid position in String escape. [At character ${index} of "${str}"]""" )
+                  case InQuoteEscape( _, _ )           => throw new Exception( s"""'"' at invalid position in String escape. [At character ${index} of "${uncapped}"]""" )
                 }
               }
               findTopCommas( index + 1, arrayLevel, newQuoteState, found )
@@ -185,7 +193,7 @@ object Encoder {
                   case NoQuote                         => NoQuote
                   case InQuote                         => InQuote
                   case InQuoteEscape( AfterSlash, -1 ) => InQuoteEscape( AtHex, 0 )
-                  case InQuoteEscape( _, _ )           => throw new Exception( s"""'x' at invalid position in String escape. [At character ${index} of "${str}"]""" )
+                  case InQuoteEscape( _, _ )           => throw new Exception( s"""'x' at invalid position in String escape. [At character ${index} of "${uncapped}"]""" )
                 }
               }
               findTopCommas( index + 1, arrayLevel, newQuoteState, found )
@@ -196,7 +204,7 @@ object Encoder {
                   case NoQuote                         => NoQuote
                   case InQuote                         => InQuote
                   case InQuoteEscape( AfterSlash, -1 ) => InQuoteEscape( AtUnicode, 0 )
-                  case InQuoteEscape( _, _ )           => throw new Exception( s"""'x' at invalid position in String escape. [At character ${index} of "${str}"]""" )
+                  case InQuoteEscape( _, _ )           => throw new Exception( s"""'x' at invalid position in String escape. [At character ${index} of "${uncapped}"]""" )
                 }
               }
               findTopCommas( index + 1, arrayLevel, newQuoteState, found )
@@ -219,7 +227,7 @@ object Encoder {
                       case 3     => InQuote
                     }
                   }
-                  case InQuoteEscape( _, _ ) => throw new Exception( s"""'${c}' at invalid position in String escape. [At character ${index} of "${str}"]""" )
+                  case InQuoteEscape( _, _ ) => throw new Exception( s"""'${c}' at invalid position in String escape. [At character ${index} of "${uncapped}"]""" )
                 }
               }
               findTopCommas( index + 1, arrayLevel, newQuoteState, found )
@@ -241,7 +249,7 @@ object Encoder {
                       case 3     => InQuote
                     }
                   }
-                  case InQuoteEscape( _, _ ) => throw new Exception( s"""'${c}' at invalid position in String escape. [At character ${index} of "${str}"]""" )
+                  case InQuoteEscape( _, _ ) => throw new Exception( s"""'${c}' at invalid position in String escape. [At character ${index} of "${uncapped}"]""" )
                 }
               }
               findTopCommas( index + 1, arrayLevel, newQuoteState, found )
@@ -252,7 +260,7 @@ object Encoder {
                   case NoQuote                         => NoQuote
                   case InQuote                         => InQuote
                   case InQuoteEscape( AfterSlash, -1 ) => InQuote
-                  case InQuoteEscape( _, _ ) => throw new Exception( s"""'${c}' at invalid position in String escape. [At character ${index} of "${str}"]""" )
+                  case InQuoteEscape( _, _ ) => throw new Exception( s"""'${c}' at invalid position in String escape. [At character ${index} of "${uncapped}"]""" )
                 }
               }
               findTopCommas( index + 1, arrayLevel, newQuoteState, found )
@@ -274,10 +282,10 @@ object Encoder {
           val capped  = -1 :: tcs ::: -1 :: Nil
           val grouped = capped.sliding(2)
           grouped.map {
-            case         -1 :: endComma :: Nil                                     => str.substring( endComma ).trim
-            case startComma ::       -1 :: Nil if ( startComma + 1 == str.length ) => ""
-            case startComma ::       -1 :: Nil                                     => str.substring( startComma + 1 ).trim
-            case startComma :: endComma :: Nil                                     => str.substring( startComma + 1 , endComma ).trim
+            case         -1 :: endComma :: Nil                                          => uncapped.substring( endComma ).trim
+            case startComma ::       -1 :: Nil if ( startComma + 1 == uncapped.length ) => ""
+            case startComma ::       -1 :: Nil                                          => uncapped.substring( startComma + 1 ).trim
+            case startComma :: endComma :: Nil                                          => uncapped.substring( startComma + 1 , endComma ).trim
           }
         }
       }
