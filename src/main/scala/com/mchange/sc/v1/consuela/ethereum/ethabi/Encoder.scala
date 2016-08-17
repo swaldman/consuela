@@ -44,9 +44,9 @@ object Encoder {
   }
 
   private lazy val UInt160 = Mappables("uint160").asInstanceOf[Encoder[BigInt]]
-  private lazy val UInt256 = Mappables("uint256").asInstanceOf[Encoder[BigInt]]
-  private lazy val SInt256 = Mappables("int256").asInstanceOf[Encoder[BigInt]]
 
+  lazy val UInt256 = Mappables("uint256").asInstanceOf[Encoder[BigInt]]
+  lazy val  Int256 = Mappables("int256").asInstanceOf[Encoder[BigInt]]
 
   private def xfixed( m : Int, n : Int, internal : Encoder[BigInt], signed : Boolean ) : Encoder[BigDecimal] = {
     new Encoder[BigDecimal] {
@@ -82,11 +82,34 @@ object Encoder {
       def decodeComplete( bytes : Seq[Byte] ) : Failable[BigDecimal] = {
         internal.decodeComplete( bytes ).flatMap( downToBigDecimal )
       }
+      def encodingLength : Option[Int] = {
+        internal.encodingLength
+      }
     }
   }
 
-  private def  fixed( m : Int, n : Int ) = xfixed( m, n, SInt256, true )
+  private def  fixed( m : Int, n : Int ) = xfixed( m, n,  Int256, true )
   private def ufixed( m : Int, n : Int ) = xfixed( m, n, UInt256, false )
+
+  private val  FixedRegex =  """fixed(\d{1,3})x(\d{1,3})""".r
+  private val UFixedRegex = """ufixed(\d{1,3})x(\d{1,3})""".r
+
+  def encoderForSolidityType( typeName : String ) : Option[Encoder[_]] = {
+    def resolveFixedType : Option[Encoder[_]] = {
+      val fullyQualifiedName = typeName match {
+        case  "fixed" =>  "fixed128x128"
+        case "ufixed" => "ufixed128x128"
+        case other    => other
+      }
+      fullyQualifiedName match {
+        case  FixedRegex( m, n ) => Some(  fixed( m.toInt, n.toInt ) )
+        case UFixedRegex( m, n ) => Some( ufixed( m.toInt, n.toInt ) )
+        case _                   => None
+      }
+    }
+
+    Mappables.get( typeName ) orElse resolveFixedType
+  }
 
   final object Bool extends FixedLengthRepresentation[Boolean]( 32 ) {
     def parse( str : String ) : Failable[Boolean] = {
@@ -120,6 +143,8 @@ object Encoder {
       ( tup._1.map( toAddress ), tup._2 )
     }
     def decodeComplete( bytes : Seq[Byte] ) : Failable[EthAddress] = UInt160.decodeComplete( bytes ).map( toAddress )
+
+    def encodingLength : Option[Int] = UInt160.encodingLength
   }
   final class UInt( bitLen : Int ) extends FixedLengthRepresentation[BigInt]( 32 ) {
     require( bitLen % 8 == 0 )
@@ -232,6 +257,8 @@ object Encoder {
       check.flatMap( _ => decodeCompleteNoLengthCheck( bytes ) )
     }
 
+    def encodingLength : Option[Int] = Some(32) // will be None, signifying unknown, for dynamic types
+
     private [Encoder] def decodeCompleteNoLengthCheck( bytes : Seq[Byte] ) : Failable[REP]
   }
 }
@@ -243,6 +270,8 @@ trait Encoder[REP] {
   def decode( bytes : immutable.Seq[Byte] ) : ( Failable[REP], immutable.Seq[Byte] )
 
   def decodeComplete( bytes : Seq[Byte] ) : Failable[REP]
+
+  def encodingLength : Option[Int] // will be None, signifying unknown, for dynamic types
 
   def parseEncode( str : String ) : Failable[immutable.Seq[Byte]] = {
     parse( str ).flatMap( encode )
