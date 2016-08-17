@@ -14,6 +14,8 @@ import com.mchange.lang.ByteUtils.unsignedPromote
 
 import scala.language.existentials
 
+import scala.annotation.tailrec
+
 object Encoder {
   private def allZero( bytes : Seq[Byte] ) : Boolean = ! bytes.exists( _ != 0 )
 
@@ -79,7 +81,7 @@ object Encoder {
         val ( bi, rest ) = internal.decode( bytes )
         ( bi.flatMap( downToBigDecimal ), rest )
       }
-      def decodeComplete( bytes : Seq[Byte] ) : Failable[BigDecimal] = {
+      def decodeComplete( bytes : immutable.Seq[Byte] ) : Failable[BigDecimal] = {
         internal.decodeComplete( bytes ).flatMap( downToBigDecimal )
       }
       def encodingLength : Option[Int] = {
@@ -111,6 +113,217 @@ object Encoder {
     Mappables.get( typeName ) orElse resolveFixedType
   }
 
+  case class ArrayRep( elementTypeName : String, items : immutable.Seq[Any] )
+
+  private trait EscapeState
+  private case object AfterSlash extends EscapeState
+  private case object AtHex      extends EscapeState
+  private case object AtUnicode  extends EscapeState
+
+  private trait QuoteState
+  private case object NoQuote                                                            extends QuoteState
+  private case object InQuote                                                            extends QuoteState
+
+  // escapeIndex is only used for digits of hex and unicode escapes
+  private case class  InQuoteEscape( escapeState : EscapeState, escapeIndex : Int = -1 ) extends QuoteState
+
+  private val SingleCharEscapeAndHexChars  = Set('a','b','f')
+  private val NoEscapeHexChars             = Set('0','1','2','3','4','5','6','7','8','9','c','d','e','A','B','C','D','E','F')
+  private val SingleCharEscapesNotHexChars = Set('n','r','t','v','\\','\'','\"','?')
+
+  final class InnerArrayDecoder( elementTypeName : String, elementCount : Int ) extends Encoder[ArrayRep] {
+
+    val inner = encoderForSolidityType( elementTypeName ).get // asserts availability of elementTypeName
+
+    def parse( str : String ) : Failable[ArrayRep] = {
+      val len = str.length
+
+      /*
+       * Note: We'll use Exceptions for parse errors in findTopCommas
+       */
+
+      @tailrec
+      def findTopCommas( index : Int, arrayLevel : Int, quoteState : QuoteState, found : List[Int] ) : List[Int] = {
+        def invalidEscapeCharQuoteTransition( c : Char ) : QuoteState = {
+          quoteState match {
+            case NoQuote                                   => NoQuote
+            case InQuote                                   => InQuote
+            case InQuoteEscape( escapeState, escapeIndex ) => throw new Exception( s"""'${c}' invalid in String escape. [At character ${index} of "${str}"]""" )
+          }
+        }
+        if ( index < len ) {
+          str.charAt( index ) match {
+            case ',' => {
+              val newFound = if ( arrayLevel == 0 && quoteState == NoQuote ) index :: found else found
+              val newQuoteState = invalidEscapeCharQuoteTransition(',')
+              findTopCommas( index + 1, arrayLevel, newQuoteState, newFound )
+            }
+            case '[' => {
+              val newArrayLevel = if ( quoteState == NoQuote ) arrayLevel + 1 else arrayLevel
+              val newQuoteState = invalidEscapeCharQuoteTransition('[')
+              findTopCommas( index + 1, newArrayLevel, newQuoteState, found )
+            }
+            case ']' => {
+              val newArrayLevel = if ( quoteState == NoQuote ) arrayLevel - 1 else arrayLevel
+              val newQuoteState = invalidEscapeCharQuoteTransition(']')
+              findTopCommas( index + 1, newArrayLevel, newQuoteState, found )
+            }
+            case '"' => {
+              val newQuoteState = {
+                quoteState match {
+                  case NoQuote                         => InQuote
+                  case InQuote                         => NoQuote
+                  case InQuoteEscape( AfterSlash, -1 ) => InQuote
+                  case InQuoteEscape( _, _ )           => throw new Exception( s"""'"' at invalid position in String escape. [At character ${index} of "${str}"]""" )
+                }
+              }
+              findTopCommas( index + 1, arrayLevel, newQuoteState, found )
+            }
+            case 'x' => {
+              val newQuoteState = {
+                quoteState match {
+                  case NoQuote                         => NoQuote
+                  case InQuote                         => InQuote
+                  case InQuoteEscape( AfterSlash, -1 ) => InQuoteEscape( AtHex, 0 )
+                  case InQuoteEscape( _, _ )           => throw new Exception( s"""'x' at invalid position in String escape. [At character ${index} of "${str}"]""" )
+                }
+              }
+              findTopCommas( index + 1, arrayLevel, newQuoteState, found )
+            }
+            case 'u' => {
+              val newQuoteState = {
+                quoteState match {
+                  case NoQuote                         => NoQuote
+                  case InQuote                         => InQuote
+                  case InQuoteEscape( AfterSlash, -1 ) => InQuoteEscape( AtUnicode, 0 )
+                  case InQuoteEscape( _, _ )           => throw new Exception( s"""'x' at invalid position in String escape. [At character ${index} of "${str}"]""" )
+                }
+              }
+              findTopCommas( index + 1, arrayLevel, newQuoteState, found )
+            }
+            case c if SingleCharEscapeAndHexChars(c) => {
+              val newQuoteState = {
+                quoteState match {
+                  case NoQuote                         => NoQuote
+                  case InQuote                         => InQuote
+                  case InQuoteEscape( AfterSlash, -1 ) => InQuote
+                  case InQuoteEscape( AtHex, i )       => {
+                    i match {
+                      case 0 => InQuoteEscape( AtHex, 1 )
+                      case 1 => InQuote
+                    }
+                  }
+                  case InQuoteEscape( AtUnicode, i ) => {
+                    i match {
+                      case 0|1|2 => InQuoteEscape( AtUnicode, i+1 )
+                      case 3     => InQuote
+                    }
+                  }
+                  case InQuoteEscape( _, _ ) => throw new Exception( s"""'${c}' at invalid position in String escape. [At character ${index} of "${str}"]""" )
+                }
+              }
+              findTopCommas( index + 1, arrayLevel, newQuoteState, found )
+            }
+            case c if NoEscapeHexChars(c) => {
+              val newQuoteState = {
+                quoteState match {
+                  case NoQuote                         => NoQuote
+                  case InQuote                         => InQuote
+                  case InQuoteEscape( AtHex, i )       => {
+                    i match {
+                      case 0 => InQuoteEscape( AtHex, 1 )
+                      case 1 => InQuote
+                    }
+                  }
+                  case InQuoteEscape( AtUnicode, i ) => {
+                    i match {
+                      case 0|1|2 => InQuoteEscape( AtUnicode, i+1 )
+                      case 3     => InQuote
+                    }
+                  }
+                  case InQuoteEscape( _, _ ) => throw new Exception( s"""'${c}' at invalid position in String escape. [At character ${index} of "${str}"]""" )
+                }
+              }
+              findTopCommas( index + 1, arrayLevel, newQuoteState, found )
+            }
+            case c if SingleCharEscapesNotHexChars(c) => {
+              val newQuoteState = {
+                quoteState match {
+                  case NoQuote                         => NoQuote
+                  case InQuote                         => InQuote
+                  case InQuoteEscape( AfterSlash, -1 ) => InQuote
+                  case InQuoteEscape( _, _ ) => throw new Exception( s"""'${c}' at invalid position in String escape. [At character ${index} of "${str}"]""" )
+                }
+              }
+              findTopCommas( index + 1, arrayLevel, newQuoteState, found )
+            }
+            case c => {
+              val newQuoteState = invalidEscapeCharQuoteTransition('[')
+              findTopCommas( index + 1, arrayLevel, newQuoteState, found )
+            }
+          }
+        } else {
+          found
+        }
+      }
+
+      val topCommas = Failable( findTopCommas( 0, 0, NoQuote, Nil ) )
+
+      val elements = {
+        topCommas.map { tcs =>
+          val capped  = -1 :: tcs ::: -1 :: Nil
+          val grouped = capped.sliding(2)
+          grouped.map {
+            case         -1 :: endComma :: Nil                                     => str.substring( endComma ).trim
+            case startComma ::       -1 :: Nil if ( startComma + 1 == str.length ) => ""
+            case startComma ::       -1 :: Nil                                     => str.substring( startComma + 1 ).trim
+            case startComma :: endComma :: Nil                                     => str.substring( startComma + 1 , endComma ).trim
+          }
+        }
+      }
+
+      elements.flatMap { list =>
+        val check = (list.length == elementCount).toFailable( s"Unexpected array size. [expected: ${elementCount}, found: ${list.length}]" )
+        check.flatMap( _ =>  Failable( ArrayRep( elementTypeName, list.map( inner.parse ).map( _.get ).toVector ) ) )
+      }
+    }
+
+    def format( representation : ArrayRep ) : Failable[String] = {
+      Failable.sequence( representation.items.map( inner.formatAny ) ).map( _.mkString("[",",","]") )
+    }
+
+    def encode( representation : ArrayRep ) : Failable[immutable.Seq[Byte]] = {
+      Failable( representation.items.flatMap( item => inner.encodeAny( item ).get ) )
+    }
+
+    def decode( bytes : immutable.Seq[Byte] ) : ( Failable[ArrayRep], immutable.Seq[Byte] ) = {
+      _decode( elementCount, elementCount, Array.ofDim[Any]( elementCount ), bytes )
+    }
+
+    @tailrec
+    private def _decode( countdown : Int, len : Int, nascent : Array[Any], more : immutable.Seq[Byte] ) : ( Failable[ArrayRep], immutable.Seq[Byte] ) = {
+      if ( countdown == 0 ) {
+        ( succeed( ArrayRep( elementTypeName, nascent.toVector ) ), more )
+      } else {
+        val ( nextValue, nextBytes ) = inner.decode( more )
+        nascent( len - countdown ) = nextValue
+        _decode( countdown - 1, len, nascent, nextBytes ) 
+      }
+    }
+
+    def decodeComplete( bytes : immutable.Seq[Byte] ) : Failable[ArrayRep] = {
+      val ( out, rest ) = decode( bytes )
+
+      val check = (rest.isEmpty).toFailable( s"decodeComplete(...) expects to decode an exact byte representation, and yet we found bytes left over: 0x${rest.hex}" )
+      check.flatMap( _ => out )
+    }
+
+    def encodingLength : Option[Int] = None
+  }
+
+
+
+
   final object Bool extends FixedLengthRepresentation[Boolean]( 32 ) {
     def parse( str : String ) : Failable[Boolean] = {
       Failable( java.lang.Boolean.parseBoolean( str ) )
@@ -121,7 +334,7 @@ object Encoder {
     def encode( representation : Boolean ) : Failable[immutable.Seq[Byte]] = {
       succeed( (0 until 31).map( _ => ZeroByte ) :+ (if ( representation ) OneByte else ZeroByte) )
     }
-    private [Encoder] def decodeCompleteNoLengthCheck( bytes : Seq[Byte] ) : Failable[Boolean] = {
+    private [Encoder] def decodeCompleteNoLengthCheck( bytes : immutable.Seq[Byte] ) : Failable[Boolean] = {
       for {
         _ <- allZero( bytes.init ).toFailable( s"All but the last byte of an encoded bool should be zero! ${bytes.hex}" )
         _ <- ( bytes.tail == 0 || bytes.tail == 1 ).toFailable("The last byte of encoded bool should be 0 or 1.")
@@ -142,7 +355,7 @@ object Encoder {
       val tup = UInt160.decode( bytes )
       ( tup._1.map( toAddress ), tup._2 )
     }
-    def decodeComplete( bytes : Seq[Byte] ) : Failable[EthAddress] = UInt160.decodeComplete( bytes ).map( toAddress )
+    def decodeComplete( bytes : immutable.Seq[Byte] ) : Failable[EthAddress] = UInt160.decodeComplete( bytes ).map( toAddress )
 
     def encodingLength : Option[Int] = UInt160.encodingLength
   }
@@ -165,7 +378,7 @@ object Encoder {
     def encode( representation : BigInt ) : Failable[immutable.Seq[Byte]] = {
       checkRange( representation ).map( _ => asFixedLengthUnsignedByteArray( representation, 32 ).toImmutableSeq )
     }
-    private [Encoder] def decodeCompleteNoLengthCheck( bytes : Seq[Byte] ) : Failable[BigInt] = {
+    private [Encoder] def decodeCompleteNoLengthCheck( bytes : immutable.Seq[Byte] ) : Failable[BigInt] = {
       val zeroLen = 32 - byteLen
       val ( zeros, good ) = bytes.splitAt( zeroLen )
       val zeroCheck = allZero( zeros ).toFailable( s"We expect a uint${bitLen} to be left-padded with ${zeroLen} zeroes, bytes: ${bytes.hex}" )
@@ -192,7 +405,7 @@ object Encoder {
     def encode( representation : BigInt ) : Failable[immutable.Seq[Byte]] = {
       checkRange( representation ).map( _ => asFixedLengthSignedByteArray( representation, 32 ).toImmutableSeq )
     }
-    private [Encoder] def decodeCompleteNoLengthCheck( bytes : Seq[Byte] ) : Failable[BigInt] = {
+    private [Encoder] def decodeCompleteNoLengthCheck( bytes : immutable.Seq[Byte] ) : Failable[BigInt] = {
       val neg = bytes(0) < 0
       val padLen = 32 - byteLen
       val ( pad, good ) = bytes.splitAt( padLen )
@@ -233,7 +446,7 @@ object Encoder {
         padded
       }
     }
-    private [Encoder] def decodeCompleteNoLengthCheck( bytes : Seq[Byte] ) : Failable[immutable.Seq[Byte]] = {
+    private [Encoder] def decodeCompleteNoLengthCheck( bytes : immutable.Seq[Byte] ) : Failable[immutable.Seq[Byte]] = {
       val ( good, pad ) = bytes.splitAt( len )
       if ( allZero( pad ) ) {
         succeed( good.toImmutableSeq )
@@ -252,24 +465,32 @@ object Encoder {
       }
     }
 
-    def decodeComplete( bytes : Seq[Byte] ) : Failable[REP] = {
+    def decodeComplete( bytes : immutable.Seq[Byte] ) : Failable[REP] = {
       val check = ( bytes.length == repLen ).toFailable( "A predefined byte array should be encoded as exactly ${repLen} bytes, has ${bytes.length}: ${bytes.hex}" )
       check.flatMap( _ => decodeCompleteNoLengthCheck( bytes ) )
     }
 
     def encodingLength : Option[Int] = Some(32) // will be None, signifying unknown, for dynamic types
 
-    private [Encoder] def decodeCompleteNoLengthCheck( bytes : Seq[Byte] ) : Failable[REP]
+    private [Encoder] def decodeCompleteNoLengthCheck( bytes : immutable.Seq[Byte] ) : Failable[REP]
   }
 }
 trait Encoder[REP] {
   def parse( str : String )          : Failable[REP]
   def format( representation : REP ) : Failable[String]
 
+  def formatAny( untypedRepresentation : Any ) : Failable[String] = {
+    Failable( format( untypedRepresentation.asInstanceOf[REP] ) ).flatten // we'll see the ClassCastException in the fail object if mistyped
+  }
+
   def encode( representation : REP )        : Failable[immutable.Seq[Byte]]
   def decode( bytes : immutable.Seq[Byte] ) : ( Failable[REP], immutable.Seq[Byte] )
 
-  def decodeComplete( bytes : Seq[Byte] ) : Failable[REP]
+  def encodeAny( untypedRepresentation : Any ) : Failable[immutable.Seq[Byte]] = {
+    Failable( encode( untypedRepresentation.asInstanceOf[REP] ) ).flatten // we'll see the ClassCastException in the fail object if mistyped
+  }
+
+  def decodeComplete( bytes : immutable.Seq[Byte] ) : Failable[REP]
 
   def encodingLength : Option[Int] // will be None, signifying unknown, for dynamic types
 
