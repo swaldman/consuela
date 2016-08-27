@@ -95,6 +95,9 @@ object Encoder {
   private val  FixedRegex =  """fixed(\d{1,3})x(\d{1,3})""".r
   private val UFixedRegex = """ufixed(\d{1,3})x(\d{1,3})""".r
 
+  private val OuterArrayRegex = """^(.*)\[\]$""".r
+  private val InnerArrayRegex = """^(.*)\[\(d+)\]$""".r
+
   def encoderForSolidityType( typeName : String ) : Option[Encoder[_]] = {
     def resolveFixedType : Option[Encoder[_]] = {
       val fullyQualifiedName = typeName match {
@@ -108,8 +111,16 @@ object Encoder {
         case _                   => None
       }
     }
+    def resolveDynamicType : Option[Encoder[_]] = {
+      val unspaced = typeName.filter( c => !c.isWhitespace )
+      unspaced match {
+        case InnerArrayRegex( elementTypeName, length ) => Some( new InnerArrayDecoder( elementTypeName, length.toInt ) )
+        case OuterArrayRegex( elementTypeName )         => Some( new OuterArrayDecoder( elementTypeName ) )
+        case _                                          => None
+      }
+    }
 
-    Mappables.get( typeName ) orElse resolveFixedType
+    Mappables.get( typeName ) orElse resolveFixedType orElse resolveDynamicType
   }
 
   case class ArrayRep( elementTypeName : String, items : immutable.Seq[Any] )
