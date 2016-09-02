@@ -123,6 +123,37 @@ object Encoder {
     Mappables.get( typeName ) orElse resolveFixedType orElse resolveDynamicType
   }
 
+  object BytesEncoder extends Encoder[immutable.Seq[Byte]] {
+
+    private def toByteSeq( items : immutable.Seq[Any] ) = {
+      items.map( _.asInstanceOf[Byte] )
+    }
+
+    val inner = new OuterArrayDecoder("byte")
+
+    def parse( str : String ) : Failable[immutable.Seq[Byte]] = Failable( str.decodeHexAsSeq ) orElse parseOneByteCharQuotedString( str )
+
+    def format( representation : immutable.Seq[Byte] ) : Failable[String] = generateOneByteCharQuotedString( representation )
+
+    def encode( representation : immutable.Seq[Byte] ) : Failable[immutable.Seq[Byte]] = inner.encode( ArrayRep( "byte", representation ) )
+
+    def decode( bytes : immutable.Seq[Byte] ) : Failable[Tuple2[immutable.Seq[Byte], immutable.Seq[Byte]]] = inner.decode( bytes ).map { case ( ar, rest ) => ( toByteSeq(ar.items), rest ) }
+
+    def decodeComplete( bytes : immutable.Seq[Byte] ) : Failable[immutable.Seq[Byte]] = {
+      decode( bytes ).flatMap { case ( decoded, rest ) =>
+        (rest.isEmpty).toFailable( s"decodeComplete(...) failed to consume all bytes. [rest 0x${rest.hex}]" ).map( _ => decoded )
+      }
+    }
+
+    def encodingLength : Option[Int] = None
+  }
+
+  private def parseOneByteCharQuotedString( quotedString : String ) : Failable[immutable.Seq[Byte]] = ???
+  private def generateOneByteCharQuotedString( bytes : Seq[Byte] )  : Failable[String]              = ???
+
+  private def parseUtf8QuotedString( quotedString : String ) : Failable[immutable.Seq[Byte]] = ???
+  private def generateUtf8QuotedString( bytes : Seq[Byte] )  : Failable[String]              = ???
+
   case class ArrayRep( elementTypeName : String, items : immutable.Seq[Any] )
 
   private trait EscapeState
@@ -137,9 +168,12 @@ object Encoder {
   // escapeIndex is only used for digits of hex and unicode escapes
   private case class  InQuoteEscape( escapeState : EscapeState, escapeIndex : Int = -1 ) extends QuoteState
 
-  private val SingleCharEscapeAndHexChars  = Set('a','b','f')
+  private val SingleCharEscapeAndHexCharsMap  = Map('a' -> 0x07.toChar, 'b' -> 0x08.toChar, 'f' -> 0x0C.toChar)
+  private val SingleCharEscapesNotHexCharsMap = Map('n' -> 0x0A.toChar, 'r' -> 0x0D.toChar, 't' -> 0x09.toChar, 'v' -> 0x0B.toChar, '\\' -> 0x5C.toChar, '\'' -> 0x27.toChar, '\"' -> 0x22.toChar, '?' -> 0x3F.toChar)
+
+  private val SingleCharEscapeAndHexChars  = SingleCharEscapeAndHexCharsMap.keySet
   private val NoEscapeHexChars             = Set('0','1','2','3','4','5','6','7','8','9','c','d','e','A','B','C','D','E','F')
-  private val SingleCharEscapesNotHexChars = Set('n','r','t','v','\\','\'','\"','?')
+  private val SingleCharEscapesNotHexChars = SingleCharEscapesNotHexCharsMap.keySet
 
   private def parseArray( elementTypeName : String, inner : Encoder[_] )( str : String ) : Failable[ArrayRep] = {
 
@@ -348,8 +382,6 @@ object Encoder {
   }
 
   final class InnerArrayDecoder( val elementTypeName : String, val elementCount : Int = -1 ) extends Encoder[ArrayRep] {
-
-  //val check = (list.length == elementCount).toFailable( s"Unexpected array size. [expected: ${elementCount}, found: ${list.length}]" )
 
     val inner = encoderForSolidityType( elementTypeName ).get // asserts availability of elementTypeName
 
