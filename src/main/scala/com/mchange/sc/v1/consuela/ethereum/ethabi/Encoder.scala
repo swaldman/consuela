@@ -10,6 +10,8 @@ import com.mchange.sc.v1.consuela.ethereum.specification.Types.ByteSeqExact20
 
 import com.mchange.sc.v2.failable._
 
+import com.mchange.sc.v2.literal.StringLiteral
+
 import com.mchange.lang.ByteUtils.unsignedPromote
 
 import scala.language.existentials
@@ -156,25 +158,6 @@ object Encoder {
 
   case class ArrayRep( elementTypeName : String, items : immutable.Seq[Any] )
 
-  private trait EscapeState
-  private case object AfterSlash extends EscapeState
-  private case object AtHex      extends EscapeState
-  private case object AtUnicode  extends EscapeState
-
-  private trait QuoteState
-  private case object NoQuote                                                            extends QuoteState
-  private case object InQuote                                                            extends QuoteState
-
-  // escapeIndex is only used for digits of hex and unicode escapes
-  private case class  InQuoteEscape( escapeState : EscapeState, escapeIndex : Int = -1 ) extends QuoteState
-
-  private val SingleCharEscapeAndHexCharsMap  = Map('a' -> 0x07.toChar, 'b' -> 0x08.toChar, 'f' -> 0x0C.toChar)
-  private val SingleCharEscapesNotHexCharsMap = Map('n' -> 0x0A.toChar, 'r' -> 0x0D.toChar, 't' -> 0x09.toChar, 'v' -> 0x0B.toChar, '\\' -> 0x5C.toChar, '\'' -> 0x27.toChar, '\"' -> 0x22.toChar, '?' -> 0x3F.toChar)
-
-  private val SingleCharEscapeAndHexChars  = SingleCharEscapeAndHexCharsMap.keySet
-  private val NoEscapeHexChars             = Set('0','1','2','3','4','5','6','7','8','9','c','d','e','A','B','C','D','E','F')
-  private val SingleCharEscapesNotHexChars = SingleCharEscapesNotHexCharsMap.keySet
-
   private def parseArray( elementTypeName : String, inner : Encoder[_] )( str : String ) : Failable[ArrayRep] = {
 
     val strim    = str.trim
@@ -191,123 +174,29 @@ object Encoder {
      */
 
     @tailrec
-    def findTopCommas( index : Int, arrayLevel : Int, quoteState : QuoteState, found : List[Int] ) : List[Int] = {
-      def invalidEscapeCharQuoteTransition( c : Char ) : QuoteState = {
-        quoteState match {
-          case NoQuote                                   => NoQuote
-          case InQuote                                   => InQuote
-          case InQuoteEscape( escapeState, escapeIndex ) => throw new Exception( s"""'${c}' invalid in String escape. [At character ${index} of "${uncapped}"]""" )
-        }
-      }
+    def findTopCommas( index : Int, arrayLevel : Int, found : List[Int] ) : List[Int] = {
       if ( index < len ) {
         uncapped.charAt( index ) match {
           case ',' => {
-            val newFound = if ( arrayLevel == 0 && quoteState == NoQuote ) index :: found else found
-            val newQuoteState = invalidEscapeCharQuoteTransition(',')
-            findTopCommas( index + 1, arrayLevel, newQuoteState, newFound )
+            val newFound = if ( arrayLevel == 0 ) index :: found else found
+            findTopCommas( index + 1, arrayLevel, newFound )
           }
           case '[' => {
-            val newArrayLevel = if ( quoteState == NoQuote ) arrayLevel + 1 else arrayLevel
-            val newQuoteState = invalidEscapeCharQuoteTransition('[')
-            findTopCommas( index + 1, newArrayLevel, newQuoteState, found )
+            val newArrayLevel = arrayLevel + 1
+            findTopCommas( index + 1, newArrayLevel, found )
           }
           case ']' => {
-            val newArrayLevel = if ( quoteState == NoQuote ) arrayLevel - 1 else arrayLevel
-            val newQuoteState = invalidEscapeCharQuoteTransition(']')
-            findTopCommas( index + 1, newArrayLevel, newQuoteState, found )
+            val newArrayLevel = arrayLevel - 1
+            findTopCommas( index + 1, newArrayLevel, found )
           }
           case '"' => {
-            val newQuoteState = {
-              quoteState match {
-                case NoQuote                         => InQuote
-                case InQuote                         => NoQuote
-                case InQuoteEscape( AfterSlash, -1 ) => InQuote
-                case InQuoteEscape( _, _ )           => throw new Exception( s"""'"' at invalid position in String escape. [At character ${index} of "${uncapped}"]""" )
-              }
-            }
-            findTopCommas( index + 1, arrayLevel, newQuoteState, found )
-          }
-          case 'x' => {
-            val newQuoteState = {
-              quoteState match {
-                case NoQuote                         => NoQuote
-                case InQuote                         => InQuote
-                case InQuoteEscape( AfterSlash, -1 ) => InQuoteEscape( AtHex, 0 )
-                case InQuoteEscape( _, _ )           => throw new Exception( s"""'x' at invalid position in String escape. [At character ${index} of "${uncapped}"]""" )
-              }
-            }
-            findTopCommas( index + 1, arrayLevel, newQuoteState, found )
-          }
-          case 'u' => {
-            val newQuoteState = {
-              quoteState match {
-                case NoQuote                         => NoQuote
-                case InQuote                         => InQuote
-                case InQuoteEscape( AfterSlash, -1 ) => InQuoteEscape( AtUnicode, 0 )
-                case InQuoteEscape( _, _ )           => throw new Exception( s"""'x' at invalid position in String escape. [At character ${index} of "${uncapped}"]""" )
-              }
-            }
-            findTopCommas( index + 1, arrayLevel, newQuoteState, found )
-          }
-          case c if SingleCharEscapeAndHexChars(c) => {
-            val newQuoteState = {
-              quoteState match {
-                case NoQuote                         => NoQuote
-                case InQuote                         => InQuote
-                case InQuoteEscape( AfterSlash, -1 ) => InQuote
-                case InQuoteEscape( AtHex, i )       => {
-                  i match {
-                    case 0 => InQuoteEscape( AtHex, 1 )
-                    case 1 => InQuote
-                  }
-                }
-                case InQuoteEscape( AtUnicode, i ) => {
-                  i match {
-                    case 0|1|2 => InQuoteEscape( AtUnicode, i+1 )
-                    case 3     => InQuote
-                  }
-                }
-                case InQuoteEscape( _, _ ) => throw new Exception( s"""'${c}' at invalid position in String escape. [At character ${index} of "${uncapped}"]""" )
-              }
-            }
-            findTopCommas( index + 1, arrayLevel, newQuoteState, found )
-          }
-          case c if NoEscapeHexChars(c) => {
-            val newQuoteState = {
-              quoteState match {
-                case NoQuote                         => NoQuote
-                case InQuote                         => InQuote
-                case InQuoteEscape( AtHex, i )       => {
-                  i match {
-                    case 0 => InQuoteEscape( AtHex, 1 )
-                    case 1 => InQuote
-                  }
-                }
-                case InQuoteEscape( AtUnicode, i ) => {
-                  i match {
-                    case 0|1|2 => InQuoteEscape( AtUnicode, i+1 )
-                    case 3     => InQuote
-                  }
-                }
-                case InQuoteEscape( _, _ ) => throw new Exception( s"""'${c}' at invalid position in String escape. [At character ${index} of "${uncapped}"]""" )
-              }
-            }
-            findTopCommas( index + 1, arrayLevel, newQuoteState, found )
-          }
-          case c if SingleCharEscapesNotHexChars(c) => {
-            val newQuoteState = {
-              quoteState match {
-                case NoQuote                         => NoQuote
-                case InQuote                         => InQuote
-                case InQuoteEscape( AfterSlash, -1 ) => InQuote
-                case InQuoteEscape( _, _ ) => throw new Exception( s"""'${c}' at invalid position in String escape. [At character ${index} of "${uncapped}"]""" )
-              }
-            }
-            findTopCommas( index + 1, arrayLevel, newQuoteState, found )
+            val parsedQuote = StringLiteral.parsePermissiveStringLiteral( uncapped, index )
+
+            // skip quoted String
+            findTopCommas( parsedQuote.endQuoteIndex + 1, arrayLevel, found )
           }
           case c => {
-            val newQuoteState = invalidEscapeCharQuoteTransition('[')
-            findTopCommas( index + 1, arrayLevel, newQuoteState, found )
+            findTopCommas( index + 1, arrayLevel, found )
           }
         }
       } else {
@@ -315,7 +204,7 @@ object Encoder {
       }
     }
 
-    val topCommas = Failable( findTopCommas( 0, 0, NoQuote, Nil ) )
+    val topCommas = Failable( findTopCommas( 0, 0, Nil ) )
 
     val elements = {
       topCommas.map { tcs =>
