@@ -136,7 +136,7 @@ object Encoder {
 
     val inner = new OuterArrayDecoder("byte")
 
-    def parse( str : String ) : Failable[immutable.Seq[Byte]] = Failable( str.decodeHexAsSeq ) orElse parseOneByteCharQuotedString( str )
+    def parse( str : String ) : Failable[immutable.Seq[Byte]] = parseByteArrayInArrayFormat( str ) orElse Failable( str.decodeHexAsSeq ) orElse parseOneByteCharQuotedString( str )
 
     def format( representation : immutable.Seq[Byte] ) : Failable[String] = formatOneByteCharQuotedString( representation )
 
@@ -163,7 +163,7 @@ object Encoder {
 
   private def formatUtf8QuotedString( bytes : Seq[Byte] )  : Failable[String] = Failable( StringLiteral.formatPermissiveStringLiteral( new String( bytes.toArray, Codec.UTF8.charSet ) ) )
 
-  private def parseStringAsByteArray( str : String ) : Failable[immutable.Seq[Byte]] = {
+  private def parseByteArrayInArrayFormat( str : String ) : Failable[immutable.Seq[Byte]] = {
     for {
       compact <- Failable( str.filter( c => !c.isWhitespace ) )
       unwrap  <- (str.length >= 2 && str.head == '[' && str.tail == ']').toFailable("An array should start with '[' and end with ']'.").map( _ => compact.substring(1, compact.length-1) )
@@ -438,7 +438,7 @@ object Encoder {
 
     private def parseAsArray( str : String ) : Failable[immutable.Seq[Byte]] = {
       for {
-        bytes <- parseStringAsByteArray( str )
+        bytes <- parseByteArrayInArrayFormat( str )
         _     <- (bytes.length == len).toFailable( s"A predefined byte array of length ${len} should contain exactly ${len} items, but contains ${bytes.length}: ${bytes}" )
       } yield {
         bytes
