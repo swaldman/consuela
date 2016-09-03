@@ -2,6 +2,8 @@ package com.mchange.sc.v1.consuela.ethereum.ethabi
 
 import scala.collection._
 
+import scala.io.Codec
+
 import com.mchange.sc.v1.consuela._
 import com.mchange.sc.v1.consuela.math._
 
@@ -118,6 +120,7 @@ object Encoder {
       unspaced match {
         case InnerArrayRegex( elementTypeName, length ) => Some( new InnerArrayDecoder( elementTypeName, length.toInt ) )
         case OuterArrayRegex( elementTypeName )         => Some( new OuterArrayDecoder( elementTypeName ) )
+        case "bytes"                                    => Some( BytesEncoder )
         case _                                          => None
       }
     }
@@ -135,7 +138,7 @@ object Encoder {
 
     def parse( str : String ) : Failable[immutable.Seq[Byte]] = Failable( str.decodeHexAsSeq ) orElse parseOneByteCharQuotedString( str )
 
-    def format( representation : immutable.Seq[Byte] ) : Failable[String] = generateOneByteCharQuotedString( representation )
+    def format( representation : immutable.Seq[Byte] ) : Failable[String] = formatOneByteCharQuotedString( representation )
 
     def encode( representation : immutable.Seq[Byte] ) : Failable[immutable.Seq[Byte]] = inner.encode( ArrayRep( "byte", representation ) )
 
@@ -150,11 +153,26 @@ object Encoder {
     def encodingLength : Option[Int] = None
   }
 
-  private def parseOneByteCharQuotedString( quotedString : String ) : Failable[immutable.Seq[Byte]] = ???
-  private def generateOneByteCharQuotedString( bytes : Seq[Byte] )  : Failable[String]              = ???
+  private def parseOneByteCharQuotedString( quotedString : String ) : Failable[immutable.Seq[Byte]] = {
+    Failable( StringLiteral.parsePermissiveStringLiteral( quotedString ).parsed )
+      .flatMap( str => if (str.exists( _ >= 256 )) fail("Expected a string of bytes, found multibyte chars") else succeed( str.map( _.toByte ).toImmutableSeq ) )
+  }
+  private def formatOneByteCharQuotedString( bytes : Seq[Byte] ) : Failable[String] = Failable( StringLiteral.formatPermissiveStringLiteral( bytes.map( _.toChar ).mkString ) )
 
-  private def parseUtf8QuotedString( quotedString : String ) : Failable[immutable.Seq[Byte]] = ???
-  private def generateUtf8QuotedString( bytes : Seq[Byte] )  : Failable[String]              = ???
+  private def parseUtf8QuotedString( quotedString : String ) : Failable[immutable.Seq[Byte]] = Failable( StringLiteral.parsePermissiveStringLiteral( quotedString ).parsed.getBytes( Codec.UTF8.charSet ).toImmutableSeq )
+
+  private def formatUtf8QuotedString( bytes : Seq[Byte] )  : Failable[String] = Failable( StringLiteral.formatPermissiveStringLiteral( new String( bytes.toArray, Codec.UTF8.charSet ) ) )
+
+  private def parseStringAsByteArray( str : String ) : Failable[immutable.Seq[Byte]] = {
+    for {
+      compact <- Failable( str.filter( c => !c.isWhitespace ) )
+      unwrap  <- (str.length >= 2 && str.head == '[' && str.tail == ']').toFailable("An array should start with '[' and end with ']'.").map( _ => compact.substring(1, compact.length-1) )
+      split   <- Failable( unwrap.split(",") )
+      bytes   <- Failable.sequence( split.map( b => Failable( b.toByte ) ) )
+    } yield {
+      bytes
+    }
+  }
 
   case class ArrayRep( elementTypeName : String, items : immutable.Seq[Any] )
 
@@ -418,19 +436,19 @@ object Encoder {
 
     private def checkLen( bytes : Seq[Byte] ) : Failable[Boolean] = (bytes.length == len).toFailable( s"Expected ${len} bytes, found ${bytes.length}: ${bytes}")
 
-    def parse( str : String ) : Failable[immutable.Seq[Byte]] = {
+    private def parseAsArray( str : String ) : Failable[immutable.Seq[Byte]] = {
       for {
-        compact <- Failable( str.filter( c => !c.isWhitespace ) )
-        unwrap  <- (str.length >= 2 && str.head == '[' && str.tail == ']').toFailable("An array should start with '[' and end with ']'.").map( _ => compact.substring(1, compact.length-1) )
-        split   <- Failable( unwrap.split(",") )
-        check   <- (split.length == len).toFailable( s"A predefined byte array of length ${len} should contain exactly ${len} items, but contains ${split.length}: ${split}" )
-        bytes   <- Failable.sequence( split.map( b => Failable( b.toByte ) ) )
+        bytes <- parseStringAsByteArray( str )
+        _     <- (bytes.length == len).toFailable( s"A predefined byte array of length ${len} should contain exactly ${len} items, but contains ${bytes.length}: ${bytes}" )
       } yield {
         bytes
       }
     }
+
+    def parse( str : String ) : Failable[immutable.Seq[Byte]] = parseAsArray( str ) orElse parseOneByteCharQuotedString( str )
+
     def format( representation : immutable.Seq[Byte] ) : Failable[String] = {
-      checkLen( representation ).map( _ =>  representation.map( unsignedPromote ).mkString("[",",","]") )
+      checkLen( representation ).flatMap( _ =>  formatOneByteCharQuotedString( representation ) )
     }
     def encode( representation : immutable.Seq[Byte] ) : Failable[immutable.Seq[Byte]] = {
       val padLength = 32 - len
