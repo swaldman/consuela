@@ -445,7 +445,16 @@ object Encoder {
       }
     }
 
-    def parse( str : String ) : Failable[immutable.Seq[Byte]] = parseAsArray( str ) orElse parseOneByteCharQuotedString( str )
+    private def parseAsHex( str : String ) : Failable[immutable.Seq[Byte]] = {
+      for {
+        bytes <- Failable( str.decodeHexAsSeq )
+        _     <- (bytes.length == len).toFailable( s"A predefined byte array of length ${len} should contain exactly ${len} items, but contains ${bytes.length}: ${bytes}" )
+      } yield {
+        bytes
+      }
+    }
+
+    def parse( str : String ) : Failable[immutable.Seq[Byte]] = parseAsArray( str ) orElse parseAsHex( str ) orElse parseOneByteCharQuotedString( str )
 
     def format( representation : immutable.Seq[Byte] ) : Failable[String] = {
       checkLen( representation ).flatMap( _ =>  formatOneByteCharQuotedString( representation ) )
