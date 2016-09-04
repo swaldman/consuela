@@ -120,7 +120,8 @@ object Encoder {
       unspaced match {
         case InnerArrayRegex( elementTypeName, length ) => Some( new Encoder.InnerArray( elementTypeName, length.toInt ) )
         case OuterArrayRegex( elementTypeName )         => Some( new Encoder.OuterArray( elementTypeName ) )
-        case "bytes"                                    => Some( BytesEncoder )
+        case "bytes"                                    => Some( Encoder.Bytes )
+        case "string"                                   => Some( Encoder.UTF8String )
         case _                                          => None
       }
     }
@@ -128,17 +129,12 @@ object Encoder {
     Mappables.get( typeName ) orElse resolveFixedType orElse resolveDynamicType
   }
 
-  object BytesEncoder extends Encoder[immutable.Seq[Byte]] {
-
+  abstract class AbstractByteString extends Encoder[immutable.Seq[Byte]] {
     private def toByteSeq( items : immutable.Seq[Any] ) = {
       items.map( _.asInstanceOf[Byte] )
     }
 
     val inner = new Encoder.OuterArray("byte")
-
-    def parse( str : String ) : Failable[immutable.Seq[Byte]] = parseByteArrayInArrayFormat( str ) orElse Failable( str.decodeHexAsSeq ) orElse parseOneByteCharQuotedString( str )
-
-    def format( representation : immutable.Seq[Byte] ) : Failable[String] = formatOneByteCharQuotedString( representation )
 
     def encode( representation : immutable.Seq[Byte] ) : Failable[immutable.Seq[Byte]] = inner.encode( ArrayRep( "byte", representation ) )
 
@@ -151,6 +147,20 @@ object Encoder {
     }
 
     def encodingLength : Option[Int] = None
+  }
+
+  object UTF8String extends Encoder.AbstractByteString {
+
+    def parse( str : String ) : Failable[immutable.Seq[Byte]] = parseUtf8QuotedString( str )
+
+    def format( representation : immutable.Seq[Byte] ) : Failable[String] = formatUtf8QuotedString( representation )
+  }
+
+  object Bytes extends Encoder.AbstractByteString {
+
+    def parse( str : String ) : Failable[immutable.Seq[Byte]] = parseByteArrayInArrayFormat( str ) orElse Failable( str.decodeHexAsSeq ) orElse parseOneByteCharQuotedString( str )
+
+    def format( representation : immutable.Seq[Byte] ) : Failable[String] = formatOneByteCharQuotedString( representation )
   }
 
   private def parseOneByteCharQuotedString( quotedString : String ) : Failable[immutable.Seq[Byte]] = {
