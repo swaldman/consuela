@@ -29,6 +29,14 @@ object Encoder {
   private val TwoBigInt     = BigInt(2)
   private val TwoBigDecimal = BigDecimal(2)
 
+  private val TypeAliases : Map[String,String] = Map (
+    "byte"   -> "bytes1",
+    "uint"   -> "uint32",
+    "int"    -> "int32",
+    "fixed"  -> "fixed128x128",
+    "ufixed" -> "ufixed128x128"
+  )
+
   private val Mappables : Map[String, Encoder[_]] = {
     val fixedLenByteArrayBindings : Seq[Tuple2[String,Encoder[_]]] = (1 to 32).map( len => s"bytes${len}" -> new Encoder.PredefinedByteArray(len) )
 
@@ -44,7 +52,7 @@ object Encoder {
     val addressBinding = "address" -> Encoder.Address
 
     val allBindings : List[Tuple2[String,Encoder[_]]] = {
-      fixedLenByteArrayBindings.toList ::: uintBindings.toList ::: intBindings.toList ::: byteBinding :: boolBinding :: defaultUIntBinding :: defaultIntBinding :: addressBinding :: Nil
+      fixedLenByteArrayBindings.toList ::: uintBindings.toList ::: intBindings.toList ::: boolBinding :: addressBinding :: Nil
     }
     Map( allBindings : _* )
   }
@@ -96,28 +104,28 @@ object Encoder {
   private def  fixed( m : Int, n : Int ) = xfixed( m, n,  Int256, true )
   private def ufixed( m : Int, n : Int ) = xfixed( m, n, UInt256, false )
 
+  private def canonicalizeTypeName( rawTypeName : String ) : String = {
+    TypeAliases.get( rawTypeName ).getOrElse( rawTypeName.filter( c => !c.isWhitespace ) )
+  }
+
   private val  FixedRegex =  """fixed(\d{1,3})x(\d{1,3})""".r
   private val UFixedRegex = """ufixed(\d{1,3})x(\d{1,3})""".r
 
   private val OuterArrayRegex = """^(.*)\[\]$""".r
   private val InnerArrayRegex = """^(.*)\[\(d+)\]$""".r
 
-  def encoderForSolidityType( typeName : String ) : Option[Encoder[_]] = {
+  def encoderForSolidityType( rawTypeName : String ) : Option[Encoder[_]] = {
+    val canonicalizedTypeName = canonicalizeTypeName( rawTypeName )
+
     def resolveFixedType : Option[Encoder[_]] = {
-      val fullyQualifiedName = typeName match {
-        case  "fixed" =>  "fixed128x128"
-        case "ufixed" => "ufixed128x128"
-        case other    => other
-      }
-      fullyQualifiedName match {
+      canonicalizedTypeName match {
         case  FixedRegex( m, n ) => Some(  fixed( m.toInt, n.toInt ) )
         case UFixedRegex( m, n ) => Some( ufixed( m.toInt, n.toInt ) )
         case _                   => None
       }
     }
     def resolveDynamicType : Option[Encoder[_]] = {
-      val unspaced = typeName.filter( c => !c.isWhitespace )
-      unspaced match {
+      canonicalizedTypeName match {
         case InnerArrayRegex( elementTypeName, length ) => Some( new Encoder.InnerArray( elementTypeName, length.toInt ) )
         case OuterArrayRegex( elementTypeName )         => Some( new Encoder.OuterArray( elementTypeName ) )
         case "bytes"                                    => Some( Encoder.Bytes )
@@ -126,7 +134,7 @@ object Encoder {
       }
     }
 
-    Mappables.get( typeName ) orElse resolveFixedType orElse resolveDynamicType
+    Mappables.get( canonicalizedTypeName ) orElse resolveFixedType orElse resolveDynamicType
   }
 
   abstract class AbstractByteString extends Encoder[immutable.Seq[Byte]] {
