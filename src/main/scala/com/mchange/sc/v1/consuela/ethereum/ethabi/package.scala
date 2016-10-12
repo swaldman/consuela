@@ -20,7 +20,7 @@ package object ethabi {
     abiFunctionForFunctionNameAndTypes( functionName, functionTypes, abiDefinition ).map( signatureForFunction )
   }
   def abiFunctionForFunctionNameAndTypes( functionName : String, functionTypes : Seq[String], abiDefinition : Abi.Definition ) : Failable[Abi.Function] = {
-    val candidates = abiDefinition.functions.filter( _.name == functionName )
+    val candidates = abiFunctionsForFunctionName( functionName, abiDefinition )
     val usable = candidates.filter( checkTypesForFunction( functionTypes, _  ) )
     usable.length match {
       case 0 => fail( s"""No matching function '${functionName}' for types '${functionTypes.mkString(",")}' in ABI: ${abiDefinition}""" )
@@ -40,7 +40,7 @@ package object ethabi {
     abiFunctionForFunctionNameAndArgs( functionName, args, abiDefinition ).map( signatureForFunction )
   }
   def abiFunctionForFunctionNameAndArgs( functionName : String, args : Seq[String], abiDefinition : Abi.Definition ) : Failable[Abi.Function] = {
-    val candidates = abiDefinition.functions.filter( _.name == functionName )
+    val candidates = abiFunctionsForFunctionName( functionName, abiDefinition )
     val usable = candidates.filter( candidate => checkArgsForFunction( args, candidate ) )
     usable.length match {
       case 0 => fail( s"""No matching function '${functionName}' for args '${args.mkString(",")}' in ABI: ${abiDefinition}""" )
@@ -52,6 +52,9 @@ package object ethabi {
           "\n"
       )
     }
+  }
+  def abiFunctionsForFunctionName( functionName : String, abiDefinition : Abi.Definition ) : immutable.Seq[Abi.Function] = {
+    abiDefinition.functions.filter( _.name == functionName )
   }
   def signatureForFunction( function : Abi.Function ) : String = {
     val sb = new StringBuilder(256) //XXX: hard-coded
