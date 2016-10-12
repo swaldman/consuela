@@ -13,15 +13,18 @@ import com.mchange.sc.v1.log.MLevel._
 package object ethabi {
   private implicit lazy val logger = mlogger( this )
 
-  def identifierForFunctionAndTypes( functionName : String, functionTypes : Seq[String], abiDefinition : Abi.Definition ) : Failable[immutable.Seq[Byte]] = {
-    signatureForFunctionAndTypes( functionName, functionTypes, abiDefinition ).map( identifierForSignature )
+  def identifierForFunctionNameAndTypes( functionName : String, functionTypes : Seq[String], abiDefinition : Abi.Definition ) : Failable[immutable.Seq[Byte]] = {
+    signatureForFunctionNameAndTypes( functionName, functionTypes, abiDefinition ).map( identifierForSignature )
   }
-  def signatureForFunctionAndTypes( functionName : String, functionTypes : Seq[String], abiDefinition : Abi.Definition ) : Failable[String] = {
+  def signatureForFunctionNameAndTypes( functionName : String, functionTypes : Seq[String], abiDefinition : Abi.Definition ) : Failable[String] = {
+    abiFunctionForFunctionNameAndTypes( functionName, functionTypes, abiDefinition ).map( signatureForFunction )
+  }
+  def abiFunctionForFunctionNameAndTypes( functionName : String, functionTypes : Seq[String], abiDefinition : Abi.Definition ) : Failable[Abi.Function] = {
     val candidates = abiDefinition.functions.filter( _.name == functionName )
     val usable = candidates.filter( checkTypesForFunction( functionTypes, _  ) )
     usable.length match {
       case 0 => fail( s"""No matching function '${functionName}' for types '${functionTypes.mkString(",")}' in ABI: ${abiDefinition}""" )
-      case 1 => succeed( signatureForFunction( usable.head ) )
+      case 1 => succeed( usable.head )
       case 2 => fail(
         s"""Ambiguous, multiple matches of function '${functionName} for types '${functionTypes.mkString(",")}' in ABI: ${abiDefinition}""" +
           "\n\t" +
@@ -30,15 +33,18 @@ package object ethabi {
       )
     }
   }
-  def identifierForFunctionAndArgs( functionName : String, args : Seq[String], abiDefinition : Abi.Definition ) : Failable[immutable.Seq[Byte]] = {
-    signatureForFunctionAndArgs( functionName, args, abiDefinition ).map( identifierForSignature )
+  def identifierForFunctionNameAndArgs( functionName : String, args : Seq[String], abiDefinition : Abi.Definition ) : Failable[immutable.Seq[Byte]] = {
+    signatureForFunctionNameAndArgs( functionName, args, abiDefinition ).map( identifierForSignature )
   }
-  def signatureForFunctionAndArgs( functionName : String, args : Seq[String], abiDefinition : Abi.Definition ) : Failable[String] = {
+  def signatureForFunctionNameAndArgs( functionName : String, args : Seq[String], abiDefinition : Abi.Definition ) : Failable[String] = {
+    abiFunctionForFunctionNameAndArgs( functionName, args, abiDefinition ).map( signatureForFunction )
+  }
+  def abiFunctionForFunctionNameAndArgs( functionName : String, args : Seq[String], abiDefinition : Abi.Definition ) : Failable[Abi.Function] = {
     val candidates = abiDefinition.functions.filter( _.name == functionName )
     val usable = candidates.filter( candidate => checkArgsForFunction( args, candidate ) )
     usable.length match {
       case 0 => fail( s"""No matching function '${functionName}' for args '${args.mkString(",")}' in ABI: ${abiDefinition}""" )
-      case 1 => succeed( signatureForFunction( usable.head ) )
+      case 1 => succeed( usable.head )
       case 2 => fail(
         s"""Ambiguous, multiple matches of function '${functionName} for args '${args.mkString(",")}' in ABI: ${abiDefinition}""" +
           "\n\t" +
@@ -48,8 +54,7 @@ package object ethabi {
     }
   }
   def signatureForFunction( function : Abi.Function ) : String = {
-    //XXX: hard-coded
-    val sb = new StringBuilder(256)
+    val sb = new StringBuilder(256) //XXX: hard-coded
     sb.append( function.name )
     sb.append( '(' )
     sb.append( function.inputs.map( f => canonicalizeTypeName( f.`type` ) ).mkString(",") )

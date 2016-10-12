@@ -29,14 +29,6 @@ object Encoder {
   private val TwoBigInt     = BigInt(2)
   private val TwoBigDecimal = BigDecimal(2)
 
-  private val TypeAliases : Map[String,String] = Map (
-    "byte"   -> "bytes1",
-    "uint"   -> "uint32",
-    "int"    -> "int32",
-    "fixed"  -> "fixed128x128",
-    "ufixed" -> "ufixed128x128"
-  )
-
   private val Mappables : Map[String, Encoder[_]] = {
     val fixedLenByteArrayBindings : Seq[Tuple2[String,Encoder[_]]] = (1 to 32).map( len => s"bytes${len}" -> new Encoder.PredefinedByteArray(len) )
 
