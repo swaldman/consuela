@@ -49,6 +49,8 @@ object Encoder {
     Map( allBindings : _* )
   }
 
+  val DynamicHeadSize = 32
+
   private lazy val UInt160 = Mappables("uint160").asInstanceOf[Encoder[BigInt]]
 
   lazy val UInt256 = Mappables("uint256").asInstanceOf[Encoder[BigInt]]
@@ -538,5 +540,6 @@ trait Encoder[REP] {
       }
     }
   }
+  def forDynamicType : Boolean = encodingLength == None
 }
 
