@@ -106,7 +106,7 @@ object Encoder {
   private val UFixedRegex = """ufixed(\d{1,3})x(\d{1,3})""".r
 
   private val OuterArrayRegex = """^(.*)\[\]$""".r
-  private val InnerArrayRegex = """^(.*)\[\(d+)\]$""".r
+  private val InnerArrayRegex = """^(.*)\[(\d+)\]$""".r
 
   def encoderForSolidityType( rawTypeName : String ) : Option[Encoder[_]] = {
     val canonicalizedTypeName = canonicalizeTypeName( rawTypeName )
