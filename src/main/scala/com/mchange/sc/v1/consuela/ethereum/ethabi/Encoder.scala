@@ -236,18 +236,18 @@ object Encoder {
 
     val topCommas = Failable( findTopCommas( 0, 0, Nil ) )
 
-    val elements = {
+    val elements : Failable[List[String]] = {
       topCommas.map { tcs =>
         val capped  = -1 :: tcs ::: -1 :: Nil
         val grouped = capped.sliding(2)
         grouped.map {
-          case         -1 :: endComma :: Nil                                          => uncapped.substring( endComma ).trim
+          case         -1 :: endComma :: Nil                                          => uncapped.substring( 0, endComma ).trim
           case startComma ::       -1 :: Nil if ( startComma + 1 == uncapped.length ) => ""
           case startComma ::       -1 :: Nil                                          => uncapped.substring( startComma + 1 ).trim
           case startComma :: endComma :: Nil                                          => uncapped.substring( startComma + 1 , endComma ).trim
         }
       }
-    }
+    }.map( _.toList )
 
     elements.flatMap { list => Failable( ArrayRep( elementTypeName, list.map( inner.parse ).map( _.get ).toVector ) ) }
   }
@@ -307,7 +307,7 @@ object Encoder {
     def parse( str : String )               : Failable[ArrayRep] = {
       for {
         arep <- parseArray( elementTypeName, inner )( str )
-        _    <- (arep.items.length == elementCount).toFailable( s"Unexpected array size. [expected: ${elementCount}, found: ${arep.items.length}]" )
+        _    <- (arep.items.length == elementCount).toFailable( s"Unexpected array size. [expected: ${elementCount}, found: ${arep.items.length}, arep: ${arep}]" )
       } yield {
         arep
       }
