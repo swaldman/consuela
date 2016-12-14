@@ -401,7 +401,16 @@ object Encoder {
     val ceiling = TwoBigInt.pow( bitLen )
 
     def parse( str : String ) : Failable[BigInt] = {
-      val v = BigInt( str )
+      val v = {
+        try { BigInt( str ) }
+        catch {
+          case nfe : NumberFormatException => {
+            val unprefixed = if ( str.startsWith("0x") ) str.substring(2) else str
+            BigInt( unprefixed, 16 )
+          }
+        }
+      }
+
       checkRange(v).map( _ => v )
     }
     def format( representation : BigInt ) : Failable[String] = {
