@@ -110,7 +110,6 @@ package object ethabi {
   }
 
   private [ethabi] val TypeAliases : Map[String,String] = Map (
-    "byte"   -> "bytes1",
     "uint"   -> "uint32",
     "int"    -> "int32",
     "fixed"  -> "fixed128x128",

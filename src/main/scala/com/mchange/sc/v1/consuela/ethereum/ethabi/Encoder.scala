@@ -29,22 +29,21 @@ object Encoder {
   private val TwoBigInt     = BigInt(2)
   private val TwoBigDecimal = BigDecimal(2)
 
-  private val Mappables : Map[String, Encoder[_]] = {
+  // maps canonical names only to appropriate encoders
+  // see TypeAliases in package.scala for omitted short names
+  private lazy val Mappables : Map[String, Encoder[_]] = { // lazy so that Encoder.SoloByte is defined
     val fixedLenByteArrayBindings : Seq[Tuple2[String,Encoder[_]]] = (1 to 32).map( len => s"bytes${len}" -> new Encoder.PredefinedByteArray(len) )
 
-    val byteBinding : Tuple2[String,Encoder[_]] = ( "byte", fixedLenByteArrayBindings(0)._2 )
+    val byteBinding : Tuple2[String,Encoder[_]] = ( "byte", Encoder.SoloByte )
     val boolBinding : Tuple2[String,Encoder[_]] = ( "bool", Encoder.Bool )
 
     val uintBindings : Seq[Tuple2[String,Encoder[_]]] = (1 to 32).map( _ * 8 ).map( bitLen => s"uint${bitLen}" -> new Encoder.UInt( bitLen ) )
     val  intBindings : Seq[Tuple2[String,Encoder[_]]] = (1 to 32).map( _ * 8 ).map( bitLen => s"int${bitLen}" -> new Encoder.SInt( bitLen ) )
 
-    val defaultUIntBinding : Tuple2[String,Encoder[_]] = "uint" -> uintBindings.last._2
-    val  defaultIntBinding : Tuple2[String,Encoder[_]] = "int"  -> intBindings.last._2
-
     val addressBinding = "address" -> Encoder.Address
 
     val allBindings : List[Tuple2[String,Encoder[_]]] = {
-      fixedLenByteArrayBindings.toList ::: uintBindings.toList ::: intBindings.toList ::: boolBinding :: addressBinding :: Nil
+      fixedLenByteArrayBindings.toList ::: uintBindings.toList ::: intBindings.toList ::: byteBinding :: boolBinding :: addressBinding :: Nil
     }
     Map( allBindings : _* )
   }
@@ -279,11 +278,11 @@ object Encoder {
     def encode( representation : ArrayRep )   : Failable[immutable.Seq[Byte]] = {
       checkElementType( representation ).flatMap { _ =>
         val elementCount = representation.items.size
-        val innerEncoder = new Encoder.FixedLengthArray( elementTypeName, elementCount )
+        val arrayEncoder = new Encoder.FixedLengthArray( elementTypeName, elementCount )
 
         for {
           prefix    <- UInt256.encode( elementCount )
-          arrayBody <- innerEncoder.encode( representation )
+          arrayBody <- arrayEncoder.encode( representation )
         } yield {
           prefix ++ arrayBody
         }
@@ -496,6 +495,15 @@ object Encoder {
         fail( s"Expected byte string of length ${len}, span of nozero bytes (from left) is more than that: ${bytes.hex}" )
       }
     }
+  }
+  val SoloByte = new FixedLengthRepresentation[Byte]( 32 ) {
+    val inner = new Encoder.PredefinedByteArray(1)
+
+    def parse( str : String )           : Failable[Byte]                = inner.parse( str ).map( _.head ) 
+    def format( representation : Byte ) : Failable[String]              = Failable( s"0x${representation.hex}" )
+    def encode( representation : Byte ) : Failable[immutable.Seq[Byte]] = inner.encode( representation :: Nil ) 
+
+    private [Encoder] def decodeCompleteNoLengthCheck( bytes : immutable.Seq[Byte] ) : Failable[Byte] = inner.decodeCompleteNoLengthCheck( bytes ).map( _.head )
   }
   abstract class FixedLengthRepresentation[REP]( val repLen : Int ) extends Encoder[REP] {
     def decode( bytes : immutable.Seq[Byte] ) : Failable[Tuple2[REP,immutable.Seq[Byte]]] = {
