@@ -99,14 +99,18 @@ object Encoder {
   private def ufixed( m : Int, n : Int ) = xfixed( m, n, UInt256, false )
 
   private def canonicalizeTypeName( rawTypeName : String ) : String = {
-    TypeAliases.get( rawTypeName ).getOrElse( rawTypeName.filter( c => !c.isWhitespace ) )
+    // XXX: this is too forgiving... the only reasonable case would be whitespace before array bracket
+    // val spaceless = rawTypeName.filter( c => !c.isWhitespace )
+    // TypeAliases.get( spaceless ).getOrElse( spaceless )
+
+    TypeAliases.get( rawTypeName ).getOrElse( rawTypeName )
   }
 
   private val  FixedRegex =  """fixed(\d{1,3})x(\d{1,3})""".r
   private val UFixedRegex = """ufixed(\d{1,3})x(\d{1,3})""".r
 
-  private val OuterArrayRegex = """^(.*)\[\]$""".r
-  private val InnerArrayRegex = """^(.*)\[(\d+)\]$""".r
+  private val DynamicArrayRegex = """^(.*)\[\]$""".r
+  private val FixedLengthArrayRegex = """^(.*)\[(\d+)\]$""".r
 
   def encoderForSolidityType( rawTypeName : String ) : Option[Encoder[_]] = {
     val canonicalizedTypeName = canonicalizeTypeName( rawTypeName )
@@ -120,11 +124,11 @@ object Encoder {
     }
     def resolveDynamicType : Option[Encoder[_]] = {
       canonicalizedTypeName match {
-        case InnerArrayRegex( elementTypeName, length ) => Some( new Encoder.InnerArray( elementTypeName, length.toInt ) )
-        case OuterArrayRegex( elementTypeName )         => Some( new Encoder.OuterArray( elementTypeName ) )
-        case "bytes"                                    => Some( Encoder.Bytes )
-        case "string"                                   => Some( Encoder.UTF8String )
-        case _                                          => None
+        case FixedLengthArrayRegex( elementTypeName, length ) => Some( new Encoder.FixedLengthArray( elementTypeName, length.toInt ) )
+        case DynamicArrayRegex( elementTypeName )             => Some( new Encoder.DynamicArray( elementTypeName ) )
+        case "bytes"                                          => Some( Encoder.Bytes )
+        case "string"                                         => Some( Encoder.UTF8String )
+        case _                                                => None
       }
     }
 
@@ -136,7 +140,7 @@ object Encoder {
       items.map( _.asInstanceOf[Byte] )
     }
 
-    val inner = new Encoder.OuterArray("byte")
+    val inner = new Encoder.DynamicArray("byte")
 
     def encode( representation : immutable.Seq[Byte] ) : Failable[immutable.Seq[Byte]] = inner.encode( ArrayRep( "byte", representation ) )
 
@@ -230,7 +234,7 @@ object Encoder {
           }
         }
       } else {
-        found
+        found.reverse
       }
     }
 
@@ -255,18 +259,19 @@ object Encoder {
     Failable.sequence( representation.items.map( inner.formatAny ) ).map( _.mkString("[",",","]") )
   }
 
-  final class OuterArray( elementTypeName : String ) extends Encoder[ArrayRep] {
+  final class DynamicArray( elementTypeName : String ) extends Encoder[ArrayRep] {
+
+    val innerEncoder = encoderForSolidityType( elementTypeName ).get // asserts availability of elementTypeName
 
     private def checkElementType( representation : ArrayRep ) : Failable[Boolean] = {
-      ( representation.elementTypeName == elementTypeName ).toFailable( s"A decoder of elements of type '${elementTypeName}' can't decode elements of type '${representation.elementTypeName}'." )
+      ( canonicalizeTypeName( representation.elementTypeName ) == canonicalizeTypeName( elementTypeName ) )
+        .toFailable(s"A decoder of elements of type '${elementTypeName}' can't decode elements of type '${representation.elementTypeName}'.")
     }
     def parse( str : String ) : Failable[ArrayRep] = {
-      val innerEncoder = new Encoder.InnerArray( elementTypeName )
       parseArray( elementTypeName, innerEncoder )( str )
     }
     def format( representation : ArrayRep ) : Failable[String] = {
       checkElementType( representation ).flatMap { _ =>
-        val innerEncoder = new Encoder.InnerArray( representation.elementTypeName )
         formatArray( innerEncoder )( representation )
       }
     }
@@ -274,7 +279,7 @@ object Encoder {
     def encode( representation : ArrayRep )   : Failable[immutable.Seq[Byte]] = {
       checkElementType( representation ).flatMap { _ =>
         val elementCount = representation.items.size
-        val innerEncoder = new Encoder.InnerArray( elementTypeName, elementCount )
+        val innerEncoder = new Encoder.FixedLengthArray( elementTypeName, elementCount )
 
         for {
           prefix    <- UInt256.encode( elementCount )
@@ -286,7 +291,7 @@ object Encoder {
     }
     def decode( bytes : immutable.Seq[Byte] ) : Failable[Tuple2[ArrayRep,immutable.Seq[Byte]]] = {
       UInt256.decode( bytes ).flatMap { case ( size, rest ) =>
-        size.isValidInt.toFailable( s"Size ${size} is too big to be represented as an Int!" ).flatMap( _ => (new Encoder.InnerArray( elementTypeName, size.toInt )).decode( rest ) )
+        size.isValidInt.toFailable( s"Size ${size} is too big to be represented as an Int!" ).flatMap( _ => (new Encoder.FixedLengthArray( elementTypeName, size.toInt )).decode( rest ) )
       }
     }
     def decodeComplete( bytes : immutable.Seq[Byte] ) : Failable[ArrayRep] = {
@@ -300,7 +305,8 @@ object Encoder {
     def encodingLength : Option[Int] = None // will be None, signifying unknown, for dynamic types
   }
 
-  final class InnerArray( val elementTypeName : String, val elementCount : Int = -1 ) extends Encoder[ArrayRep] {
+  // An array for which the element count is already known, or will be inferred from the array itself
+  final class FixedLengthArray( val elementTypeName : String, val elementCount : Int ) extends Encoder[ArrayRep] {
 
     val inner = encoderForSolidityType( elementTypeName ).get // asserts availability of elementTypeName
 
