@@ -63,7 +63,19 @@ object Encoder {
 
       def notRepresentableMessage( bd : BigDecimal ) = s"${bd} cannot be represented as a multiple of 1/(2 ** ${n})"
       def downToBigDecimal( bi : BigInt ) = Failable( BigDecimal( bi ) / TwoBigDecimal.pow(n) )
-      def upToBigInt( bd : BigDecimal )   = Failable( bd * denominator ).withFilter( _.isWhole ).map( _.toBigInt ).xmap( _ => Fail.simple( notRepresentableMessage( bd ) ) )
+      def upToBigInt( bd : BigDecimal ) = {
+        val ( minimalTwosToWhole, minimalBigInt ) = {
+          (0 until n).foldLeft( Tuple2(-1 : Int,null : BigInt) ) { (seen, exp) =>
+            if (seen._1 >= 0) {
+              seen
+            } else {
+              val check = bd * TwoBigDecimal.pow(exp)
+              if ( !check.isWhole ) seen else (exp, check.toBigInt)
+            }
+          }
+        }
+        (minimalTwosToWhole >= 0).toFailable( notRepresentableMessage( bd ) ).map( _ => minimalBigInt * TwoBigInt.pow(n - minimalTwosToWhole) )
+      }
       def isRepresentable( bd : BigDecimal ) = (bd * denominator).isWhole
       def representableOrFail( bd : BigDecimal ) = isRepresentable( bd ).toFailable( notRepresentableMessage( bd ) ).map( _ => bd )
 
