@@ -40,7 +40,7 @@ package object ethabi {
     def headTailTupled( tup : Tuple2[Encoder[_],String] ) = headTail( tup._1, tup._2 )
 
     def generateCallData( abiFunction : Abi.Function, identifier : immutable.Seq[Byte], headTails : Seq[Tuple2[Option[immutable.Seq[Byte]],immutable.Seq[Byte]]] ) : Failable[immutable.Seq[Byte]] = Failable {
-      val totalHeadSize = headTails.foldLeft(0)( ( count, next ) => next._1.fold( Encoder.DynamicHeadSize )( _.length ) )
+      val totalHeadSize = headTails.foldLeft(0)( ( count, next ) => count + next._1.fold( Encoder.DynamicHeadSize )( _.length ) )
 
       // XXX: hard-coded initial buffer size
       // XXX: should i bother redoing/making this in functional style?
