@@ -43,7 +43,7 @@ package object ethabi {
       val totalHeadSize = headTails.foldLeft(0)( ( count, next ) => next._1.fold( Encoder.DynamicHeadSize )( _.length ) )
 
       // XXX: hard-coded initial buffer size
-      // XXX: should i bother dredoingmaking this in functional style?
+      // XXX: should i bother redoing/making this in functional style?
       val buffer = new mutable.ArrayBuffer[Byte](1024)
       buffer ++= identifier
 

@@ -147,15 +147,21 @@ object Encoder {
   }
 
   abstract class AbstractByteString extends Encoder[immutable.Seq[Byte]] {
-    private def toByteSeq( items : immutable.Seq[Any] ) = {
-      items.map( _.asInstanceOf[Byte] )
+    def encode( representation : immutable.Seq[Byte] ) : Failable[immutable.Seq[Byte]] = {
+      val len = representation.length
+      val body = {
+        val pad = 32 - (len % 32)
+        representation.padTo(len + pad, ZeroByte )
+      }
+      UInt256.encode( len ).map( _ ++ body )
     }
 
-    val inner = new Encoder.DynamicArray("byte")
-
-    def encode( representation : immutable.Seq[Byte] ) : Failable[immutable.Seq[Byte]] = inner.encode( ArrayRep( "byte", representation ) )
-
-    def decode( bytes : immutable.Seq[Byte] ) : Failable[Tuple2[immutable.Seq[Byte], immutable.Seq[Byte]]] = inner.decode( bytes ).map { case ( ar, rest ) => ( toByteSeq(ar.items), rest ) }
+    def decode( bytes : immutable.Seq[Byte] ) : Failable[Tuple2[immutable.Seq[Byte], immutable.Seq[Byte]]] = {
+      UInt256.decode( bytes ).flatMap {
+        case ( len, rest ) =>
+          len.isValidInt.toFailable( s"Unsupported, bytestring length ${len} exceeds ${Integer.MAX_VALUE}").map( _ => rest.splitAt( len.toInt ) )
+      }
+    }
 
     def decodeComplete( bytes : immutable.Seq[Byte] ) : Failable[immutable.Seq[Byte]] = {
       decode( bytes ).flatMap { case ( decoded, rest ) =>
@@ -333,10 +339,10 @@ object Encoder {
     def format( representation : ArrayRep ) : Failable[String] = formatArray( inner )( representation )
 
     def encode( representation : ArrayRep ) : Failable[immutable.Seq[Byte]] = {
-      Failable( representation.items.flatMap( item => inner.encodeAny( item ).get ) )
+      Failable( representation.items.flatMap( item => inner.encodeUntyped( item ).get ) )
     }
     def decode( bytes : immutable.Seq[Byte] ) : Failable[Tuple2[ArrayRep,immutable.Seq[Byte]]] = {
-      val check = ( elementCount >= 0).toFailable("We need to know the element count to decode an array!")
+      val check = ( elementCount >= 0).toFailable("We need a non-negative element count to decode an array!")
       check.flatMap( _ => _decode( elementCount, elementCount, Array.ofDim[Any]( elementCount ), bytes ) )
     }
 
@@ -366,7 +372,7 @@ object Encoder {
         out
       }
     }
-    def encodingLength : Option[Int] = None
+    def encodingLength : Option[Int] = inner.encodingLength.map( _ * elementCount )
   }
 
   final object Bool extends FixedLengthRepresentation[Boolean]( 32 ) {
@@ -395,7 +401,7 @@ object Encoder {
     def parse( str : String ) : Failable[EthAddress]             = Failable( EthAddress( str ) )
     def format( representation : EthAddress ) : Failable[String] = Failable( "0x"+representation.hex )
 
-    def encode( representation : EthAddress ) : Failable[immutable.Seq[Byte]]                 = UInt160.encode( toBigInt( representation ) )
+    def encode( representation : EthAddress ) : Failable[immutable.Seq[Byte]]                    = UInt160.encode( toBigInt( representation ) )
     def decode( bytes : immutable.Seq[Byte] ) : Failable[Tuple2[EthAddress,immutable.Seq[Byte]]] = {
       UInt160.decode( bytes ).map { case ( bi, rest ) => ( toAddress(bi), rest ) }
     }
@@ -557,7 +563,7 @@ trait Encoder[REP] {
   def encode( representation : REP )        : Failable[immutable.Seq[Byte]]
   def decode( bytes : immutable.Seq[Byte] ) : Failable[Tuple2[REP, immutable.Seq[Byte]]]
 
-  def encodeAny( untypedRepresentation : Any ) : Failable[immutable.Seq[Byte]] = {
+  def encodeUntyped( untypedRepresentation : Any ) : Failable[immutable.Seq[Byte]] = {
     Failable( encode( untypedRepresentation.asInstanceOf[REP] ) ).flatten // we'll see the ClassCastException in the fail object if mistyped
   }
 
