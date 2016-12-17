@@ -28,6 +28,16 @@ object Client {
 
 
   trait eth {
+    def call(
+      from        : Option[EthAddress]     = None,
+      to          : Option[EthAddress]     = None,
+      gas         : Option[BigInt]         = None,
+      gasPrice    : Option[BigInt]         = None,
+      value       : Option[BigInt]         = None,
+      data        : Option[Seq[Byte]]      = None,
+      blockNumber : BlockNumber            = BlockNumber.Latest
+    )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Byte]]
+
     def compileSolidity( solidityText : String )( implicit ec : ExecutionContext ) : Future[immutable.Map[String,Compilation.Contract]]
 
     def estimateGas(
@@ -59,6 +69,37 @@ object Client {
     }
 
     val eth = new Client.eth {
+
+      private def createTransactionCallObject(
+        from     : Option[EthAddress] = None,
+        to       : Option[EthAddress] = None,
+        gas      : Option[BigInt]     = None,
+        gasPrice : Option[BigInt]     = None,
+        value    : Option[BigInt]     = None,
+        data     : Option[Seq[Byte]]  = None
+      ) : JsObject = {
+        def listify[T <: JsValue]( key : String, mb : Option[T] ) = mb.fold( Nil : List[Tuple2[String,T]] )( t => List( Tuple2( key, t ) ) )
+        val _from     = listify("from", from.map( encodeAddress ))
+        val _to       = listify("to", to.map( encodeAddress ))
+        val _gas      = listify("gas", gas.map( encodeQuantity ))
+        val _gasPrice = listify("gasPrice", gasPrice.map( encodeQuantity ))
+        val _value    = listify("value", value.map( encodeQuantity ))
+        val _data     = listify("data", data.map( encodeBytes ))
+        JsObject( _from ::: _to ::: _gas ::: _gasPrice ::: _value ::: _data ::: Nil )
+      }
+      
+      def call(
+        from        : Option[EthAddress]     = None,
+        to          : Option[EthAddress]     = None,
+        gas         : Option[BigInt]         = None,
+        gasPrice    : Option[BigInt]         = None,
+        value       : Option[BigInt]         = None,
+        data        : Option[Seq[Byte]]      = None,
+        blockNumber : BlockNumber            = BlockNumber.Latest
+      )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Byte]] = {
+        val txnCallObject = createTransactionCallObject( from, to, gas, gasPrice, value, data )
+        doExchange( "eth_call", Seq(txnCallObject, blockNumber.jsValue) )( success => decodeBytes( success.result.as[String] ) )
+      }
       def compileSolidity( solidityText : String )( implicit ec : ExecutionContext ) : Future[immutable.Map[String,Compilation.Contract]] = {
         doExchange( "eth_compileSolidity", Seq(JsString( solidityText )) )( _.result.as[immutable.Map[String,Compilation.Contract]] )
       }
@@ -70,18 +111,8 @@ object Client {
         value    : Option[BigInt]     = None,
         data     : Option[Seq[Byte]]  = None
       )( implicit ec : ExecutionContext ) : Future[BigInt] = {
-        val props = {
-          def listify[T <: JsValue]( key : String, mb : Option[T] ) = mb.fold( Nil : List[Tuple2[String,T]] )( t => List( Tuple2( key, t ) ) )
-
-          val _from     = listify("from", from.map( encodeAddress ))
-          val _to       = listify("to", to.map( encodeAddress ))
-          val _gas      = listify("gas", gas.map( encodeQuantity ))
-          val _gasPrice = listify("gasPrice", gasPrice.map( encodeQuantity ))
-          val _value    = listify("value", value.map( encodeQuantity ))
-          val _data     = listify("data", data.map( encodeBytes ))
-          JsObject( _from ::: _to ::: _gas ::: _gasPrice ::: _value ::: _data ::: Nil )
-        }
-        doExchange( "eth_estimateGas", Seq(props) )( extractBigInt )
+        val txnCallObject = createTransactionCallObject( from, to, gas, gasPrice, value, data )
+        doExchange( "eth_estimateGas", Seq(txnCallObject) )( extractBigInt )
       }
       def gasPrice()( implicit ec : ExecutionContext ) : Future[BigInt] = {
         doExchange( "eth_gasPrice", Seq() )( extractBigInt )

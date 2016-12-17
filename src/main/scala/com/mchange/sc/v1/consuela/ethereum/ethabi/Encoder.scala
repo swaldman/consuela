@@ -273,7 +273,7 @@ object Encoder {
     elements.flatMap { list => Failable( ArrayRep( elementTypeName, list.map( inner.parse ).map( _.get ).toVector ) ) }
   }
   private def formatArray( inner : Encoder[_] )( representation : ArrayRep ) : Failable[String] = {
-    Failable.sequence( representation.items.map( inner.formatAny ) ).map( _.mkString("[",",","]") )
+    Failable.sequence( representation.items.map( inner.formatUntyped ) ).map( _.mkString("[",",","]") )
   }
 
   final class DynamicArray( elementTypeName : String ) extends Encoder[ArrayRep] {
@@ -556,7 +556,7 @@ trait Encoder[REP] {
   def parse( str : String )          : Failable[REP]
   def format( representation : REP ) : Failable[String]
 
-  def formatAny( untypedRepresentation : Any ) : Failable[String] = {
+  def formatUntyped( untypedRepresentation : Any ) : Failable[String] = {
     Failable( format( untypedRepresentation.asInstanceOf[REP] ) ).flatten // we'll see the ClassCastException in the fail object if mistyped
   }
 
