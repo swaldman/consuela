@@ -432,7 +432,7 @@ object Encoder {
       checkRange(v).map( _ => v )
     }
     def format( representation : BigInt ) : Failable[String] = {
-      checkRange( representation ).map( _.toString )
+      checkRange( representation ).map( _ => representation.toString )
     }
     def encode( representation : BigInt ) : Failable[immutable.Seq[Byte]] = {
       checkRange( representation ).map( _ => asFixedLengthUnsignedByteArray( representation, 32 ).toImmutableSeq )
@@ -459,7 +459,7 @@ object Encoder {
       checkRange(v).map( _ => v )
     }
     def format( representation : BigInt ) : Failable[String] = {
-      checkRange( representation ).map( _.toString )
+      checkRange( representation ).map( _ => representation.toString )
     }
     def encode( representation : BigInt ) : Failable[immutable.Seq[Byte]] = {
       checkRange( representation ).map( _ => asFixedLengthSignedByteArray( representation, 32 ).toImmutableSeq )
