@@ -6,7 +6,7 @@ organization := "com.mchange"
 
 name := "consuela"
 
-version := "0.0.2-SNAPSHOT"
+version := "0.0.2"
 
 scalaVersion := "2.11.8"
 
@@ -33,15 +33,15 @@ publishTo <<= version {
   }
 }
 
-val restrictedTypeVersion = "0.0.2-SNAPSHOT"
+val restrictedTypeVersion = "0.0.2"
 
 
 libraryDependencies ++= Seq(
-  "com.mchange" %% "mlog-scala" % "0.3.8",
-  "com.mchange" %% "restricted-type" %  restrictedTypeVersion changing(),
+  "com.mchange" %% "mlog-scala" % "0.3.9",
+  "com.mchange" %% "restricted-type" %  restrictedTypeVersion,
   "com.mchange" %% "leftright" % "0.0.1",
-  "com.mchange" %% "mchange-commons-scala" % "0.4.2-SNAPSHOT" changing(),
-  "com.mchange" %% "literal" % "0.0.1-SNAPSHOT" changing(),
+  "com.mchange" %% "mchange-commons-scala" % "0.4.2",
+  "com.mchange" %% "literal" % "0.0.1",
   "com.typesafe" % "config" % "1.2.1",
   "org.spire-math" %% "spire" % "0.9.1",
   "org.bouncycastle" % "bcprov-jdk15on" % "1.54",
