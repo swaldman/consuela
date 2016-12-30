@@ -6,6 +6,8 @@ import com.mchange.sc.v2.failable._
 
 import com.mchange.sc.v1.consuela._
 
+import scala.annotation.tailrec
+
 import scala.io.Codec
 
 import scala.collection._
@@ -31,15 +33,15 @@ package object ethabi {
       )
     }
   }
-  def callDataForFunctionNameAndArgs( functionName : String, args : Seq[String], abiDefinition : Abi.Definition ) : Failable[immutable.Seq[Byte]] = {
+  def callDataForAbiFunction( args : Seq[String], abiFunction : Abi.Function ) : Failable[immutable.Seq[Byte]] = {
     def headTail( enc : Encoder[_], arg : String ) : Failable[Tuple2[Option[immutable.Seq[Byte]],immutable.Seq[Byte]]] = {
       enc.parseEncode( arg ).map( encoded =>
-        if ( enc.forDynamicType ) Tuple2( None, encoded ) else Tuple2( Some(encoded), Nil )
+        if ( enc.encodesDynamicType ) Tuple2( None, encoded ) else Tuple2( Some(encoded), Nil )
       )
     }
     def headTailTupled( tup : Tuple2[Encoder[_],String] ) = headTail( tup._1, tup._2 )
 
-    def generateCallData( abiFunction : Abi.Function, identifier : immutable.Seq[Byte], headTails : Seq[Tuple2[Option[immutable.Seq[Byte]],immutable.Seq[Byte]]] ) : Failable[immutable.Seq[Byte]] = Failable {
+    def generateCallData( identifier : immutable.Seq[Byte], headTails : Seq[Tuple2[Option[immutable.Seq[Byte]],immutable.Seq[Byte]]] ) : Failable[immutable.Seq[Byte]] = Failable {
       val totalHeadSize = headTails.foldLeft(0)( ( count, next ) => count + next._1.fold( Encoder.DynamicHeadSize )( _.length ) )
 
       // XXX: hard-coded initial buffer size
@@ -63,18 +65,48 @@ package object ethabi {
       buffer.toArray.toImmutableSeq
     }
 
-    // XXX: We parse the arguments twice, once in abiFunctionForFunctionNameAndArgs > checkArgsForFunction,
-    //      once directly here
-
     for {
-      abiFunction <- abiFunctionForFunctionNameAndArgs( functionName, args, abiDefinition ) // this checks that the argument list is the right length and is parsable
-      encoders <- encodersForAbiFunction( abiFunction )
-      signature  = signatureForAbiFunction( abiFunction )
+      encoders <- inputEncodersForAbiFunction( abiFunction )
+      signature = signatureForAbiFunction( abiFunction )
       identifier = identifierForSignature( signature )
       headTails <- Failable.sequence( encoders.zip(args).map( headTailTupled ) )
-      callData <- generateCallData( abiFunction, identifier, headTails )
+      callData <- generateCallData( identifier, headTails )
     } yield {
       callData
+    }
+  }
+
+  case class DecodedReturnValue( parameter : Abi.Function.Parameter, value : Any, stringRep : String )
+
+  def decodeReturnValuesForFunction( returnData : immutable.Seq[Byte], abiFunction : Abi.Function ) : Failable[immutable.Seq[DecodedReturnValue]] = {
+    outputEncodersForAbiFunction( abiFunction ).flatMap { encoders =>
+
+      @tailrec
+      def readValues( nextHeaderOffset : Int, remainingEncoders : Seq[Encoder[_]], remainingParams : Seq[Abi.Function.Parameter], reverseAccum : List[DecodedReturnValue] ) : immutable.Seq[DecodedReturnValue] = {
+        if ( remainingEncoders.isEmpty ) {
+          reverseAccum.reverse
+        } else {
+          val nextEncoder = remainingEncoders.head
+          val nextParam = remainingParams.head
+          val ( nextValue, nextNextHeaderOffset ) = {
+            if ( nextEncoder.encodesDynamicType ) {
+              val ( offset, _ ) = Encoder.UInt256.decode( returnData.drop( nextHeaderOffset ) ).get // we assert the success of everything here, deal with any Exception in the Failable wrapper
+              if ( !offset.isValidInt ) {
+                throw new EthereumException( s"${offset} exceeds ${Integer.MAX_VALUE}, not currently supported." )
+              }
+              val ( value, _ ) = nextEncoder.decode( returnData.drop( offset.toInt ) ).get
+              ( value, nextHeaderOffset + Encoder.DynamicHeadSize )
+            } else {
+              val ( value, _ ) = nextEncoder.decode( returnData.drop( nextHeaderOffset ) ).get
+              ( value, nextHeaderOffset + nextEncoder.encodingLength.get )
+            }
+          }
+          val nextStringRep = nextEncoder.formatUntyped( nextValue ).get
+          readValues( nextNextHeaderOffset, remainingEncoders.tail, remainingParams.tail, DecodedReturnValue( nextParam, nextValue, nextStringRep ) :: reverseAccum )
+        }
+      }
+
+      Failable( readValues( 0, encoders, abiFunction.outputs, Nil ) )
     }
   }
   def identifierForFunctionNameAndArgs( functionName : String, args : Seq[String], abiDefinition : Abi.Definition ) : Failable[immutable.Seq[Byte]] = {
@@ -122,8 +154,8 @@ package object ethabi {
   private def identifierForSignature( signature : String ) : immutable.Seq[Byte] = {
     EthHash.hash( signature.getBytes( Codec.UTF8.charSet ) ).bytes.take(4)
   }
-  private def encodersForAbiFunction( function : Abi.Function ) : Failable[immutable.Seq[Encoder[_]]] = {
-    val mbEncodersTypes = function.inputs.map( param => Tuple2(Encoder.encoderForSolidityType( param.`type` ), param.`type` ) )
+  private def encodersForAbiFunctionParameters( params : Seq[Abi.Function.Parameter] ) : Failable[immutable.Seq[Encoder[_]]] = {
+    val mbEncodersTypes = params.map( param => Tuple2(Encoder.encoderForSolidityType( param.`type` ), param.`type` ) )
     val reverseEncoders = mbEncodersTypes.foldLeft( succeed( Nil : List[Encoder[_]] ) ) { ( accum, tup ) =>
       tup match {
         case Tuple2( Some( encoder ), _ ) => accum.map( list => encoder :: list )
@@ -131,6 +163,12 @@ package object ethabi {
       }
     }
     reverseEncoders.map( _.reverse )
+  }
+  private def inputEncodersForAbiFunction( function : Abi.Function ) : Failable[immutable.Seq[Encoder[_]]] = {
+    encodersForAbiFunctionParameters( function.inputs )
+  }
+  private def outputEncodersForAbiFunction( function : Abi.Function ) : Failable[immutable.Seq[Encoder[_]]] = {
+    encodersForAbiFunctionParameters( function.outputs )
   }
   private def checkArgsForFunction( args : Seq[String], function : Abi.Function ) : Boolean = {
     val len = args.length

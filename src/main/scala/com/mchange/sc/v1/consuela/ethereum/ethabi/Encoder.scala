@@ -586,6 +586,6 @@ trait Encoder[REP] {
       }
     }
   }
-  def forDynamicType : Boolean = encodingLength == None
+  def encodesDynamicType : Boolean = encodingLength == None
 }
 
