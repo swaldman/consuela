@@ -158,8 +158,13 @@ object Encoder {
 
     def decode( bytes : immutable.Seq[Byte] ) : Failable[Tuple2[immutable.Seq[Byte], immutable.Seq[Byte]]] = {
       UInt256.decode( bytes ).flatMap {
-        case ( len, rest ) =>
-          len.isValidInt.toFailable( s"Unsupported, bytestring length ${len} exceeds ${Integer.MAX_VALUE}").map( _ => rest.splitAt( len.toInt ) )
+        case ( len, body ) =>
+          len.isValidInt.toFailable( s"Unsupported, bytestring length ${len} exceeds ${Integer.MAX_VALUE}").map { _ =>
+            val lint = len.toInt
+            val pad = 32 - (lint % 32)
+            val ( data, rest ) = body.splitAt( lint.toInt )
+            ( data, rest.drop( pad ) )
+          }
       }
     }
 
