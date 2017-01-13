@@ -13,6 +13,8 @@ import scala.io.Codec
 import scala.collection._
 
 package object ethabi {
+  val IdentifierLength = 4
+
   def identifierForFunctionNameAndTypes( functionName : String, functionTypes : Seq[String], abiDefinition : Abi.Definition ) : Failable[immutable.Seq[Byte]] = {
     signatureForFunctionNameAndTypes( functionName, functionTypes, abiDefinition ).map( identifierForSignature )
   }
@@ -73,6 +75,32 @@ package object ethabi {
       callData <- generateCallData( identifier, headTails )
     } yield {
       callData
+    }
+  }
+
+  /*
+   * bit ugly, but rather than refactor callDataForAbiFunction(...)
+   * - we generate a fake "function" as the constructor,
+   * - use callDataForAbiFunction(...)
+   * - then drop the meaningles identifier
+   */ 
+  def constructorCallData( args : Seq[String], abi : Abi.Definition ) : Failable[immutable.Seq[Byte]] = {
+
+    def constructorAsFunction( ctor : Abi.Constructor ) : Abi.Function = {
+      val inputs = ctor.inputs.map( ci => Abi.Function.Parameter( ci.name, ci.`type` ) )
+      Abi.Function( "<bullshit-arbitrary-constructor-name>", inputs, Nil, false )
+    }
+
+    if ( abi.constructors.isEmpty ) {
+      succeed( Nil )
+    } else {
+      for {
+        _                  <- (abi.constructors.length == 1).toFailable(s"The ABI contains multiple constructors, but constructor overloading is not currently supported (or legal in solidity): ${abi.constructors})")
+        ctorAsFunction     <- succeed( constructorAsFunction( abi.constructors.head ) )
+        asFunctionCallData <- callDataForAbiFunction( args, ctorAsFunction )
+      } yield {
+        asFunctionCallData.drop( IdentifierLength )
+      }
     }
   }
 
@@ -153,7 +181,7 @@ package object ethabi {
   }
 
   private def identifierForSignature( signature : String ) : immutable.Seq[Byte] = {
-    EthHash.hash( signature.getBytes( Codec.UTF8.charSet ) ).bytes.take(4)
+    EthHash.hash( signature.getBytes( Codec.UTF8.charSet ) ).bytes.take( IdentifierLength )
   }
   private def encodersForAbiFunctionParameters( params : Seq[Abi.Function.Parameter] ) : Failable[immutable.Seq[Encoder[_]]] = {
     val mbEncodersTypes = params.map( param => Tuple2(Encoder.encoderForSolidityType( param.`type` ), param.`type` ) )
