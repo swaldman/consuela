@@ -83,6 +83,7 @@ package object ethabi {
 
       @tailrec
       def readValues( nextHeaderOffset : Int, remainingEncoders : Seq[Encoder[_]], remainingParams : Seq[Abi.Function.Parameter], reverseAccum : List[DecodedReturnValue] ) : immutable.Seq[DecodedReturnValue] = {
+        // println( s"nextHeaderOffset : $nextHeaderOffset, remainingEncoders : $remainingEncoders, remainingParams : $remainingParams, reverseAccum : $reverseAccum" )
         if ( remainingEncoders.isEmpty ) {
           reverseAccum.reverse
         } else {

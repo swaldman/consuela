@@ -391,11 +391,12 @@ object Encoder {
       succeed( (0 until 31).map( _ => ZeroByte ) :+ (if ( representation ) OneByte else ZeroByte) )
     }
     private [Encoder] def decodeCompleteNoLengthCheck( bytes : immutable.Seq[Byte] ) : Failable[Boolean] = {
+      val last = bytes.last
       for {
         _ <- allZero( bytes.init ).toFailable( s"All but the last byte of an encoded bool should be zero! ${bytes.hex}" )
-        _ <- ( bytes.tail == 0 || bytes.tail == 1 ).toFailable("The last byte of encoded bool should be 0 or 1.")
+        _ <- ( last == 0 || last == 1 ).toFailable("The last byte of encoded bool should be 0 or 1.")
       } yield {
-        if ( bytes.tail == 0 ) true else false
+        if ( last == 1 ) true else false
       }
     }
   }
