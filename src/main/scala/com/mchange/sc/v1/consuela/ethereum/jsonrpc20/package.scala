@@ -45,7 +45,8 @@ package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Re
 
     def opt[T <: MaybeEmpty : Format ]( t : T ) : Option[String] = if ( t.isEmpty ) None else Some( str( t ) )
 
-
+    // every field always has some non-null value, but often it is something uselessly empty
+    // use the mbXXX methods to get an Option, in which the empty values get represented as None
     final case class Info (
       source          : String,
       language        : String,
@@ -90,6 +91,7 @@ package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Re
     final case class Function( name : String, inputs : immutable.Seq[Function.Parameter], outputs : immutable.Seq[Function.Parameter], constant : Boolean )
 
     object Constructor {
+      val noArg = Constructor( Nil )
       case class Parameter( name : String, `type` : String ) extends Abi.Parameter
     }
     final case class Constructor( inputs : immutable.Seq[Function.Parameter] )
