@@ -37,19 +37,20 @@ val restrictedTypeVersion = "0.0.2"
 
 
 libraryDependencies ++= Seq(
-  "com.mchange" %% "mlog-scala" % "0.3.9",
-  "com.mchange" %% "restricted-type" %  restrictedTypeVersion,
-  "com.mchange" %% "leftright" % "0.0.1",
-  "com.mchange" %% "mchange-commons-scala" % "0.4.2",
-  "com.mchange" %% "literal" % "0.0.1",
-  "com.typesafe" % "config" % "1.2.1",
-  "org.spire-math" %% "spire" % "0.9.1",
-  "org.bouncycastle" % "bcprov-jdk15on" % "1.54",
-  "com.typesafe.play" %% "play-json" % "2.4.6",
-  "com.madgag.spongycastle" % "prov" % "1.54.0.0" % "compile,optional", //only necessary on android
-  "com.mchange" %% "restricted-type-scalacheck-util" % restrictedTypeVersion % "test",
-  "org.specs2"  %% "specs2" % "2.4.6" % "test",
-  "ch.qos.logback" % "logback-classic" % "1.1.2" % "test"
+  "com.mchange"             %% "mlog-scala"                      % "0.3.9",
+  "com.mchange"             %% "restricted-type"                 % restrictedTypeVersion,
+  "com.mchange"             %% "leftright"                       % "0.0.1",
+  "com.mchange"             %% "mchange-commons-scala"           % "0.4.2",
+  "com.mchange"             %% "literal"                         % "0.0.2-SNAPSHOT" changing(),
+  "com.mchange"             %% "mchange-play-json-util"          % "0.0.1-SNAPSHOT" changing(),
+  "com.typesafe"            % "config"                           % "1.2.1",
+  "org.spire-math"          %% "spire"                           % "0.9.1",
+  "org.bouncycastle"        % "bcprov-jdk15on"                   % "1.54",
+  "com.typesafe.play"       %% "play-json"                       % "2.4.6",
+  "com.madgag.spongycastle" % "prov"                             % "1.54.0.0"            % "compile,optional", //only necessary on android
+  "com.mchange"             %% "restricted-type-scalacheck-util" % restrictedTypeVersion % "test",
+  "org.specs2"              %% "specs2"                          % "2.4.6"               % "test",
+  "ch.qos.logback"          % "logback-classic"                  % "1.1.2"               % "test"
 )
 
 fork in (Test, run) := true
