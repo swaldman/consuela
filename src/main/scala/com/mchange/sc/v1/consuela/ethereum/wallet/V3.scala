@@ -120,6 +120,7 @@ object V3 {
   private implicit lazy val logger = mlogger( this )
 
   class Exception( msg : String ) extends EthereumException( msg )
+  class BadDecodeException( msg : String ) extends V3.Exception( msg )
 
   final object Default {
     final object Scrypt {
@@ -152,6 +153,8 @@ object V3 {
   def apply( is : InputStream ) : V3 = V3( Json.parse(is).asInstanceOf[JsObject] )
 
   def apply( file : File ) : V3 = borrow ( new BufferedInputStream( new FileInputStream( file ) ) )( apply )
+
+  def apply( s : String ) : V3 = V3( Json.parse(s).asInstanceOf[JsObject] )
 
   def keyStoreMap( dir : File ) : Map[EthAddress,V3] = {
     require( dir.isDirectory, s"Invalid key store directory, '${dir}': Not a directory." )
@@ -310,7 +313,7 @@ object V3 {
     val _version = version( jsv )
 
     if (_version != 3)
-      throw new V3.Exception( s"Excepted a V3 wallet but found version ${_version}" )
+      throw new V3.BadDecodeException( s"Expected a V3 wallet but found version ${_version}" )
 
     val _cipher          = cipher( jsv )( provider )
     val _keyMac          = findKeyMac( jsv, passphrase )( provider )
@@ -320,7 +323,7 @@ object V3 {
     val _mac = mac( jsv )
 
     if ( _keyMac.mac( _ciphertext ) != _mac )
-      throw new V3.Exception( s"Message authetication code mismatch: KDF-derived MAC: ${_keyMac.mac( _ciphertext ).hex}, expected MAC: ${_mac.hex}" )
+      throw new V3.BadDecodeException( s"Message authetication code mismatch: KDF-derived MAC: ${_keyMac.mac( _ciphertext ).hex}, expected MAC: ${_mac.hex}" )
 
     val out = decodePrivateKey( _cipher, _keyMac.key, _ivParameterSpec, _ciphertext )
 
@@ -328,7 +331,7 @@ object V3 {
     val pvtKeyAddress   = out.toPublicKey.toAddress
 
     if ( pvtKeyAddress != expectedAddress ) {
-      throw new V3.Exception( s"Wallet is for address ${expectedAddress}, but decoded a private key for address '${pvtKeyAddress}'" )
+      throw new V3.BadDecodeException( s"Wallet is for address ${expectedAddress}, but decoded a private key for address '${pvtKeyAddress}'" )
     } else {
       out
     }
