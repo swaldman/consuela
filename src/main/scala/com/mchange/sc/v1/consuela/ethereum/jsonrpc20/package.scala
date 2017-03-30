@@ -50,40 +50,40 @@ package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Re
 
     def opt[T <: MaybeEmpty : Format ]( t : T ) : Option[String] = if ( t.isEmpty ) None else Some( str( t ) )
 
-    // most fields always have some non-null value, but often it is something uselessly empty
-    // 
-    // metadata is only just proposed to be defined, and in any event would only be available
-    // for outputs from very recent compiler versions
-    //
-    // use the mbXXX methods to get a useful Option (for which the empty values get represented as None)
+    final object Contract {
 
-    final case class Info (
-      source          : Option[String],
-      language        : Option[String],
-      languageVersion : Option[String],
-      compilerVersion : Option[String],
-      compilerOptions : Option[String],
-      abiDefinition   : Option[Abi.Definition],
-      userDoc         : Option[Doc.User],
-      developerDoc    : Option[Doc.Developer],
-      metadata        : Option[String]
-    ) {
-      def mbSource          = source.flatMap( opt )
-      def mbLanguage        = language.flatMap( opt )
-      def mbLanguageVersion = languageVersion.flatMap( opt )
-      def mbCompilerVersion = compilerVersion.flatMap( opt )
-      def mbCompilerOptions = compilerOptions.flatMap( opt )
-      def mbAbiDefinition   = abiDefinition.flatMap( opt[Abi.Definition] )
-      def mbUserDoc         = userDoc.flatMap( opt[Doc.User] )
-      def mbDeveloperDoc    = developerDoc.flatMap( opt[Doc.Developer] )
-      def mbMetadata        = metadata.flatMap( opt )
+      // most fields always have some non-null value, but often it is something uselessly empty
+      //
+      // metadata is only just proposed to be defined, and in any event would only be available
+      // for outputs from very recent compiler versions
+      //
+      // use the mbXXX methods to get a useful Option (for which the empty values get represented as None)
+
+      final case class Info (
+        source          : Option[String],
+        language        : Option[String],
+        languageVersion : Option[String],
+        compilerVersion : Option[String],
+        compilerOptions : Option[String],
+        abiDefinition   : Option[Abi.Definition],
+        userDoc         : Option[Doc.User],
+        developerDoc    : Option[Doc.Developer],
+        metadata        : Option[String]
+      ) {
+        def mbSource          = source.flatMap( opt )
+        def mbLanguage        = language.flatMap( opt )
+        def mbLanguageVersion = languageVersion.flatMap( opt )
+        def mbCompilerVersion = compilerVersion.flatMap( opt )
+        def mbCompilerOptions = compilerOptions.flatMap( opt )
+        def mbAbiDefinition   = abiDefinition.flatMap( opt[Abi.Definition] )
+        def mbUserDoc         = userDoc.flatMap( opt[Doc.User] )
+        def mbDeveloperDoc    = developerDoc.flatMap( opt[Doc.Developer] )
+        def mbMetadata        = metadata.flatMap( opt )
+      }
     }
-
-    final case class Contract( code : String, info : Info )
-
-    //def apply( jso : JsObject ) : Option[Compilation] = Json.fromJson[immutable.Map[String,Compilation.Contract]]( jso ).asOpt.map( this.apply )
+    final case class Contract( code : String, info : Contract.Info )
   }
-  //final case class Compilation( contracts : immutable.Map[String,Compilation.Contract] )
+  type Compilation = immutable.Map[String,Compilation.Contract]
 
   trait MaybeEmpty {
     def isEmpty : Boolean
@@ -246,7 +246,7 @@ package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Re
     }
   }
 
-  implicit val CompilationInfoFormat = Json.format[Compilation.Info]
+  implicit val CompilationContractInfoFormat = Json.format[Compilation.Contract.Info]
   implicit val CompilationContractFormat = Json.format[Compilation.Contract]
 
   implicit val MapStringCompilationContractFormat = new Format[immutable.Map[String,Compilation.Contract]] {
