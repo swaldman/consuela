@@ -36,8 +36,18 @@ package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Re
 
   private[jsonrpc20] def encodeAddress( address : EthAddress ) : JsString = encodeBytes( address.bytes.widen )
 
-  final class Exception( val code : Int, val message : String ) extends EthereumException( s"${message} [code=${code}]" ) {
-    def this( errorResponse : Response.Error ) = this( errorResponse.error.code, errorResponse.error.message ) 
+  final object Exception {
+    def stringifyErrorData( data : JsValue ) : String = {
+      data match {
+        case JsArray( elems ) => elems.map( stringifyErrorData ).mkString("\n","\n","")
+        case str : JsString   => str.as[String]
+        case JsNull           => "No further information"
+        case whatevs          => Json.stringify( whatevs )
+      }
+    }
+  }
+  final class Exception( val code : Int, val message : String, val data : JsValue = JsNull ) extends EthereumException( s"${message} [code=${code}]: ${Exception.stringifyErrorData(data)}" ) {
+    def this( errorResponse : Response.Error ) = this( errorResponse.error.code, errorResponse.error.message, errorResponse.error.data ) 
   }
 
   type Response = Either[Response.Error,Response.Success]
