@@ -44,7 +44,6 @@ libraryDependencies ++= Seq(
   "com.mchange"             %% "literal"                         % "0.0.2-SNAPSHOT" changing(),
   "com.mchange"             %% "mchange-play-json-util"          % "0.0.1-SNAPSHOT" changing(),
   "com.typesafe"            % "config"                           % "1.2.1",
-  "org.spire-math"          %% "spire"                           % "0.9.1",
   "org.bouncycastle"        % "bcprov-jdk15on"                   % "1.54",
   "com.typesafe.play"       %% "play-json"                       % "2.4.6",
   "com.madgag.spongycastle" % "prov"                             % "1.54.0.0"            % "compile,optional", //only necessary on android

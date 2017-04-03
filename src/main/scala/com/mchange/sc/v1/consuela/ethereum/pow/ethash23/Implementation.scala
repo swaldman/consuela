@@ -56,9 +56,6 @@ import com.mchange.sc.v1.log.MLevel._;
 
 import com.mchange.sc.v1.consuela.ethereum.pow.ethash23; //so that we can refer to the package object explicitly
 
-//import spire.math.SafeLong;
-import spire.implicits._ //only used for sqrt at this point...
-
 import java.nio.file.{Files,Path}
 import java.io.{BufferedInputStream,BufferedOutputStream,File,FileInputStream,InputStream,OutputStream,EOFException}
 
@@ -786,8 +783,8 @@ trait Implementation {
   // we probably want to optimize this someday
   private def isPrime( num : Long ) : Boolean = {
     def naiveIsPrime : Boolean = {
-      val limit = num.sqrt;
-      var check = 2;
+      val limit = scala.math.sqrt( num ).ceil.toLong;
+      var check = 2L;
       while (check <= limit) if( num % check == 0 ) return false else check += 1;
       return true;
     }
