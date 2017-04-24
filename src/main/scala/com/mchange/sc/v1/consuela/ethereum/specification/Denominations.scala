@@ -2,8 +2,6 @@ package com.mchange.sc.v1.consuela.ethereum.specification;
 
 import com.mchange.sc.v1.consuela.ethereum.EthereumException
 
-import spire.implicits._ // for ** operator
-
 // from yellow paper, sec 2.1
 object Denominations {
   sealed abstract class Denomination( multiplier : scala.BigDecimal ) {
@@ -30,10 +28,10 @@ object Denominations {
 
   final object Multiplier {
     final object Long extends Multiplier[scala.Long] {
-      val Wei    = 10L ** 0;
-      val Szabo  = 10L ** 12;
-      val Finney = 10L ** 15;
-      val Ether  = 10L ** 18;
+      val Wei    = Math.pow(10, 0).toLong;
+      val Szabo  = Math.pow(10, 12).toLong;
+      val Finney = Math.pow(10, 15).toLong;
+      val Ether  = Math.pow(10, 18).toLong;
     }
     final object BigInt extends Multiplier[scala.BigInt] {
       val Wei    = scala.BigInt( Long.Wei );
