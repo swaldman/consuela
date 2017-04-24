@@ -45,8 +45,14 @@ package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Re
         case whatevs          => Json.stringify( whatevs )
       }
     }
+    def stringifyErrorData( data : Option[JsValue] ) : String = {
+      data match {
+        case Some( jsv ) => stringifyErrorData( jsv )
+        case None        => "No further information"
+      }
+    }
   }
-  final class Exception( val code : Int, val message : String, val data : JsValue = JsNull ) extends EthereumException( s"${message} [code=${code}]: ${Exception.stringifyErrorData(data)}" ) {
+  final class Exception( val code : Int, val message : String, val data : Option[JsValue] = None ) extends EthereumException( s"${message} [code=${code}]: ${Exception.stringifyErrorData(data)}" ) {
     def this( errorResponse : Response.Error ) = this( errorResponse.error.code, errorResponse.error.message, errorResponse.error.data ) 
   }
 
