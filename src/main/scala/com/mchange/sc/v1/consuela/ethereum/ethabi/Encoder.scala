@@ -20,6 +20,26 @@ import scala.language.existentials
 
 import scala.annotation.tailrec
 
+
+/**
+  * We currently handle the following solidity types...
+  *
+  *     address
+  *     bool
+  *     byte
+  *     bytes1 to bytes32
+  *     uint8, uint16, uint24 ... uint256
+  *     int8,  int16,  int24  ... int256
+  *
+  *     bytes
+  *     string
+  *     ufixed(MxN)
+  *     fixed(MxN)
+  *
+  *     <any-type>[N]
+  *     <any-type>[]
+  *
+  */
 object Encoder {
   private def allZero( bytes : Seq[Byte] ) : Boolean = ! bytes.exists( _ != 0 )
 
@@ -532,9 +552,9 @@ object Encoder {
   val SoloByte = new FixedLengthRepresentation[Byte]( 32 ) {
     val inner = new Encoder.PredefinedByteArray(1)
 
-    def parse( str : String )           : Failable[Byte]                = inner.parse( str ).map( _.head ) 
+    def parse( str : String )           : Failable[Byte]                = inner.parse( str ).map( _.head )
     def format( representation : Byte ) : Failable[String]              = Failable( s"0x${representation.hex}" )
-    def encode( representation : Byte ) : Failable[immutable.Seq[Byte]] = inner.encode( representation :: Nil ) 
+    def encode( representation : Byte ) : Failable[immutable.Seq[Byte]] = inner.encode( representation :: Nil )
 
     private [Encoder] def decodeCompleteNoLengthCheck( bytes : immutable.Seq[Byte] ) : Failable[Byte] = inner.decodeCompleteNoLengthCheck( bytes ).map( _.head )
   }
@@ -553,7 +573,7 @@ object Encoder {
       check.flatMap( _ => decodeCompleteNoLengthCheck( bytes ) )
     }
 
-    def encodingLength : Option[Int] = Some(repLen) 
+    def encodingLength : Option[Int] = Some(repLen)
 
     private [Encoder] def decodeCompleteNoLengthCheck( bytes : immutable.Seq[Byte] ) : Failable[REP]
   }
@@ -589,4 +609,3 @@ trait Encoder[REP] {
   }
   def encodesDynamicType : Boolean = encodingLength == None
 }
-
