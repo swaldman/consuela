@@ -35,13 +35,40 @@ package object ethabi {
       )
     }
   }
-  def callDataForAbiFunction( args : Seq[String], abiFunction : Abi.Function ) : Failable[immutable.Seq[Byte]] = {
+
+  def callDataForAbiFunctionFromEncoderRepresentations( reps : Seq[Any], abiFunction : Abi.Function ) : Failable[immutable.Seq[Byte]] = {
+    def headTail( enc : Encoder[_], rep : Any ) : Failable[Tuple2[Option[immutable.Seq[Byte]],immutable.Seq[Byte]]] = {
+      enc.encodeUntyped( rep ).map( encoded =>
+        if ( enc.encodesDynamicType ) Tuple2( None, encoded ) else Tuple2( Some(encoded), Nil )
+      )
+    }
+    def headTailTupled( tup : Tuple2[Encoder[_], Any] ) = headTail( tup._1, tup._2 )
+
+    val fEncoders  = inputEncodersForAbiFunction( abiFunction )
+    val fHeadTails = fEncoders.flatMap( encoders => Failable.sequence( encoders.zip(reps).map( headTailTupled ) ) )
+
+    _callDataForAbiFunction( fEncoders, fHeadTails, abiFunction )
+  }
+
+  def callDataForAbiFunctionFromStringArgs( args : Seq[String], abiFunction : Abi.Function ) : Failable[immutable.Seq[Byte]] = {
     def headTail( enc : Encoder[_], arg : String ) : Failable[Tuple2[Option[immutable.Seq[Byte]],immutable.Seq[Byte]]] = {
       enc.parseEncode( arg ).map( encoded =>
         if ( enc.encodesDynamicType ) Tuple2( None, encoded ) else Tuple2( Some(encoded), Nil )
       )
     }
     def headTailTupled( tup : Tuple2[Encoder[_],String] ) = headTail( tup._1, tup._2 )
+
+    val fEncoders  = inputEncodersForAbiFunction( abiFunction )
+    val fHeadTails = fEncoders.flatMap( encoders => Failable.sequence( encoders.zip(args).map( headTailTupled ) ) )
+
+    _callDataForAbiFunction( fEncoders, fHeadTails, abiFunction )
+  }
+
+  private def _callDataForAbiFunction(
+    fEncoders : Failable[immutable.Seq[Encoder[_]]],
+    fHeadTails : Failable[immutable.Seq[Tuple2[Option[immutable.Seq[Byte]],immutable.Seq[Byte]]]],
+    abiFunction : Abi.Function
+  ) : Failable[immutable.Seq[Byte]] = {
 
     def generateCallData( identifier : immutable.Seq[Byte], headTails : Seq[Tuple2[Option[immutable.Seq[Byte]],immutable.Seq[Byte]]] ) : Failable[immutable.Seq[Byte]] = Failable {
       val totalHeadSize = headTails.foldLeft(0)( ( count, next ) => count + next._1.fold( Encoder.DynamicHeadSize )( _.length ) )
@@ -68,10 +95,10 @@ package object ethabi {
     }
 
     for {
-      encoders <- inputEncodersForAbiFunction( abiFunction )
+      encoders <- fEncoders
+      headTails <- fHeadTails
       signature = signatureForAbiFunction( abiFunction )
       identifier = identifierForSignature( signature )
-      headTails <- Failable.sequence( encoders.zip(args).map( headTailTupled ) )
       callData <- generateCallData( identifier, headTails )
     } yield {
       callData
@@ -97,7 +124,7 @@ package object ethabi {
       for {
         _                  <- (abi.constructors.length == 1).toFailable(s"The ABI contains multiple constructors, but constructor overloading is not currently supported (or legal in solidity): ${abi.constructors})")
         ctorAsFunction     <- succeed( constructorAsFunction( abi.constructors.head ) )
-        asFunctionCallData <- callDataForAbiFunction( args, ctorAsFunction )
+        asFunctionCallData <- callDataForAbiFunctionFromStringArgs( args, ctorAsFunction )
       } yield {
         asFunctionCallData.drop( IdentifierLength )
       }
