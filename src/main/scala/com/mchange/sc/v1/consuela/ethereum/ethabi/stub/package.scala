@@ -1,21 +1,19 @@
 package com.mchange.sc.v1.consuela.ethereum.ethabi
 
 import scala.collection._
+import com.mchange.sc.v1.consuela.ethereum.EthereumException
 
 // TODO: Fixed rational types are not yet implemented
 //       (Are they implemenetd in solidity?)
 
 package object stub {
 
+  class StubException( message : String, t : Throwable = null ) extends EthereumException( message, t )
+
   final object ScalaParameterHelper {
     def apply( solidityTypeName : String ) : ScalaParameterHelper = this.apply( solidityTypeName, identity, identity )
   }
   final case class ScalaParameterHelper( scalaTypeName : String, inConversionGen : String => String, outConversionGen : String => String )
-
-  val StubImports = immutable.Seq(
-    "scala.collection._",
-    "com.mchange.sc.v1.consuela.ethereum.ethabi.stub._"
-  )
 
   val FullTypenameMappings = Map (
     "address" -> ScalaParameterHelper( "sol.Address" ),
