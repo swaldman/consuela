@@ -35,8 +35,6 @@ object Invoker {
   }
 
   final case class Context( jsonRpcUrl : String, gasHandler : MarkupOrOverride, gasPriceHandler : MarkupOrOverride )
-}
-final class Invoker {
 
   private def gasPriceGas(
     client     : Client,
