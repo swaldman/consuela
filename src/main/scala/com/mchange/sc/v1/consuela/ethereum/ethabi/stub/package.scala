@@ -8,6 +8,14 @@ import com.mchange.sc.v1.consuela.ethereum.EthereumException
 
 package object stub {
 
+  // annoying, but we want a uniform way to convert all integral types,
+  // to BigInt, even when we don't know that the type is anything but integral
+  implicit final class BigIntBigInter( val bi : BigInt ) extends AnyVal {
+    def toBigInt : BigInt = bi
+  }
+
+  lazy val Zero = sol.UInt256(0) // if not lazy, we have weirdness because the types aren't initialized
+
   class StubException( message : String, t : Throwable = null ) extends EthereumException( message, t )
 
   final object ScalaParameterHelper {
@@ -25,13 +33,13 @@ package object stub {
 
   val PredefinedBytesTypeRegex = """^bytes(\d{1,2})""".r
   val IntegralTypeRegex        = """^(u)?int(\d{1,3})$""".r
-  val ArrayTypeRegex           = """^(.*)[(\d*)]$""".r
+  val ArrayTypeRegex           = """^(.*)\[(\d*)\]$""".r
 
   def mbPredefinedBytesType( solidityTypeName : String ) : Option[ScalaParameterHelper] = {
     solidityTypeName match {
       case PredefinedBytesTypeRegex( len ) => {
         val scalaTypeName = s"sol.Bytes${len}"
-        Some( ScalaParameterHelper( scalaTypeName, name => s"${name}.widen", name => s"${solidityTypeName}( $name )" ) )
+        Some( ScalaParameterHelper( scalaTypeName, name => s"${name}.widen", name => s"${scalaTypeName}( $name )" ) )
       }
       case _ => None
     }
@@ -53,8 +61,8 @@ package object stub {
         scalaParameterHelperForSolidityType( baseTypeName ).map { baseTypeHelper =>
           ScalaParameterHelper(
             s"immutable.Seq[${baseTypeHelper.scalaTypeName}]",
-            name => s"""${name}.map( elem => ${baseTypeHelper.inConversionGen("elem")} )""",
-            name => s"""${name}.map( elem => ${baseTypeHelper.outConversionGen("elem")} )"""
+            name => s"""com.mchange.sc.v1.consuela.ethereum.ethabi.Encoder.ArrayRep( "${baseTypeName}", ${name}.map( elem => ${baseTypeHelper.inConversionGen("elem")} ) )""",
+            name => s"""${name}.items.map( elem => ${baseTypeHelper.outConversionGen("elem")} )"""
           )
         }
       }

@@ -107,6 +107,7 @@ package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Re
 
   final object Abi {
     object Definition {
+      def apply( json : String ) : Definition = Json.parse( json ).as[Definition]
       val empty = Definition( immutable.Seq.empty, immutable.Seq.empty, immutable.Seq.empty, None )
     }
     final case class Definition( functions : immutable.Seq[Function], events : immutable.Seq[Event], constructors : immutable.Seq[Constructor], fallback : Option[Fallback] ) extends MaybeEmpty {
