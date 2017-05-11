@@ -8,20 +8,25 @@ import com.mchange.sc.v1.consuela.ethereum.EthereumException
 
 package object stub {
 
-  // annoying, but we want a uniform way to convert all integral types,
-  // to BigInt, even when we don't know that the type is anything but integral
-  implicit final class BigIntBigInter( val bi : BigInt ) extends AnyVal {
-    def toBigInt : BigInt = bi
-  }
-
   lazy val Zero = sol.UInt256(0) // if not lazy, we have weirdness because the types aren't initialized
 
   class StubException( message : String, t : Throwable = null ) extends EthereumException( message, t )
 
   final object ScalaParameterHelper {
-    def apply( solidityTypeName : String ) : ScalaParameterHelper = this.apply( solidityTypeName, identity, identity )
+    def apply( scalaTypeName : String ) : ScalaParameterHelper = this.apply( scalaTypeName, identity, name => s"${name}.asInstanceOf[${scalaTypeName}]" )
   }
   final case class ScalaParameterHelper( scalaTypeName : String, inConversionGen : String => String, outConversionGen : String => String )
+
+  def anyIntegralToBigInt( a : Any ) : BigInt = {
+    a match {
+      case b  : Byte   => BigInt( b )
+      case s  : Short  => BigInt( s )
+      case i  : Int    => BigInt( i )
+      case l  : Long   => BigInt( l )
+      case bi : BigInt => bi
+      case _           => throw new StubException( s"${a} is not an integral type, cannot be converted to BigInt." )
+    }
+  }
 
   val FullTypenameMappings = Map (
     "address" -> ScalaParameterHelper( "sol.Address" ),
@@ -39,7 +44,7 @@ package object stub {
     solidityTypeName match {
       case PredefinedBytesTypeRegex( len ) => {
         val scalaTypeName = s"sol.Bytes${len}"
-        Some( ScalaParameterHelper( scalaTypeName, name => s"${name}.widen", name => s"${scalaTypeName}( $name )" ) )
+        Some( ScalaParameterHelper( scalaTypeName, name => s"${name}.widen", name => s"${scalaTypeName}( ${name}.asInstanceOf[immutable.Seq[Byte]] )" ) )
       }
       case _ => None
     }
@@ -49,7 +54,7 @@ package object stub {
     solidityTypeName match {
       case IntegralTypeRegex( mbu, bitlength ) => {
         val scalaTypeName = if (mbu == "u") s"sol.UInt${bitlength}" else s"sol.Int${bitlength}"
-        Some( ScalaParameterHelper( scalaTypeName, name => s"${name}.widen.toBigInt", name => s"${solidityTypeName}( $name )" ) )
+        Some( ScalaParameterHelper( scalaTypeName, name => s"anyIntegralToBigInt( ${name}.widen )", name => s"${scalaTypeName}( anyIntegralToBigInt( ${name} ) )" ) )
       }
       case _ => None
     }

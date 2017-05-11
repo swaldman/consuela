@@ -97,24 +97,24 @@ object Generator {
     }
     iw.println( s"""val fcn = ${abiFunctionCtor}""" )
     iw.println( s"""val reps = immutable.Seq[Any]( ${fcn.inputs.map( toRepLambda ).mkString(", ")} )""" )
-    iw.println( s"""val callData = ethabi.callDataForAbiFunctionFromEncoderRepresentations( reps, fcn )""" )
+    iw.println( s"""val callData = ethabi.callDataForAbiFunctionFromEncoderRepresentations( reps, fcn ).get""" )
 
     if ( constantSection ) {
       iw.println( s"""val futRetBytes = Invoker.constant.sendMessage( sender.address, contractAddress, optionalValueInWei.getOrElse( Zero ), callData )""" )
-      iw.println( s"""val futDecodedReturnValues = futRepBytes.map( bytes => ethabi.decodeReturnValuesForFunction( bytes, fcn ) )""" )
-      iw.println( s"""val futDecodedReps = futDecodedReturnValues.map( _.value ).toVector""" )
+      iw.println( s"""val futDecodedReturnValues = futRetBytes.map( bytes => ethabi.decodeReturnValuesForFunction( bytes, fcn ) )""" )
+      iw.println( s"""val futDecodedReps = futDecodedReturnValues.map( _.get.map( _.value  ).toVector )""" )
 
       iw.println( s"""val futOut = futDecodedReps.map { decodedReps =>""" )
       iw.upIndent()
 
       if ( fcn.outputs.length == 1 ) {
         val outHelper = forceHelper( fcn.outputs.head.`type` )
-        outHelper.outConversionGen( "decodedReps.head" )
+        iw.println( outHelper.outConversionGen( "decodedReps.head" ) )
       } else { // zero or multiple outputs, return Tuple (or Unit)
         val outHelpers = fcn.outputs.map( outparam => forceHelper( outparam.`type` ) )
         val indexedHelpers = immutable.Stream.from(1).zip(outHelpers)
         indexedHelpers.foreach { case ( index, helper ) =>
-          iw.println( s"""val out${index} = ${helper.outConversionGen( "decodedReps( index - 1 )" )}""" )
+          iw.println( s"""val out${index} = ${helper.outConversionGen( "decodedReps( " + (index - 1) + " )" )}""" )
         }
         val indices = indexedHelpers.map( _._1 )
         iw.println( s"""( ${indices.map( index => "out" + index ).mkString(", ")} )""" )
@@ -125,7 +125,7 @@ object Generator {
       iw.println( s"""Await.result( futOut, Duration.Inf )""" )
 
     } else {
-      iw.println( s"""val futHash= Invoker.sendMessage( sender.findPrivateKey(), contractAddress, optionalValueInWei.getOrElse( Zero ), callData )""" )
+      iw.println( s"""val futHash = Invoker.transaction.sendMessage( sender.findPrivateKey(), contractAddress, optionalValueInWei.getOrElse( Zero ), callData )""" )
       iw.println( s"""Await.result( futHash, Duration.Inf )""" )
     }
 

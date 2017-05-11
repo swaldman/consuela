@@ -58,7 +58,7 @@ object Invoker {
   }
 
   final object transaction {
-    private def sendMessage[T](
+    def sendMessage[T](
       senderKey  : EthPrivateKey,
       to         : EthAddress,
       valueInWei : Unsigned256,
