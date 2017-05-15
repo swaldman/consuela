@@ -458,6 +458,8 @@ case class V3( rawJson : JsObject ) {
     decaseObjectKeys( this.rawJson ).asInstanceOf[JsObject]
   }
 
+  def decode( passphrase : String )( implicit provider : jce.Provider ) = V3.decodePrivateKey( this, passphrase )( provider )
+
   def address = V3.address( this.withLowerCaseKeys )
 
   def toByteArray = Json.stringify( rawJson ).getBytes( Codec.UTF8.charSet )
