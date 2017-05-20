@@ -90,5 +90,7 @@ final case class EthPrivateKey( val bytes : ByteSeqExact32 ) {
   def signHashedDocument( document : Array[Byte] ) : EthSignature = signEthHash( EthHash.hash( document ) );
 
   lazy val toPublicKey = EthPublicKey( this );
+
+  def hex = bytes.widen.hex
 }
 
