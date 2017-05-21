@@ -9,9 +9,12 @@ import com.mchange.sc.v1.log.MLevel._
 
 import java.net.URL
 
+import scala.annotation.tailrec
+
 import scala.collection._
 
-import scala.concurrent.{ExecutionContext,Future}
+import scala.concurrent.{Await,ExecutionContext,Future}
+import scala.concurrent.duration._
 
 object Invoker {
 
@@ -19,7 +22,7 @@ object Invoker {
 
   def rounded( bd : BigDecimal ) = bd.round( bd.mc ) // work around absence of default rounded method in scala 2.10 BigDecimal
 
-  object MarkupOrOverride {
+  final object MarkupOrOverride {
     def default = Markup( 0 )
     def createMarkup( fraction : Double ) = Markup( fraction ) // we use createXXX to avoid using the bare keyword override :(
     def createOverride( value : BigInt ) = Override( value ) 
@@ -27,14 +30,14 @@ object Invoker {
   sealed trait MarkupOrOverride {
     def compute( default : BigInt ) : BigInt
   }
-  final case class Markup( fraction : Double ) {
+  final case class Markup( fraction : Double ) extends MarkupOrOverride {
     def compute( default : BigInt ) : BigInt = rounded( BigDecimal( default ) * BigDecimal(1 + fraction) ).toBigInt
   }
-  final case class Override( value : BigInt ) {
+  final case class Override( value : BigInt ) extends MarkupOrOverride {
     def compute( default : BigInt ) : BigInt = value
   }
 
-  final case class Context( jsonRpcUrl : String, gasHandler : MarkupOrOverride, gasPriceHandler : MarkupOrOverride )
+  final case class Context( jsonRpcUrl : String, gasHandler : MarkupOrOverride = Markup(0.2), gasPriceHandler : MarkupOrOverride = Markup(0), pollPeriod : Duration = 5.seconds )
 
   private def gasPriceGas(
     client     : Client,
@@ -57,8 +60,44 @@ object Invoker {
     }
   }
 
+  def awaitTransactionReceipt( transactionHash : EthHash, timeout : Duration = Duration.Inf )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Option[ClientTransactionReceipt] = {
+    val pollPeriodMillis = icontext.pollPeriod.toMillis
+    val timeoutMillis = if ( timeout == Duration.Inf ) Long.MaxValue else System.currentTimeMillis + timeout.toMillis
+
+    borrow( new Client.Simple( new URL( icontext.jsonRpcUrl ) ) ) { client =>
+
+      def onePoll = Await.result( client.eth.getTransactionReceipt( transactionHash ), Duration.Inf )
+
+      @tailrec
+      def poll( last : Option[ClientTransactionReceipt] ) : Option[ClientTransactionReceipt] = {
+        last match {
+          case Some( _ ) => last
+          case None      => {
+            if (System.currentTimeMillis > timeoutMillis ) {
+              None
+            } else {
+              Thread.sleep( pollPeriodMillis )
+              poll( onePoll )
+            }
+          }
+        }
+      }
+
+      poll( onePoll )
+    }
+  }
+
   final object transaction {
-    def sendMessage[T](
+
+    def sendWei(
+      senderKey  : EthPrivateKey,
+      to         : EthAddress,
+      valueInWei : Unsigned256
+    )(implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Future[EthHash] = {
+      sendMessage( senderKey, to, valueInWei, immutable.Seq.empty[Byte] )
+    }
+
+    def sendMessage(
       senderKey  : EthPrivateKey,
       to         : EthAddress,
       valueInWei : Unsigned256,

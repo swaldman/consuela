@@ -40,7 +40,7 @@ object Generator {
       }
       iw.println()
 
-      iw.println( s"final case class $className( val contractAddress : EthAddress ) {" )
+      iw.println( s"final case class $className( val contractAddress : EthAddress )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) {" )
       iw.upIndent()
       iw.println( s"final object transaction {" )
       iw.upIndent()
@@ -149,7 +149,7 @@ object Generator {
 
     val valueArgList = if ( fcn.payable ) "( optionalValueInWei : Option[sol.UInt256] )" else ""
     
-    val prereturn = s"""def ${fcn.name}( ${fcn.inputs.map(param).mkString(", ")} )${valueArgList}( implicit sender : Sender, icontext : Invoker.Context, econtext : ExecutionContext )"""
+    val prereturn = s"""def ${fcn.name}( ${fcn.inputs.map(param).mkString(", ")} )${valueArgList}( implicit sender : Sender )"""
 
     val post = {
       if (!constantSection) {
