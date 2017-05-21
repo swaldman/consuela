@@ -1,6 +1,6 @@
 package com.mchange.sc.v1.consuela.ethereum.jsonrpc20
 
-import com.mchange.sc.v1.consuela.ethereum.{EthAddress, EthPrivateKey, EthHash, EthTransaction}
+import com.mchange.sc.v1.consuela.ethereum.{EthAddress, EthPrivateKey, EthHash, EthTransaction, EthereumException}
 import com.mchange.sc.v1.consuela.ethereum.specification.Types._
 
 import com.mchange.sc.v2.lang.borrow
@@ -19,6 +19,9 @@ import scala.concurrent.duration._
 object Invoker {
 
   private lazy implicit val logger = mlogger( this )
+
+  class InvokerException( message : String, cause : Throwable = null ) extends EthereumException( message, cause )
+  final class TimeoutException( transactionHash : EthHash, timeout : Duration ) extends InvokerException( s"Could not retrieve receipt for transaction '0x${transactionHash.hex}' within ${timeout}" )
 
   def rounded( bd : BigDecimal ) = bd.round( bd.mc ) // work around absence of default rounded method in scala 2.10 BigDecimal
 
@@ -60,7 +63,7 @@ object Invoker {
     }
   }
 
-  def awaitTransactionReceipt( transactionHash : EthHash, timeout : Duration = Duration.Inf )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Option[ClientTransactionReceipt] = {
+  def awaitTransactionReceipt( transactionHash : EthHash, timeout : Duration )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Option[ClientTransactionReceipt] = {
     val pollPeriodMillis = icontext.pollPeriod.toMillis
     val timeoutMillis = if ( timeout == Duration.Inf ) Long.MaxValue else System.currentTimeMillis + timeout.toMillis
 
@@ -85,6 +88,10 @@ object Invoker {
 
       poll( onePoll )
     }
+  }
+
+  def requireTransactionReceipt( transactionHash : EthHash, timeout : Duration = Duration.Inf )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : ClientTransactionReceipt = {
+    awaitTransactionReceipt( transactionHash, timeout ).getOrElse( throw new TimeoutException( transactionHash, timeout ) )
   }
 
   final object transaction {
