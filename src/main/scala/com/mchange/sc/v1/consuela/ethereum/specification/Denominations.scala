@@ -1,5 +1,6 @@
 package com.mchange.sc.v1.consuela.ethereum.specification;
 
+import scala.language.implicitConversions
 import com.mchange.sc.v1.consuela.ethereum.EthereumException
 
 // from yellow paper, sec 2.1
@@ -74,4 +75,8 @@ object Denominations {
     def finney = value * Multiplier.BigInt.Finney;
     def ether  = value * Multiplier.BigInt.Ether;
   }
+}
+trait Denominations {
+  implicit def longToLongEther( value : Long ) = new Denominations.LongEther( value )
+  implicit def bigIntToBigIntEther( value : BigInt ) = new Denominations.BigIntEther( value )
 }
