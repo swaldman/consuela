@@ -28,12 +28,19 @@ package object stub {
     }
   }
 
+  val StringHelper = {
+    ScalaParameterHelper(
+      "sol.String",
+      name => s"""${name}.getBytes( java.nio.charset.StandardCharsets.UTF_8 ).toImmutableSeq""",
+      name => s"""(new String( ${name}.asInstanceOf[immutable.Seq[Byte]].toArray, java.nio.charset.StandardCharsets.UTF_8))""" )
+  }
+
   val FullTypenameMappings = Map (
     "address" -> ScalaParameterHelper( "sol.Address" ),
     "bool"    -> ScalaParameterHelper( "sol.Bool" ),
     "byte"    -> ScalaParameterHelper( "sol.Byte" ),
     "bytes"   -> ScalaParameterHelper( "sol.Bytes" ),
-    "string"  -> ScalaParameterHelper( "sol.String" )
+    "string"  -> StringHelper
   )
 
   val PredefinedBytesTypeRegex = """^bytes(\d{1,2})""".r

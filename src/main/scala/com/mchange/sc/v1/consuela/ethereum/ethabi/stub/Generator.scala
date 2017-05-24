@@ -16,6 +16,7 @@ object Generator {
     "scala.collection._",
     "scala.concurrent._",
     "scala.concurrent.duration.Duration",
+    "com.mchange.sc.v1.consuela._",
     "com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash}",
     "com.mchange.sc.v1.consuela.ethereum.ethabi",
     "com.mchange.sc.v1.consuela.ethereum.ethabi.stub._",
