@@ -26,8 +26,7 @@ object Invoker {
   def rounded( bd : BigDecimal ) = bd.round( bd.mc ) // work around absence of default rounded method in scala 2.10 BigDecimal
 
   final object MarkupOrOverride {
-    def default = Markup( 0 )
-    def createMarkup( fraction : Double ) = Markup( fraction ) // we use createXXX to avoid using the bare keyword override :(
+    def createMarkup( fraction : Double ) = Markup( fraction ) // we use createXXX to avoid using the bare keyword 'override' :(
     def createOverride( value : BigInt ) = Override( value ) 
   }
   sealed trait MarkupOrOverride {
