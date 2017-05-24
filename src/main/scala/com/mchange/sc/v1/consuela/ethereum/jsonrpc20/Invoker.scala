@@ -13,7 +13,7 @@ import scala.annotation.tailrec
 
 import scala.collection._
 
-import scala.concurrent.{Await,ExecutionContext,Future}
+import scala.concurrent.{Await,ExecutionContext,Future,blocking}
 import scala.concurrent.duration._
 
 object Invoker {
@@ -63,24 +63,33 @@ object Invoker {
     }
   }
 
-  def awaitTransactionReceipt( transactionHash : EthHash, timeout : Duration )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Option[ClientTransactionReceipt] = {
+  def futureTransactionReceipt( transactionHash : EthHash, timeout : Duration )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Future[Option[ClientTransactionReceipt]] = {
     val pollPeriodMillis = icontext.pollPeriod.toMillis
     val timeoutMillis = if ( timeout == Duration.Inf ) Long.MaxValue else System.currentTimeMillis + timeout.toMillis
 
     borrow( new Client.Simple( new URL( icontext.jsonRpcUrl ) ) ) { client =>
 
-      def onePoll = Await.result( client.eth.getTransactionReceipt( transactionHash ), Duration.Inf )
+      def onePoll = client.eth.getTransactionReceipt( transactionHash )
 
-      @tailrec
-      def poll( last : Option[ClientTransactionReceipt] ) : Option[ClientTransactionReceipt] = {
-        last match {
-          case Some( _ ) => last
-          case None      => {
-            if (System.currentTimeMillis > timeoutMillis ) {
-              None
-            } else {
-              Thread.sleep( pollPeriodMillis )
-              poll( onePoll )
+      // this method is not tail recursive... but it isn't actually recursive, as each call to Future.flatMap(...)
+      // runs as its own task dispatched to a Thread pool. i wonder whether, after waiting a very, very long, it might
+      // consume a lot of memory. but for now i think it is okay.
+      //
+      // see https://stackoverflow.com/questions/44146832/tail-recursive-functional-polling-in-scala
+
+      def poll( last : Future[Option[ClientTransactionReceipt]] ) : Future[Option[ClientTransactionReceipt]] = {
+        last.flatMap { mbReceipt =>
+          mbReceipt match {
+            case Some( _ ) => last // cool, we got it :)
+            case None      => {    // it wasn't available when we checked :(
+              if (System.currentTimeMillis > timeoutMillis ) { // we give up
+                last
+              } else {                                         // try again!
+                blocking {
+                  Thread.sleep( pollPeriodMillis )
+                }
+                poll( onePoll )
+              }
             }
           }
         }
@@ -90,9 +99,14 @@ object Invoker {
     }
   }
 
+  def awaitTransactionReceipt( transactionHash : EthHash, timeout : Duration )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Option[ClientTransactionReceipt] = {
+      Await.result( futureTransactionReceipt( transactionHash, timeout ), Duration.Inf ) // the timeout in enforced within futureTransactionReceipt( ... ), not here
+  }
+
   def requireTransactionReceipt( transactionHash : EthHash, timeout : Duration = Duration.Inf )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : ClientTransactionReceipt = {
     awaitTransactionReceipt( transactionHash, timeout ).getOrElse( throw new TimeoutException( transactionHash, timeout ) )
   }
+
 
   final object transaction {
 
