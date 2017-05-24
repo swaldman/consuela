@@ -1,7 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum.jsonrpc20
 
 import scala.collection._
-import scala.concurrent.{ExecutionContext,Future}
+import scala.concurrent.{blocking,ExecutionContext,Future}
 
 import java.io.InputStream
 import java.net.{HttpURLConnection, URL}
@@ -38,14 +38,16 @@ object Exchanger {
       htconn.setInstanceFollowRedirects( false )
       htconn.setUseCaches( false )
       htconn.setRequestMethod( "POST" );
-      htconn.setRequestProperty( "Content-Type", "application/json");
-      htconn.setRequestProperty( "charset", "utf-8" );
-      htconn.setRequestProperty( "Content-Length", paramsBytes.length.toString );
+      htconn.setRequestProperty( "Content-Type", "application/json")
+      htconn.setRequestProperty( "charset", "utf-8" )
+      htconn.setRequestProperty( "Content-Length", paramsBytes.length.toString )
 
-      borrow( htconn.getOutputStream() )( _.write(paramsBytes) )
-      borrow( htconn.getInputStream() )( traceParse ).as[Response] match { 
-        case Right( success ) => success.ensuring( _.id == id )
-        case Left( error )    => throw new jsonrpc20.Exception( error )
+      blocking {
+        borrow( htconn.getOutputStream() )( _.write(paramsBytes) )
+        borrow( htconn.getInputStream() )( traceParse ).as[Response] match {
+          case Right( success ) => success.ensuring( _.id == id )
+          case Left( error )    => throw new jsonrpc20.Exception( error )
+        }
       }
     }
     def close() : Unit = ()
