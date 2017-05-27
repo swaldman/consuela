@@ -126,7 +126,7 @@ object Generator {
       iw.println( s"""Await.result( futOut, Duration.Inf )""" )
 
     } else {
-      iw.println( s"""val futHash = Invoker.transaction.sendMessage( sender.findPrivateKey(), contractAddress, optionalValueInWei.getOrElse( Zero ), callData )""" )
+      iw.println( s"""val futHash = Invoker.transaction.sendMessage( sender.findSigner(), contractAddress, optionalValueInWei.getOrElse( Zero ), callData )""" )
       iw.println( s"""Await.result( futHash, Duration.Inf )""" )
     }
 

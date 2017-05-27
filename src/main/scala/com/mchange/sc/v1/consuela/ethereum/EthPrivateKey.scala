@@ -64,7 +64,7 @@ object EthPrivateKey {
   }
 }
 
-final case class EthPrivateKey( val bytes : ByteSeqExact32 ) {
+final case class EthPrivateKey( val bytes : ByteSeqExact32 ) extends EthSigner {
 
   lazy val s = bytes.widen.toUnsignedBigInt
 
@@ -92,5 +92,11 @@ final case class EthPrivateKey( val bytes : ByteSeqExact32 ) {
   lazy val toPublicKey = EthPublicKey( this );
 
   def hex = bytes.widen.hex
+
+  // for EthSigner trait
+
+  def sign( document : Seq[Byte] ) : EthSignature = this.sign( document.toArray )
+
+  lazy val address = toPublicKey.toAddress
 }
 

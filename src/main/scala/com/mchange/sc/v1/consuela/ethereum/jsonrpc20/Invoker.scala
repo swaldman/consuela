@@ -1,6 +1,6 @@
 package com.mchange.sc.v1.consuela.ethereum.jsonrpc20
 
-import com.mchange.sc.v1.consuela.ethereum.{EthAddress, EthPrivateKey, EthHash, EthTransaction, EthereumException}
+import com.mchange.sc.v1.consuela.ethereum.{EthAddress, EthHash, EthSigner, EthTransaction, EthereumException}
 import com.mchange.sc.v1.consuela.ethereum.specification.Types._
 
 import com.mchange.sc.v2.lang.borrow
@@ -110,22 +110,22 @@ object Invoker {
   final object transaction {
 
     def sendWei(
-      senderKey  : EthPrivateKey,
-      to         : EthAddress,
-      valueInWei : Unsigned256
+      senderSigner  : EthSigner,
+      to            : EthAddress,
+      valueInWei    : Unsigned256
     )(implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Future[EthHash] = {
-      sendMessage( senderKey, to, valueInWei, immutable.Seq.empty[Byte] )
+      sendMessage( senderSigner, to, valueInWei, immutable.Seq.empty[Byte] )
     }
 
     def sendMessage(
-      senderKey  : EthPrivateKey,
-      to         : EthAddress,
-      valueInWei : Unsigned256,
-      data       : immutable.Seq[Byte]
+      senderSigner  : EthSigner,
+      to            : EthAddress,
+      valueInWei    : Unsigned256,
+      data          : immutable.Seq[Byte]
     )(implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Future[EthHash] = {
       borrow( new Client.Simple( new URL( icontext.jsonRpcUrl ) ) ) { client =>
 
-        val from = senderKey.toPublicKey.toAddress
+        val from = senderSigner.address
 
         val fGasPriceGas = gasPriceGas( client, from, to, valueInWei, data )
         val fNextNonce = client.eth.getTransactionCount( from, Client.BlockNumber.Pending )
@@ -134,7 +134,7 @@ object Invoker {
           ( effectiveGasPrice, effectiveGas ) <- fGasPriceGas
           nextNonce <- fNextNonce
           unsigned = EthTransaction.Unsigned.Message( Unsigned256(nextNonce), Unsigned256(effectiveGasPrice), Unsigned256(effectiveGas), to, valueInWei, data )
-          signed = unsigned.sign( senderKey )
+          signed = unsigned.sign( senderSigner )
           hash <- client.eth.sendSignedTransaction( signed )
         } yield {
           hash

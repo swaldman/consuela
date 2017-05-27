@@ -51,17 +51,17 @@ object EthTransaction {
   final object Unsigned {
     final case class Message( nonce : Unsigned256, gasPrice : Unsigned256, gasLimit : Unsigned256, to : EthAddress, value : Unsigned256, data : immutable.Seq[Byte] ) 
         extends Unsigned with EthTransaction.Message {
-      def sign( privateKey : EthPrivateKey ) : Signed.Message = Signed.Message( this, privateKey.sign( RLP.encode[EthTransaction]( this ).toArray ) );
+      def sign( signer : EthSigner ) : Signed.Message = Signed.Message( this, signer.sign( RLP.encode[EthTransaction]( this ) ) );
     }
     final case class ContractCreation( nonce : Unsigned256, gasPrice : Unsigned256, gasLimit : Unsigned256, value : Unsigned256, init : immutable.Seq[Byte] ) 
         extends Unsigned with EthTransaction.ContractCreation {
-      def sign( privateKey : EthPrivateKey ) : Signed.ContractCreation = Signed.ContractCreation( this, privateKey.sign( RLP.encode[EthTransaction]( this ).toArray ) );
+      def sign( signer : EthSigner ) : Signed.ContractCreation = Signed.ContractCreation( this, signer.sign( RLP.encode[EthTransaction]( this ) ) );
     }
   }
   sealed trait Unsigned extends EthTransaction {
     override def signed = false;
 
-    def sign( privateKey : EthPrivateKey ) : Signed;
+    def sign( signer : EthSigner ) : Signed;
   }
   final object Signed {
     def apply( base : Unsigned, sig : EthSignature ) : Signed = {
