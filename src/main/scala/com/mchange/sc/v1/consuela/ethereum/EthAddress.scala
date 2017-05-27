@@ -48,6 +48,8 @@ object EthAddress {
   def computeBytes( pub : EthPublicKey ) : ByteSeqExact20 = ByteSeqExact20( EthHash.hash(pub.bytes.widen).toByteArray.drop(12) );
 
   def apply( hexString : String ) : EthAddress = EthAddress( ByteSeqExact20( hexString.decodeHex ) )
+
+  val Zero = EthAddress( ByteSeqExact20( Array.fill[Byte](20)(0.toByte) ) )
 }
 final case class EthAddress( val bytes : ByteSeqExact20 ) {
   lazy val toNibbles : IndexedSeq[Nibble] = encoding.toNibbles( bytes.widen )
