@@ -19,10 +19,24 @@ object Sender {
 
     def findPrivateKey() : EthPrivateKey = w.decode( passphraseFinder() )
   }
+  object Basic {
+    def apply( privateKey : EthPrivateKey ) : Sender.Basic = apply( EthKeyPair( privateKey ) )
+  }
   final case class Basic( keyPair : EthKeyPair ) extends Sender {
     def address = keyPair.address
     def findPrivateKey = keyPair.pvt
   }
+
+  /**
+    * This is just a conventional account to use as an Ether fountain in testing environments
+    *
+    * Corresponds to eth address 0xaba220742442621625bb1160961d2cfcb64c7682
+    */
+  lazy val TestPrivateKey = EthPrivateKey( BigInt( 0x7e57 ) )
+
+  lazy val TestSender = Sender.Basic( TestPrivateKey )
+
+  lazy val Default = TestSender
 }
 trait Sender {
   def address : EthAddress
