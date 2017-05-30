@@ -93,7 +93,7 @@ object Generator {
     iw.upIndent()
 
     if (! fcn.payable) {
-      iw.println("val optionalValueInWei : Option[sol.UInt256] = None")
+      iw.println("val optionalPaymentInWei : Option[sol.UInt256] = None")
       iw.println()
     }
     iw.println( s"""val fcn = ${abiFunctionCtor}""" )
@@ -101,7 +101,7 @@ object Generator {
     iw.println( s"""val callData = ethabi.callDataForAbiFunctionFromEncoderRepresentations( reps, fcn ).get""" )
 
     if ( constantSection ) {
-      iw.println( s"""val futRetBytes = Invoker.constant.sendMessage( sender.address, contractAddress, optionalValueInWei.getOrElse( Zero ), callData )""" )
+      iw.println( s"""val futRetBytes = Invoker.constant.sendMessage( sender.address, contractAddress, optionalPaymentInWei.getOrElse( Zero ), callData )""" )
       iw.println( s"""val futDecodedReturnValues = futRetBytes.map( bytes => ethabi.decodeReturnValuesForFunction( bytes, fcn ) )""" )
       iw.println( s"""val futDecodedReps = futDecodedReturnValues.map( _.get.map( _.value  ).toVector )""" )
 
@@ -126,7 +126,7 @@ object Generator {
       iw.println( s"""Await.result( futOut, Duration.Inf )""" )
 
     } else {
-      iw.println( s"""val futHash = Invoker.transaction.sendMessage( sender.findSigner(), contractAddress, optionalValueInWei.getOrElse( Zero ), callData )""" )
+      iw.println( s"""val futHash = Invoker.transaction.sendMessage( sender.findSigner(), contractAddress, optionalPaymentInWei.getOrElse( Zero ), callData )""" )
       iw.println( s"""Await.result( futHash, Duration.Inf )""" )
     }
 
@@ -148,9 +148,11 @@ object Generator {
       s"${helper.scalaTypeName}"
     }
 
-    val valueArgList = if ( fcn.payable ) "( optionalValueInWei : Option[sol.UInt256] )" else ""
+    def paymentArg = "optionalPaymentInWei : Option[sol.UInt256] = None"
+
+    val params = fcn.inputs.map(param) ++ ( if ( fcn.payable ) immutable.Seq( paymentArg ) else immutable.Seq.empty[String] )
     
-    val prereturn = s"""def ${fcn.name}( ${fcn.inputs.map(param).mkString(", ")} )${valueArgList}( implicit sender : Sender )"""
+    val prereturn = s"""def ${fcn.name}( ${params.mkString(", ")} )( implicit sender : Sender )"""
 
     val post = {
       if (!constantSection) {
