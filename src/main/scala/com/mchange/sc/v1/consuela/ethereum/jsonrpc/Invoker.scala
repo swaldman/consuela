@@ -23,7 +23,7 @@ object Invoker {
   class InvokerException( message : String, cause : Throwable = null ) extends EthereumException( message, cause )
   final class TimeoutException( transactionHash : EthHash, timeout : Duration ) extends InvokerException( s"Could not retrieve receipt for transaction '0x${transactionHash.hex}' within ${timeout}" )
 
-  def rounded( bd : BigDecimal ) = bd.round( bd.mc ) // work around absence of default rounded method in scala 2.10 BigDecimal
+  private def rounded( bd : BigDecimal ) = bd.round( bd.mc ) // work around absence of default rounded method in scala 2.10 BigDecimal
 
   final object MarkupOrOverride {
     def createMarkup( fraction : Double ) = Markup( fraction ) // we use createXXX to avoid using the bare keyword 'override' :(
@@ -32,8 +32,13 @@ object Invoker {
   sealed trait MarkupOrOverride {
     def compute( default : BigInt ) : BigInt
   }
-  final case class Markup( fraction : Double ) extends MarkupOrOverride {
-    def compute( default : BigInt ) : BigInt = rounded( BigDecimal( default ) * BigDecimal(1 + fraction) ).toBigInt
+  final case class Markup( fraction : Double, mbFloorInWei : Option[BigInt] = None, mbCapInWei : Option[BigInt] = None ) extends MarkupOrOverride {
+    def compute( default : BigInt ) : BigInt = {
+      val base             = rounded( BigDecimal( default ) * BigDecimal(1 + fraction) ).toBigInt
+      val floored          = mbFloorInWei.fold( base )( floorInWei => base max floorInWei )
+      val flooredAndCapped = mbCapInWei.fold( floored )( capInWei => floored min capInWei )
+      flooredAndCapped
+    }
   }
   final case class Override( value : BigInt ) extends MarkupOrOverride {
     def compute( default : BigInt ) : BigInt = value
