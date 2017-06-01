@@ -1,7 +1,6 @@
 package com.mchange.sc.v1.consuela.ethereum
 
 import scala.collection._
-import com.mchange.sc.v1.consuela.ethereum.EthereumException
 
 // TODO: Fixed rational types are not yet implemented
 //       (Are they implemenetd in solidity?)

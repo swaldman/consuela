@@ -81,7 +81,7 @@ package object jsonrpc extends BiasedEither.RightBias.Base[Response.Error]( Resp
         languageVersion : Option[String],
         compilerVersion : Option[String],
         compilerOptions : Option[String],
-        abiDefinition   : Option[Abi.Definition],
+        abi             : Option[Abi],
         userDoc         : Option[Doc.User],
         developerDoc    : Option[Doc.Developer],
         metadata        : Option[String]
@@ -91,7 +91,7 @@ package object jsonrpc extends BiasedEither.RightBias.Base[Response.Error]( Resp
         def mbLanguageVersion = languageVersion.flatMap( opt )
         def mbCompilerVersion = compilerVersion.flatMap( opt )
         def mbCompilerOptions = compilerOptions.flatMap( opt )
-        def mbAbiDefinition   = abiDefinition.flatMap( opt[Abi.Definition] )
+        def mbAbi             = abi.flatMap( opt[Abi] )
         def mbUserDoc         = userDoc.flatMap( opt[Doc.User] )
         def mbDeveloperDoc    = developerDoc.flatMap( opt[Doc.Developer] )
         def mbMetadata        = metadata.flatMap( opt )
@@ -106,13 +106,8 @@ package object jsonrpc extends BiasedEither.RightBias.Base[Response.Error]( Resp
   }
 
   final object Abi {
-    object Definition {
-      def apply( json : String ) : Definition = Json.parse( json ).as[Definition]
-      val empty = Definition( immutable.Seq.empty, immutable.Seq.empty, immutable.Seq.empty, None )
-    }
-    final case class Definition( functions : immutable.Seq[Function], events : immutable.Seq[Event], constructors : immutable.Seq[Constructor], fallback : Option[Fallback] ) extends MaybeEmpty {
-      def isEmpty : Boolean = functions.isEmpty && events.isEmpty && constructors.isEmpty
-    }
+    def apply( json : String ) : Abi = Json.parse( json ).as[Abi]
+    val empty = Abi( immutable.Seq.empty, immutable.Seq.empty, immutable.Seq.empty, None )
 
     object Function {
       case class Parameter( name : String, `type` : String ) extends Abi.Parameter
@@ -137,6 +132,14 @@ package object jsonrpc extends BiasedEither.RightBias.Base[Response.Error]( Resp
       val `type`  : String
       def tpe = `type`
     }
+  }
+  final case class Abi(
+    functions : immutable.Seq[Abi.Function],
+    events : immutable.Seq[Abi.Event],
+    constructors : immutable.Seq[Abi.Constructor],
+    fallback : Option[Abi.Fallback]
+  ) extends MaybeEmpty {
+    def isEmpty : Boolean = functions.isEmpty && events.isEmpty && constructors.isEmpty
   }
 
   final object Doc {
@@ -207,8 +210,8 @@ package object jsonrpc extends BiasedEither.RightBias.Base[Response.Error]( Resp
   implicit val DeveloperDocFormat            = Json.format[Doc.Developer]
 
   // these we'll have to do ourselves
-  implicit val AbiDefinitionFormat : Format[Abi.Definition] = new Format[Abi.Definition] {
-    def reads( jsv : JsValue ) : JsResult[Abi.Definition] = {
+  implicit val AbiFormat : Format[Abi] = new Format[Abi] {
+    def reads( jsv : JsValue ) : JsResult[Abi] = {
       jsv match {
         case jsa : JsArray => {
           val ( functions, events, constructors, fallback, message ) = {
@@ -243,16 +246,16 @@ package object jsonrpc extends BiasedEither.RightBias.Base[Response.Error]( Resp
           }
           message match {
             case None => {
-              val abi = Abi.Definition( functions.reverse.map( _.as[Abi.Function] ), events.reverse.map( _.as[Abi.Event] ), constructors.reverse.map( _.as[Abi.Constructor] ), fallback.map( _.as[Abi.Fallback] ) )
+              val abi = Abi( functions.reverse.map( _.as[Abi.Function] ), events.reverse.map( _.as[Abi.Event] ), constructors.reverse.map( _.as[Abi.Constructor] ), fallback.map( _.as[Abi.Fallback] ) )
               JsSuccess( abi )
             }
             case Some( words ) => JsError( words )
           }
         }
-        case _ => JsError( s"abiDefinition is expected as a JsArray, found ${jsv}" )
+        case _ => JsError( s"abi is expected as a JsArray, found ${jsv}" )
       }
     }
-    def writes( definition : Abi.Definition ) : JsValue = {
+    def writes( definition : Abi ) : JsValue = {
       def makeFunction( abif : Abi.Function )       = Json.toJson(abif).asInstanceOf[JsObject] + ( "type", JsString("function") )
       def makeEvent( abie : Abi.Event )             = Json.toJson(abie).asInstanceOf[JsObject] + ( "type", JsString("event") )
       def makeConstructor( abic : Abi.Constructor ) = Json.toJson(abic).asInstanceOf[JsObject] + ( "type", JsString("constructor") )

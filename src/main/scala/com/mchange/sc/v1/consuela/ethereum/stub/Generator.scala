@@ -30,7 +30,7 @@ object Generator {
   }
   private def fillInputs( fcn : Abi.Function ) = fcn.copy( inputs = fillArgs( fcn.inputs ) )
 
-  def generateContractStub( className : String, abi : Abi.Definition, fullyQualifiedPackageName : String ) : String = {
+  def generateContractStub( className : String, abi : Abi, fullyQualifiedPackageName : String ) : String = {
     val sw = new StringWriter()
 
     borrow( new IndentedWriter( sw ) ) { iw =>

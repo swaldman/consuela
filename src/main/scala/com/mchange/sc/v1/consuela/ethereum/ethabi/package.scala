@@ -15,20 +15,20 @@ import scala.collection._
 package object ethabi {
   val IdentifierLength = 4
 
-  def identifierForFunctionNameAndTypes( functionName : String, functionTypes : Seq[String], abiDefinition : Abi.Definition ) : Failable[immutable.Seq[Byte]] = {
-    signatureForFunctionNameAndTypes( functionName, functionTypes, abiDefinition ).map( identifierForSignature )
+  def identifierForFunctionNameAndTypes( functionName : String, functionTypes : Seq[String], abi : Abi ) : Failable[immutable.Seq[Byte]] = {
+    signatureForFunctionNameAndTypes( functionName, functionTypes, abi ).map( identifierForSignature )
   }
-  def signatureForFunctionNameAndTypes( functionName : String, functionTypes : Seq[String], abiDefinition : Abi.Definition ) : Failable[String] = {
-    abiFunctionForFunctionNameAndTypes( functionName, functionTypes, abiDefinition ).map( signatureForAbiFunction )
+  def signatureForFunctionNameAndTypes( functionName : String, functionTypes : Seq[String], abi : Abi ) : Failable[String] = {
+    abiFunctionForFunctionNameAndTypes( functionName, functionTypes, abi ).map( signatureForAbiFunction )
   }
-  def abiFunctionForFunctionNameAndTypes( functionName : String, functionTypes : Seq[String], abiDefinition : Abi.Definition ) : Failable[Abi.Function] = {
-    val candidates = abiFunctionsForFunctionName( functionName, abiDefinition )
+  def abiFunctionForFunctionNameAndTypes( functionName : String, functionTypes : Seq[String], abi : Abi ) : Failable[Abi.Function] = {
+    val candidates = abiFunctionsForFunctionName( functionName, abi )
     val usable = candidates.filter( checkTypesForFunction( functionTypes, _  ) )
     usable.length match {
-      case 0 => fail( s"""No matching function '${functionName}' for types '${functionTypes.mkString(",")}' in ABI: ${abiDefinition}""" )
+      case 0 => fail( s"""No matching function '${functionName}' for types '${functionTypes.mkString(",")}' in ABI: ${abi}""" )
       case 1 => succeed( usable.head )
       case 2 => fail(
-        s"""Ambiguous, multiple matches of function '${functionName} for types '${functionTypes.mkString(",")}' in ABI: ${abiDefinition}""" +
+        s"""Ambiguous, multiple matches of function '${functionName} for types '${functionTypes.mkString(",")}' in ABI: ${abi}""" +
           "\n\t" +
           usable.mkString("\n\t") +
           "\n"
@@ -111,7 +111,7 @@ package object ethabi {
    * - use callDataForAbiFunction(...)
    * - then drop the meaningles identifier
    */ 
-  def constructorCallData( args : Seq[String], abi : Abi.Definition ) : Failable[immutable.Seq[Byte]] = {
+  def constructorCallData( args : Seq[String], abi : Abi ) : Failable[immutable.Seq[Byte]] = {
 
     def constructorAsFunction( ctor : Abi.Constructor ) : Abi.Function = {
       val inputs = ctor.inputs.map( ci => Abi.Function.Parameter( ci.name, ci.`type` ) )
@@ -165,28 +165,28 @@ package object ethabi {
       Failable( readValues( 0, encoders, abiFunction.outputs, Nil ) )
     }
   }
-  def identifierForFunctionNameAndArgs( functionName : String, args : Seq[String], abiDefinition : Abi.Definition ) : Failable[immutable.Seq[Byte]] = {
-    signatureForFunctionNameAndArgs( functionName, args, abiDefinition ).map( identifierForSignature )
+  def identifierForFunctionNameAndArgs( functionName : String, args : Seq[String], abi : Abi ) : Failable[immutable.Seq[Byte]] = {
+    signatureForFunctionNameAndArgs( functionName, args, abi ).map( identifierForSignature )
   }
-  def signatureForFunctionNameAndArgs( functionName : String, args : Seq[String], abiDefinition : Abi.Definition ) : Failable[String] = {
-    abiFunctionForFunctionNameAndArgs( functionName, args, abiDefinition ).map( signatureForAbiFunction )
+  def signatureForFunctionNameAndArgs( functionName : String, args : Seq[String], abi : Abi ) : Failable[String] = {
+    abiFunctionForFunctionNameAndArgs( functionName, args, abi ).map( signatureForAbiFunction )
   }
-  def abiFunctionForFunctionNameAndArgs( functionName : String, args : Seq[String], abiDefinition : Abi.Definition ) : Failable[Abi.Function] = {
-    val candidates = abiFunctionsForFunctionName( functionName, abiDefinition )
+  def abiFunctionForFunctionNameAndArgs( functionName : String, args : Seq[String], abi : Abi ) : Failable[Abi.Function] = {
+    val candidates = abiFunctionsForFunctionName( functionName, abi )
     val usable = candidates.filter( candidate => checkArgsForFunction( args, candidate ) )
     usable.length match {
-      case 0 => fail( s"""No matching function '${functionName}' for args '${args.mkString(",")}' in ABI: ${abiDefinition}""" )
+      case 0 => fail( s"""No matching function '${functionName}' for args '${args.mkString(",")}' in ABI: ${abi}""" )
       case 1 => succeed( usable.head )
       case 2 => fail(
-        s"""Ambiguous, multiple matches of function '${functionName} for args '${args.mkString(",")}' in ABI: ${abiDefinition}""" +
+        s"""Ambiguous, multiple matches of function '${functionName} for args '${args.mkString(",")}' in ABI: ${abi}""" +
           "\n\t" +
           usable.mkString("\n\t") +
           "\n"
       )
     }
   }
-  def abiFunctionsForFunctionName( functionName : String, abiDefinition : Abi.Definition ) : immutable.Seq[Abi.Function] = {
-    abiDefinition.functions.filter( _.name == functionName )
+  def abiFunctionsForFunctionName( functionName : String, abi : Abi ) : immutable.Seq[Abi.Function] = {
+    abi.functions.filter( _.name == functionName )
   }
   def signatureForAbiFunction( function : Abi.Function ) : String = {
     val sb = new StringBuilder(256) //XXX: hard-coded
