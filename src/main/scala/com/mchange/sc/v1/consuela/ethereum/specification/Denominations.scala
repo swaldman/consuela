@@ -63,11 +63,26 @@ object Denominations {
       }
     }
   }
+
+  private def rounded( bd : BigDecimal ) = bd.round( bd.mc ) // work around absence of default rounded method in scala 2.10 BigDecimal
+
+  implicit class DoubleEther ( val value : Double ) extends AnyVal {
+    def wei    = rounded( BigDecimal( value ) * Multiplier.BigDecimal.Wei ).toBigInt
+    def szabo  = rounded( BigDecimal( value ) * Multiplier.BigDecimal.Szabo ).toBigInt
+    def finney = rounded( BigDecimal( value ) * Multiplier.BigDecimal.Finney ).toBigInt
+    def ether  = rounded( BigDecimal( value ) * Multiplier.BigDecimal.Ether ).toBigInt
+  }
+  implicit class BigDecimalEther ( val value : BigDecimal ) extends AnyVal {
+    def wei    = rounded( value * Multiplier.BigDecimal.Wei ).toBigInt
+    def szabo  = rounded( value * Multiplier.BigDecimal.Szabo ).toBigInt
+    def finney = rounded( value * Multiplier.BigDecimal.Finney ).toBigInt
+    def ether  = rounded( value * Multiplier.BigDecimal.Ether ).toBigInt
+  }
   implicit class LongEther( val value : Long ) extends AnyVal {
-    def wei    = value * Multiplier.Long.Wei;
-    def szabo  = value * Multiplier.Long.Szabo;
-    def finney = value * Multiplier.Long.Finney;
-    def ether  = value * Multiplier.Long.Ether;
+    def wei    = BigInt( value ) * Multiplier.Long.Wei;
+    def szabo  = BigInt( value ) * Multiplier.Long.Szabo;
+    def finney = BigInt( value ) * Multiplier.Long.Finney;
+    def ether  = BigInt( value ) * Multiplier.Long.Ether;
   }
   implicit class BigIntEther( val value : BigInt ) extends AnyVal {
     def wei    = value * Multiplier.BigInt.Wei;
@@ -77,6 +92,8 @@ object Denominations {
   }
 }
 trait Denominations {
+  implicit def doubleToDoubleEther( value : Double ) = new Denominations.DoubleEther( value )
+  implicit def bigDecimalToBigDecialEther( value : BigDecimal ) = new Denominations.BigDecimalEther( value )
   implicit def longToLongEther( value : Long ) = new Denominations.LongEther( value )
   implicit def bigIntToBigIntEther( value : BigInt ) = new Denominations.BigIntEther( value )
 }
