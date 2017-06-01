@@ -1,4 +1,4 @@
-package com.mchange.sc.v1.consuela.ethereum.ethabi.stub
+package com.mchange.sc.v1.consuela.ethereum.stub
 
 import scala.collection._
 

@@ -1,6 +1,6 @@
-package com.mchange.sc.v1.consuela.ethereum.ethabi.stub
+package com.mchange.sc.v1.consuela.ethereum.stub
 
-import com.mchange.sc.v1.consuela.ethereum.jsonrpc20.Abi
+import com.mchange.sc.v1.consuela.ethereum.jsonrpc.Abi
 
 import scala.collection._
 
@@ -19,8 +19,8 @@ object Generator {
     "com.mchange.sc.v1.consuela._",
     "com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash}",
     "com.mchange.sc.v1.consuela.ethereum.ethabi",
-    "com.mchange.sc.v1.consuela.ethereum.ethabi.stub._",
-    "com.mchange.sc.v1.consuela.ethereum.jsonrpc20.{Abi,Invoker}"
+    "com.mchange.sc.v1.consuela.ethereum.stub._",
+    "com.mchange.sc.v1.consuela.ethereum.jsonrpc.{Abi,Invoker}"
   )
 
   private def fillArgs( inputs : immutable.Seq[Abi.Function.Parameter] ) : immutable.Seq[Abi.Function.Parameter] = {

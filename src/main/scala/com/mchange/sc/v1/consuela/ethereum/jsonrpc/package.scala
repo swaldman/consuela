@@ -17,24 +17,24 @@ import com.mchange.leftright._
 
 
 
-package object jsonrpc20 extends BiasedEither.RightBias.Base[Response.Error]( Response.Error.Empty ) {
+package object jsonrpc extends BiasedEither.RightBias.Base[Response.Error]( Response.Error.Empty ) {
 
-  private[jsonrpc20] def encodeQuantity( quantity : BigInt )  : JsString = JsString( "0x" + quantity.toString(16) )
+  private[jsonrpc] def encodeQuantity( quantity : BigInt )  : JsString = JsString( "0x" + quantity.toString(16) )
 
-  private[jsonrpc20] def decodeQuantity( encoded : JsString ) : BigInt = decodeQuantity( encoded.value )
+  private[jsonrpc] def decodeQuantity( encoded : JsString ) : BigInt = decodeQuantity( encoded.value )
 
-  private[jsonrpc20] def decodeQuantity( encoded : String ) : BigInt = {
+  private[jsonrpc] def decodeQuantity( encoded : String ) : BigInt = {
     require( encoded.startsWith("0x"), s"Ethereum JSON-RPC expects hex-encoded quantities to begin with '0x', '${encoded}' does not." )
     BigInt( encoded.substring(2), 16 )
   }
 
-  private[jsonrpc20] def encodeBytes( bytes : Seq[Byte] )  : JsString = JsString( "0x" + bytes.hex )
+  private[jsonrpc] def encodeBytes( bytes : Seq[Byte] )  : JsString = JsString( "0x" + bytes.hex )
 
-  private[jsonrpc20] def decodeBytes( encoded : JsString ) : immutable.Seq[Byte] = decodeBytes( encoded.value )
+  private[jsonrpc] def decodeBytes( encoded : JsString ) : immutable.Seq[Byte] = decodeBytes( encoded.value )
 
-  private[jsonrpc20] def decodeBytes( encoded : String ) : immutable.Seq[Byte] = encoded.decodeHex.toImmutableSeq
+  private[jsonrpc] def decodeBytes( encoded : String ) : immutable.Seq[Byte] = encoded.decodeHex.toImmutableSeq
 
-  private[jsonrpc20] def encodeAddress( address : EthAddress ) : JsString = encodeBytes( address.bytes.widen )
+  private[jsonrpc] def encodeAddress( address : EthAddress ) : JsString = encodeBytes( address.bytes.widen )
 
   final object Exception {
     def stringifyErrorData( data : JsValue ) : String = {

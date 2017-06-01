@@ -1,6 +1,6 @@
 package com.mchange.sc.v1.consuela.ethereum
 
-import jsonrpc20._
+import jsonrpc._
 
 import com.mchange.sc.v2.failable._
 

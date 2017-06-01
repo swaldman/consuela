@@ -1,4 +1,4 @@
-package com.mchange.sc.v1.consuela.ethereum.jsonrpc20
+package com.mchange.sc.v1.consuela.ethereum.jsonrpc
 
 import scala.collection._
 import scala.concurrent.{blocking,ExecutionContext,Future}
@@ -13,8 +13,8 @@ import com.mchange.sc.v2.lang.borrow
 
 import com.mchange.sc.v1.log.MLevel._
 
-// a bit annoying to have to do this, just to refer to jsonrpc20, the current package
-import com.mchange.sc.v1.consuela.ethereum.jsonrpc20
+// a bit annoying to have to do this, just to refer to jsonrpc, the current package
+import com.mchange.sc.v1.consuela.ethereum.jsonrpc
 
 object Exchanger {
   private implicit val logger = mlogger( this )
@@ -46,7 +46,7 @@ object Exchanger {
         borrow( htconn.getOutputStream() )( _.write(paramsBytes) )
         borrow( htconn.getInputStream() )( traceParse ).as[Response] match {
           case Right( success ) => success.ensuring( _.id == id )
-          case Left( error )    => throw new jsonrpc20.Exception( error )
+          case Left( error )    => throw new jsonrpc.Exception( error )
         }
       }
     }

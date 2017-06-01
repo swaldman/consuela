@@ -1,11 +1,11 @@
-package com.mchange.sc.v1.consuela.ethereum.ethabi.stub
+package com.mchange.sc.v1.consuela.ethereum.stub
 
 import scala.concurrent.{ExecutionContext,Future}
 import scala.concurrent.duration._
 
 import com.mchange.sc.v1.consuela.ethereum.EthHash
 import com.mchange.sc.v1.consuela.ethereum.specification.Denominations
-import com.mchange.sc.v1.consuela.ethereum.jsonrpc20.{ClientTransactionReceipt,Invoker}
+import com.mchange.sc.v1.consuela.ethereum.jsonrpc.{ClientTransactionReceipt,Invoker}
 
 trait Utilities extends Denominations {
   def futureTransactionReceipt( transactionHash : EthHash, timeout : Duration )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Future[Option[ClientTransactionReceipt]] = {

@@ -1,4 +1,4 @@
-package com.mchange.sc.v1.consuela.ethereum.jsonrpc20
+package com.mchange.sc.v1.consuela.ethereum.jsonrpc
 
 import com.mchange.sc.v1.consuela.ethereum.{EthAddress, EthHash, EthSigner, EthTransaction, EthereumException}
 import com.mchange.sc.v1.consuela.ethereum.specification.Types._

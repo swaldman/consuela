@@ -1,4 +1,4 @@
-package com.mchange.sc.v1.consuela.ethereum.jsonrpc20
+package com.mchange.sc.v1.consuela.ethereum.jsonrpc
 
 import play.api.libs.json.{JsNull,JsValue}
 

@@ -1,4 +1,4 @@
-package com.mchange.sc.v1.consuela.ethereum.ethabi
+package com.mchange.sc.v1.consuela.ethereum
 
 import scala.collection._
 import com.mchange.sc.v1.consuela.ethereum.EthereumException
