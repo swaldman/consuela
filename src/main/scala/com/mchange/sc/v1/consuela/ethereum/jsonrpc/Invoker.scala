@@ -27,16 +27,17 @@ object Invoker {
 
   final object MarkupOrOverride {
     def createMarkup( fraction : Double ) = Markup( fraction ) // we use createXXX to avoid using the bare keyword 'override' :(
-    def createOverride( value : BigInt ) = Override( value ) 
+    def createOverride( value : BigInt ) = Override( value )
+    val None = Markup(0)
   }
   sealed trait MarkupOrOverride {
     def compute( default : BigInt ) : BigInt
   }
-  final case class Markup( fraction : Double, mbFloorInWei : Option[BigInt] = None, mbCapInWei : Option[BigInt] = None ) extends MarkupOrOverride {
+  final case class Markup( fraction : Double, cap : Option[BigInt] = None, floor : Option[BigInt] = None ) extends MarkupOrOverride {
     def compute( default : BigInt ) : BigInt = {
       val base             = rounded( BigDecimal( default ) * BigDecimal(1 + fraction) ).toBigInt
-      val floored          = mbFloorInWei.fold( base )( floorInWei => base max floorInWei )
-      val flooredAndCapped = mbCapInWei.fold( floored )( capInWei => floored min capInWei )
+      val floored          = floor.fold( base )( floorInWei => base max floorInWei )
+      val flooredAndCapped = cap.fold( floored )( capInWei => floored min capInWei )
       flooredAndCapped
     }
   }
@@ -44,7 +45,7 @@ object Invoker {
     def compute( default : BigInt ) : BigInt = value
   }
 
-  final case class Context( jsonRpcUrl : String, gasHandler : MarkupOrOverride = Markup(0.2), gasPriceHandler : MarkupOrOverride = Markup(0), pollPeriod : Duration = 5.seconds )
+  final case class Context( jsonRpcUrl : String, gasPriceTweak : MarkupOrOverride = Markup(0), gasLimitTweak : MarkupOrOverride = Markup(0.2), pollPeriod : Duration = 5.seconds )
 
   private def gasPriceGas(
     client     : Client,
@@ -59,9 +60,9 @@ object Invoker {
 
     for {
       defaultGasPrice <- fDefaultGasPrice
-      effectiveGasPrice = icontext.gasPriceHandler.compute( defaultGasPrice )
+      effectiveGasPrice = icontext.gasPriceTweak.compute( defaultGasPrice )
       defaultGas <- fDefaultGas
-      effectiveGas = icontext.gasHandler.compute( defaultGas )
+      effectiveGas = icontext.gasLimitTweak.compute( defaultGas )
     } yield {
       ( effectiveGasPrice, effectiveGas )
     }
