@@ -62,6 +62,12 @@ object EthPrivateKey {
   def apply( hexString : String ) : EthPrivateKey = {
     EthPrivateKey( ByteSeqExact32( hexString.decodeHex ) )
   }
+  def apply( array : Array[Byte] ) : EthPrivateKey = {
+    EthPrivateKey( ByteSeqExact32( array ) )
+  }
+  def apply( seq : Seq[Byte] ) : EthPrivateKey = {
+    EthPrivateKey( ByteSeqExact32( seq ) )
+  }
 }
 
 final case class EthPrivateKey( val bytes : ByteSeqExact32 ) extends EthSigner {

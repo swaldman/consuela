@@ -1,6 +1,5 @@
 package com.mchange.sc.v1.consuela.ethereum
 
-
 /**
   * For now, this is just an abstraction over EthPrivateKey.
   * 
