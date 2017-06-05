@@ -47,6 +47,7 @@ import javax.xml.bind.DatatypeConverter;
 
 package object consuela {
   class ConsuelaException( message : String, t : Throwable = null ) extends Exception( message, t );
+  class BadConversionException( message : String, t : Throwable = null ) extends ConsuelaException( message, t )
 
   implicit val MainProvider : crypto.jce.Provider = crypto.jce.Provider.ConfiguredProvider;
 
@@ -100,6 +101,12 @@ package object consuela {
      */    
     def unsignedBytes( len : Int ) : Array[Byte] = {
       math.asFixedLengthUnsignedByteArray( bi, len )
+    }
+    def toValidLong = {
+      if ( bi.isValidLong ) bi.toLong else throw new BadConversionException( s"BigInt bi cannot be converted to Long without truncation" )
+    }
+    def toValidInt = {
+      if ( bi.isValidInt ) bi.toInt else throw new BadConversionException( s"BigInt bi cannot be converted to Int without truncation" )
     }
   }
   implicit def toRichBigInt( bi : BigInteger ) = new RichBigInt( bi );
