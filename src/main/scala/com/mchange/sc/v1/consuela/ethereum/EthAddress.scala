@@ -49,6 +49,10 @@ object EthAddress {
 
   def apply( hexString : String ) : EthAddress = EthAddress( ByteSeqExact20( hexString.decodeHex ) )
 
+  def apply( bytes : Array[Byte] ) : EthAddress = EthAddress( ByteSeqExact20( bytes ) )
+
+  def apply( bytes : Seq[Byte] ) : EthAddress = EthAddress( ByteSeqExact20( bytes ) )
+
   val Zero = EthAddress( ByteSeqExact20( Array.fill[Byte](20)(0.toByte) ) )
 }
 final case class EthAddress( val bytes : ByteSeqExact20 ) {

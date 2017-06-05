@@ -1,5 +1,8 @@
 package com.mchange.sc.v1.consuela.ethereum
 
+/**
+  * Just a container for sometimes-convenient implicit conversions to EthSigner
+  */ 
 object EthSigners extends EthSigners {
   abstract class PrivateKeySigner( privateKey : EthPrivateKey ) extends EthSigner {
     def sign( document : Array[Byte] ) : EthSignature = privateKey.sign( document )
@@ -9,6 +12,9 @@ object EthSigners extends EthSigners {
   }
 }
 
+/**
+  * An extendable container for sometimes-convenient implicit conversions to EthSigner
+  */ 
 trait EthSigners {
   import EthSigners.PrivateKeySigner
 
