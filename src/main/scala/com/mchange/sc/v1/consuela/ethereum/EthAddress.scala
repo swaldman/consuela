@@ -54,6 +54,28 @@ object EthAddress {
   def apply( bytes : Seq[Byte] ) : EthAddress = EthAddress( ByteSeqExact20( bytes ) )
 
   val Zero = EthAddress( ByteSeqExact20( Array.fill[Byte](20)(0.toByte) ) )
+
+  trait Source[T] {
+    /**
+      * May throw if the instance of T cannot be converted
+      */ 
+    def toEthAddress( t : T ) : EthAddress
+  }
+  implicit final object EthAddressIsSource extends EthAddress.Source[EthAddress]{
+    def toEthAddress( address : EthAddress ) = address
+  }
+  implicit final object StringIsSource extends EthAddress.Source[String]{
+    def toEthAddress( hex : String ) = EthAddress( hex )
+  }
+  implicit final object ByteSeqIsSource extends EthAddress.Source[Seq[Byte]]{
+    def toEthAddress( seq : Seq[Byte] ) = EthAddress( seq )
+  }
+  implicit final object ByteArrayIsSource extends EthAddress.Source[Array[Byte]]{
+    def toEthAddress( arr : Array[Byte] ) = EthAddress( arr )
+  }
+  implicit final object ByteSeqExact20IsSource extends EthAddress.Source[ByteSeqExact20]{
+    def toEthAddress( bytes : ByteSeqExact20 ) = EthAddress( bytes )
+  }
 }
 final case class EthAddress( val bytes : ByteSeqExact20 ) {
   lazy val toNibbles : IndexedSeq[Nibble] = encoding.toNibbles( bytes.widen )
