@@ -19,7 +19,7 @@ trait EthSigners {
   import EthSigners.PrivateKeySigner
 
   implicit class HexStringSigner( hex : String )    extends PrivateKeySigner( EthPrivateKey( hex ) )
-  implicit class BigIntSigner( s : String )         extends PrivateKeySigner( EthPrivateKey( s ) )
+  implicit class BigIntSigner( s : BigInt )         extends PrivateKeySigner( EthPrivateKey( s ) )
   implicit class ArraySigner( bytes : Array[Byte] ) extends PrivateKeySigner( EthPrivateKey( bytes ) )
   implicit class SeqSigner( bytes : Seq[Byte] )     extends PrivateKeySigner( EthPrivateKey( bytes ) )
 }
