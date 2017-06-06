@@ -11,6 +11,8 @@ import play.api.libs.json._
 
 import com.mchange.sc.v2.lang.borrow
 
+import com.mchange.sc.v2.yinyang._
+
 import com.mchange.sc.v1.log.MLevel._
 
 // a bit annoying to have to do this, just to refer to jsonrpc, the current package
@@ -45,8 +47,8 @@ object Exchanger {
       blocking {
         borrow( htconn.getOutputStream() )( _.write(paramsBytes) )
         borrow( htconn.getInputStream() )( traceParse ).as[Response] match {
-          case Right( success ) => success.ensuring( _.id == id )
-          case Left( error )    => throw new jsonrpc.Exception( error )
+          case Yang( success ) => success.ensuring( _.id == id )
+          case Yin( error )    => throw new jsonrpc.Exception( error )
         }
       }
     }

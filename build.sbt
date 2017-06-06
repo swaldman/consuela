@@ -8,11 +8,11 @@ name := "consuela"
 
 version := "0.0.3-SNAPSHOT"
 
-scalaVersion := "2.11.8"
+scalaVersion := "2.11.11"
 
 // annoyingly, tests have 2.11 dependencies for now, so they won't run
 // unless crossScalaVersions is commented out
-crossScalaVersions := Seq("2.10.6", "2.11.8")
+crossScalaVersions := Seq("2.10.6", "2.11.11", "2.12.2")
 
 scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked" /*, "-Xlog-implicits" */)
 
@@ -37,20 +37,33 @@ val restrictedTypeVersion = "0.0.3-SNAPSHOT"
 
 
 libraryDependencies ++= Seq(
-  "com.mchange"             %% "mlog-scala"                      % "0.3.9",
+  "com.mchange"             %% "mlog-scala"                      % "0.3.10-SNAPSHOT",
   "com.mchange"             %% "restricted-type"                 % restrictedTypeVersion,
-  "com.mchange"             %% "leftright"                       % "0.0.1",
-  "com.mchange"             %% "mchange-commons-scala"           % "0.4.2",
+  "com.mchange"             %% "yinyang"                         % "0.0.2-SNAPSHOT",
+  "com.mchange"             %% "mchange-commons-scala"           % "0.4.3-SNAPSHOT",
   "com.mchange"             %% "literal"                         % "0.0.2-SNAPSHOT" changing(),
   "com.mchange"             %% "mchange-play-json-util"          % "0.0.1-SNAPSHOT" changing(),
   "com.typesafe"            % "config"                           % "1.2.1",
   "org.bouncycastle"        % "bcprov-jdk15on"                   % "1.54",
-  "com.typesafe.play"       %% "play-json"                       % "2.4.6",
   "com.madgag.spongycastle" % "prov"                             % "1.54.0.0"            % "compile,optional", //only necessary on android
   "com.mchange"             %% "restricted-type-scalacheck-util" % restrictedTypeVersion % "test",
-  "org.specs2"              %% "specs2"                          % "2.4.6"               % "test",
+  "org.specs2"              %% "specs2"                          % "2.4.17"              % "test",
   "ch.qos.logback"          % "logback-classic"                  % "1.1.2"               % "test"
 )
+
+libraryDependencies += {
+  CrossVersion.partialVersion(Keys.scalaVersion.value) match {
+    case Some((2, 12)) => {
+      "com.typesafe.play" %% "play-json" % "2.6.0-RC2"
+    }
+    case Some((2, 11)) => {
+      "com.typesafe.play" %% "play-json" % "2.5.15"
+    }
+    case _ => {
+      "com.typesafe.play" %% "play-json" % "2.4.9"
+    }
+  }
+}
 
 fork in (Test, run) := true
 

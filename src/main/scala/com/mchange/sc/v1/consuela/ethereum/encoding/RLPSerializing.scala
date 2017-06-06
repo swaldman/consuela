@@ -40,6 +40,8 @@ import com.mchange.sc.v1.consuela.util;
 
 import com.mchange.sc.v2.failable._;
 
+import com.mchange.sc.v2.yinyang._
+
 import scala.collection._;
 
 import scala.util.Try;
@@ -82,12 +84,12 @@ object RLPSerializing {
           val rlpSerializing = implicitly[RLPSerializing[U]];
           elements.foldLeft( succeed( immutable.Seq.empty[U] ) ){ ( failable : Failable[immutable.Seq[U]], element : RLP.Element ) =>
             failable match {
-              case Left(_) => failable;
-              case Right( nascentSeq ) => {
+              case Yin(_) => failable;
+              case Yang( nascentSeq ) => {
                 val mbDecoded : Failable[U] = rlpSerializing.fromElement( element.simplify );
                 mbDecoded match {
-                  case ouch : Left[Fail,U]  => refail( ouch );
-                  case good : Right[Fail,U] => Right( nascentSeq :+ good.get );
+                  case ouch : Yin[Fail,U]  => refail( ouch );
+                  case good : Yang[Fail,U] => Yang( nascentSeq :+ good.get );
                 }
               }
             }
@@ -120,7 +122,7 @@ trait RLPSerializing[T] {
   }
   def decodeComplete( bytes : Seq[Byte] ) : Failable[T] = {
     val ( mbDecoded, rest ) = decode( bytes );
-    if (mbDecoded.isRight && rest.length > 0 ) {
+    if (mbDecoded.isSucceeded && rest.length > 0 ) {
       fail(s"RLPSerializing ${this.getClass.getName} decodeComplete(...) received bytes for ${mbDecoded} with 0x${rest.hex} left over.");
     } else {
       mbDecoded

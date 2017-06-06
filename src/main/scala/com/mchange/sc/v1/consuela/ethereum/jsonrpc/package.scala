@@ -13,11 +13,11 @@ import play.api.libs.json._
 
 import com.mchange.sc.v2.playjson._
 
-import com.mchange.leftright._
+import com.mchange.sc.v2.yinyang._
 
 
 
-package object jsonrpc extends BiasedEither.RightBias.Base[Response.Error]( Response.Error.Empty ) {
+package object jsonrpc extends YinYang.YangBias.Base[Response.Error]( Response.Error.Empty ) {
 
   private[jsonrpc] def encodeQuantity( quantity : BigInt )  : JsString = JsString( "0x" + quantity.toString(16) )
 
@@ -56,7 +56,7 @@ package object jsonrpc extends BiasedEither.RightBias.Base[Response.Error]( Resp
     def this( errorResponse : Response.Error ) = this( errorResponse.error.code, errorResponse.error.message, errorResponse.error.data ) 
   }
 
-  type Response = Either[Response.Error,Response.Success]
+  type Response = YinYang[Response.Error,Response.Success]
 
   final object Compilation {
 
@@ -166,15 +166,15 @@ package object jsonrpc extends BiasedEither.RightBias.Base[Response.Error]( Resp
   implicit val ResponseFormat : Format[Response] = new Format[Response] {
     def reads( jsv : JsValue ) : JsResult[Response] = {
       jsv match {
-        case jso : JsObject if jso.keys("result") => SuccessResponseFormat.reads( jso ).map( Right(_) )
-        case jso : JsObject if jso.keys("error")  => ErrorResponseFormat.reads( jso ).map( Left(_) )
+        case jso : JsObject if jso.keys("result") => SuccessResponseFormat.reads( jso ).map( Yang(_) )
+        case jso : JsObject if jso.keys("error")  => ErrorResponseFormat.reads( jso ).map( Yin(_) )
         case jso : JsObject                       => JsError( s"Response is expected to contain either a 'result' or 'error' field" )
         case _                                    => JsError( s"Response is expected as a JsObject, found ${jsv}" )
       }
     }
     def writes( response : Response ) : JsValue = response match {
-      case Left( errorResponse ) => ErrorResponseFormat.writes( errorResponse )
-      case Right( goodResponse ) => SuccessResponseFormat.writes( goodResponse )
+      case Yin( errorResponse ) => ErrorResponseFormat.writes( errorResponse )
+      case Yang( goodResponse ) => SuccessResponseFormat.writes( goodResponse )
     }
   }
 

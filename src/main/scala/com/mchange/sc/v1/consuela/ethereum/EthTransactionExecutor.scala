@@ -42,8 +42,8 @@ import EthWorldState.Account;
 
 import scala.collection._;
 
-import com.mchange.leftright.BiasedEither;
-import BiasedEither.RightBias._;
+import com.mchange.sc.v2.yinyang._
+import YinYang.YangBias._;
 
 object EthTransactionExecutor {
 
@@ -67,7 +67,7 @@ object EthTransactionExecutor {
   private final case class Substate( suicides : Set[EthAddress], logEntries : immutable.IndexedSeq[EthLogEntry], accruedRefund : BigInt );
   private final case class PostExec( provisional : EthWorldState, remainingGas : BigInt, substate : Substate );
 
-  private val OK = Right( () );
+  private val OK = Yang( () );
 
   private def execute( 
     worldState : EthWorldState, 
@@ -79,54 +79,54 @@ object EthTransactionExecutor {
   ) : (ExecutionStatus, StateUpdate) = {
     val sender = stxn.sender;
 
-    def findAccount : Either[ExecutionStatus, Account] = worldState( sender ).fold[Either[ExecutionStatus,Account]]( Left(Aborted.NoAccount) )( Right( _ ) );
-    def findGoodNonce( acct : Account ) : Either[ExecutionStatus, BigInt] = {
+    def findAccount : YinYang[ExecutionStatus, Account] = worldState( sender ).fold[YinYang[ExecutionStatus,Account]]( Yin(Aborted.NoAccount) )( Yang( _ ) );
+    def findGoodNonce( acct : Account ) : YinYang[ExecutionStatus, BigInt] = {
       if (acct.nonce == stxn.nonce) {
-        Right( acct.nonce.widen )
+        Yang( acct.nonce.widen )
       } else {
-        Left( Aborted.MismatchedNonces( acct.nonce, stxn.nonce ) )
+        Yin( Aborted.MismatchedNonces( acct.nonce, stxn.nonce ) )
       }
     }
-    def findGoodIntrinsicGasRequired : Either[ExecutionStatus, BigInt] = {
+    def findGoodIntrinsicGasRequired : YinYang[ExecutionStatus, BigInt] = {
       val intrinsicGasRequired = g0( stxn );
       if ( intrinsicGasRequired > stxn.gasLimit.widen ) {
-        Left( Aborted.InsufficientIntrinsicGas( Unsigned256( intrinsicGasRequired ), stxn.gasLimit ) )
+        Yin( Aborted.InsufficientIntrinsicGas( Unsigned256( intrinsicGasRequired ), stxn.gasLimit ) )
       } else {
-        Right( intrinsicGasRequired )
+        Yang( intrinsicGasRequired )
       }
     }
-    def checkPotentialTransactionCost( acct : Account ) : Either[ExecutionStatus, Unit] = {
+    def checkPotentialTransactionCost( acct : Account ) : YinYang[ExecutionStatus, Unit] = {
       val potentialTransactionCost = v0( stxn );
       if ( potentialTransactionCost > acct.balance.widen ) {
-        Left( Aborted.TransactionCostMayExceedAccountBalance( Unsigned256( potentialTransactionCost ), acct.balance ) )
+        Yin( Aborted.TransactionCostMayExceedAccountBalance( Unsigned256( potentialTransactionCost ), acct.balance ) )
       } else {
         OK
       }
     }
-    def checkBlockLimit : Either[ExecutionStatus, Unit] = {
+    def checkBlockLimit : YinYang[ExecutionStatus, Unit] = {
       if (blockPriorTransactionGasUsed + stxn.gasLimit.widen > blockGasLimit ) {
-        Left( Aborted.TransactionMayExceedBlockGasLimit( stxn.gasLimit, Unsigned256( blockPriorTransactionGasUsed ), Unsigned256( blockGasLimit ) ) )
+        Yin( Aborted.TransactionMayExceedBlockGasLimit( stxn.gasLimit, Unsigned256( blockPriorTransactionGasUsed ), Unsigned256( blockGasLimit ) ) )
       } else {
         OK
       }
     }
-    def checkpointState( acct : Account, nonce : BigInt ) : Either[ExecutionStatus,EthWorldState] = {
+    def checkpointState( acct : Account, nonce : BigInt ) : YinYang[ExecutionStatus,EthWorldState] = {
       val newNonce   = Unsigned256( nonce + 1 );
       val newBalance = Unsigned256( acct.balance.widen - ( stxn.gasLimit.widen * stxn.gasPrice.widen ) );
       val newAccount = acct.copy( nonce = newNonce, balance = newBalance );
-      Right( worldState.including( sender, newAccount ) )
+      Yang( worldState.including( sender, newAccount ) )
     }
-    def doExec( checkpoint : EthWorldState, intrinsicGasRequired : BigInt ) : Either[ExecutionStatus, PostExec] = { // all other args available from stxn + originalTransactor
+    def doExec( checkpoint : EthWorldState, intrinsicGasRequired : BigInt ) : YinYang[ExecutionStatus, PostExec] = { // all other args available from stxn + originalTransactor
       val g = stxn.gasLimit.widen - intrinsicGasRequired;
       ???
     }
-    def refundableGas( postExec : PostExec ) : Either[ExecutionStatus, BigInt] = {
+    def refundableGas( postExec : PostExec ) : YinYang[ExecutionStatus, BigInt] = {
       val remaining      = postExec.remainingGas;
       val extraRefundCap = (stxn.gasLimit.widen - remaining) / 2;
       val extraRefund    = (extraRefundCap) min (postExec.substate.accruedRefund); // odd infix min... oh well
-      Right( remaining + extraRefund );
+      Yang( remaining + extraRefund );
     }
-    def preFinalState( provisionalState : EthWorldState, refund : BigInt ) : Either[ExecutionStatus,EthWorldState] = {
+    def preFinalState( provisionalState : EthWorldState, refund : BigInt ) : YinYang[ExecutionStatus,EthWorldState] = {
       val provisionalSenderAccount = provisionalState( sender ).get;
       val newSenderBalance = Unsigned256( provisionalSenderAccount.balance.widen + refund );
       val prefinalSenderAccount = provisionalSenderAccount.copy( balance=newSenderBalance );
@@ -135,13 +135,13 @@ object EthTransactionExecutor {
       val newCoinbaseBalance = Unsigned256( provisionalCoinbaseAccount.balance.widen + ( (stxn.gasLimit.widen - refund) * stxn.gasPrice.widen ) );
       val prefinalCoinbaseAccount = provisionalCoinbaseAccount.copy( balance=newCoinbaseBalance );
 
-      Right( provisionalState ++ List( ( sender, prefinalSenderAccount ), ( blockCoinbase, prefinalCoinbaseAccount ) ) )
+      Yang( provisionalState ++ List( ( sender, prefinalSenderAccount ), ( blockCoinbase, prefinalCoinbaseAccount ) ) )
     }
-    def finalState( prefinalState : EthWorldState, suicides : Set[EthAddress] ) : Either[ExecutionStatus, EthWorldState] = {
-      Right( prefinalState -- suicides )
+    def finalState( prefinalState : EthWorldState, suicides : Set[EthAddress] ) : YinYang[ExecutionStatus, EthWorldState] = {
+      Yang( prefinalState -- suicides )
     }
 
-    val check : Either[ExecutionStatus, StateUpdate] = {
+    val check : YinYang[ExecutionStatus, StateUpdate] = {
       for {
         acct                 <- findAccount;
         nonce                <- findGoodNonce( acct );
@@ -159,9 +159,9 @@ object EthTransactionExecutor {
     }
 
     check match {
-      case Left( aborted : Aborted ) => ( aborted, StateUpdate( worldState, Zero256, immutable.IndexedSeq.empty[EthLogEntry] ) ); // we remain the original state
-      case Left( _ )                 => throw new AssertionError("Eventually we may have execution statuses that provoke partial state changes. But they're not implemented yet.");
-      case Right( su : StateUpdate ) => ( Completed, su );
+      case Yin( aborted : Aborted ) => ( aborted, StateUpdate( worldState, Zero256, immutable.IndexedSeq.empty[EthLogEntry] ) ); // we remain the original state
+      case Yin( _ )                 => throw new AssertionError("Eventually we may have execution statuses that provoke partial state changes. But they're not implemented yet.");
+      case Yang( su : StateUpdate ) => ( Completed, su );
     }
   }
 

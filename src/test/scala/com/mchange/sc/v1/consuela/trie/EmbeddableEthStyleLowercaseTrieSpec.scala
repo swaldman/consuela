@@ -40,7 +40,7 @@ import org.specs2._;
 import com.mchange.sc.v1.log.MLogger;
 import com.mchange.sc.v1.log.MLevel._;
 
-class EmbeddableEthStyleLowercaseTrieSpec extends Specification { 
+class EmbeddableEthStyleLowercaseTrieSpec extends Specification with TestingUtilities { 
 
   private[this] implicit val logger = MLogger( this );
 
