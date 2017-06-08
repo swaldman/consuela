@@ -30,7 +30,16 @@ object Generator {
   }
   private def fillInputs( fcn : Abi.Function ) = fcn.copy( inputs = fillArgs( fcn.inputs ) )
 
-  def generateContractStub( className : String, abi : Abi, fullyQualifiedPackageName : String ) : String = {
+  /**
+    * @return ( <generated class name>, <generated source file text> )
+    */ 
+  def generateContractStub( baseClassName : String, abi : Abi, async : Boolean, fullyQualifiedPackageName : String ) : (String, String) = {
+    def asyncClassName = {
+      val alwaysCapitalized = baseClassName(0).toString.toUpperCase + baseClassName.substring(1)
+      s"Async${alwaysCapitalized}"
+    }
+    val className = if ( async ) asyncClassName else baseClassName
+
     val sw = new StringWriter()
 
     borrow( new IndentedWriter( sw ) ) { iw =>
@@ -41,12 +50,13 @@ object Generator {
       }
       iw.println()
 
+
       iw.println( s"final case class $className( val contractAddress : EthAddress )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) {" )
       iw.upIndent()
       iw.println( s"final object transaction {" )
       iw.upIndent()
       abi.functions.foreach { fcn =>
-        writeFunction( fillInputs(fcn), false, iw )
+        writeFunction( fillInputs(fcn), false, async, iw )
         iw.println()
       }
       iw.downIndent()
@@ -54,7 +64,7 @@ object Generator {
       iw.println( s"final object constant {" )
       iw.upIndent()
       abi.functions.filter( _.constant ).foreach { fcn =>
-        writeFunction( fillInputs(fcn), true, iw )
+        writeFunction( fillInputs(fcn), true, async, iw )
         iw.println()
       }
       iw.downIndent()
@@ -63,7 +73,7 @@ object Generator {
       iw.println( "}" )
     }
 
-    sw.toString
+    (className, sw.toString)
   }
 
   private def forceHelper( solidityTypeName : String ) : ScalaParameterHelper = {
@@ -72,7 +82,7 @@ object Generator {
     }
   }
 
-  private def writeFunction( fcn : Abi.Function, constantSection : Boolean, iw : IndentedWriter ) : Unit = {
+  private def writeFunction( fcn : Abi.Function, constantSection : Boolean, async : Boolean, iw : IndentedWriter ) : Unit = {
     def paramName( param : Abi.Function.Parameter ) : String = {
       val tpe = param.`type`
       val helper = forceHelper( tpe )
@@ -89,7 +99,7 @@ object Generator {
       s"""Abi.Function( name = "${fcn.name}", inputs = immutable.Seq( ${paramctors(fcn.inputs)} ), outputs = immutable.Seq( ${paramctors(fcn.outputs)} ), constant = ${fcn.constant}, payable = ${fcn.payable} )"""
     }
 
-    iw.println( functionSignature( fcn, constantSection ) + " = {" )
+    iw.println( functionSignature( fcn, constantSection, async ) + " = {" )
     iw.upIndent()
 
     if (! fcn.payable) {
@@ -123,11 +133,18 @@ object Generator {
 
       iw.downIndent()
       iw.println( "}")
-      iw.println( s"""Await.result( futOut, Duration.Inf )""" )
-
+      if ( async ) {
+        iw.println( "futOut" )
+      } else {
+        iw.println( s"""Await.result( futOut, Duration.Inf )""" )
+      }
     } else {
       iw.println( s"""val futHash = Invoker.transaction.sendMessage( sender.findSigner(), contractAddress, optionalPaymentInWei.getOrElse( Zero ), callData )""" )
-      iw.println( s"""Await.result( futHash, Duration.Inf )""" )
+      if ( async ) {
+        iw.println( "futHash" )
+      } else {
+        iw.println( s"""Await.result( futHash, Duration.Inf )""" )
+      }
     }
 
 
@@ -135,7 +152,7 @@ object Generator {
     iw.println( "}")
   }
 
-  private def functionSignature( fcn : Abi.Function, constantSection : Boolean ) : String = {
+  private def functionSignature( fcn : Abi.Function, constantSection : Boolean, async : Boolean ) : String = {
     def param( param : Abi.Function.Parameter ) : String = {
       val tpe = param.`type`
       val helper = forceHelper( tpe )
@@ -155,21 +172,24 @@ object Generator {
     val prereturn = s"""def ${fcn.name}( ${params.mkString(", ")} )( implicit sender : Sender )"""
 
     val post = {
-      if (!constantSection) {
-        " : EthHash"
-      } else {
-        fcn.outputs.length match {
-          case 0 => {
-            " : Unit"
-          }
-          case 1 => {
-            s" : ${scalaType( fcn.outputs.head )}"
-          }
-          case _ => {
-            s""" : ( ${fcn.outputs.map( scalaType ).mkString(", ")} )"""
+      val raw = {
+        if (!constantSection) {
+          "EthHash"
+        } else {
+          fcn.outputs.length match {
+            case 0 => {
+              "Unit"
+            }
+            case 1 => {
+              scalaType( fcn.outputs.head )
+            }
+            case _ => {
+              s"""( ${fcn.outputs.map( scalaType ).mkString(", ")} )"""
+            }
           }
         }
       }
+      " : " + (if ( async ) s"Future[ ${raw} ]" else raw)
     }
 
     prereturn + post
