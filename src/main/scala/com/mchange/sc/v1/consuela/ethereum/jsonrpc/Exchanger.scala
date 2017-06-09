@@ -25,6 +25,13 @@ object Exchanger {
     TRACE.logEval( "Raw parsed JSON: " )( Json.parse( is ) )
   }
 
+  trait Factory {
+    def apply( url : URL ) : Exchanger
+  }
+
+  final object Simple extends Factory {
+    def apply( url : URL ) : Exchanger = new Simple( url )
+  }
   class Simple( httpUrl : URL ) extends Exchanger {
     TRACE.log( s"${this} created, using URL '$httpUrl'" )
 
