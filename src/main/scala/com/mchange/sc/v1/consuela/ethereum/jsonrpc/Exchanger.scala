@@ -3,7 +3,7 @@ package com.mchange.sc.v1.consuela.ethereum.jsonrpc
 import scala.collection._
 import scala.concurrent.{blocking,ExecutionContext,Future}
 
-import java.io.InputStream
+import java.io.{Closeable,InputStream}
 import java.net.{HttpURLConnection, URL}
 import java.nio.charset.StandardCharsets.UTF_8
 
@@ -25,12 +25,14 @@ object Exchanger {
     TRACE.logEval( "Raw parsed JSON: " )( Json.parse( is ) )
   }
 
-  trait Factory {
+  trait Factory extends Closeable {
     def apply( url : URL ) : Exchanger
+    def close() : Unit
   }
 
   final object Simple extends Factory {
     def apply( url : URL ) : Exchanger = new Simple( url )
+    def close() : Unit = () //nothing to do
   }
   class Simple( httpUrl : URL ) extends Exchanger {
     TRACE.log( s"${this} created, using URL '$httpUrl'" )
