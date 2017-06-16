@@ -13,11 +13,7 @@ import play.api.libs.json._
 
 import com.mchange.sc.v2.playjson._
 
-import com.mchange.sc.v2.yinyang._
-
-
-
-package object jsonrpc extends YinYang.YangBias.Base[Response.Error]( Response.Error.Empty ) {
+package object jsonrpc {
 
   private[jsonrpc] def encodeQuantity( quantity : BigInt )  : JsString = JsString( "0x" + quantity.toString(16) )
 
@@ -35,28 +31,6 @@ package object jsonrpc extends YinYang.YangBias.Base[Response.Error]( Response.E
   private[jsonrpc] def decodeBytes( encoded : String ) : immutable.Seq[Byte] = encoded.decodeHex.toImmutableSeq
 
   private[jsonrpc] def encodeAddress( address : EthAddress ) : JsString = encodeBytes( address.bytes.widen )
-
-  final object Exception {
-    def stringifyErrorData( data : JsValue ) : String = {
-      data match {
-        case JsArray( elems ) => elems.map( stringifyErrorData ).mkString("\n","\n","")
-        case str : JsString   => str.as[String]
-        case JsNull           => "No further information"
-        case whatevs          => Json.stringify( whatevs )
-      }
-    }
-    def stringifyErrorData( data : Option[JsValue] ) : String = {
-      data match {
-        case Some( jsv ) => stringifyErrorData( jsv )
-        case None        => "No further information"
-      }
-    }
-  }
-  final class Exception( val code : Int, val message : String, val data : Option[JsValue] = None ) extends EthereumException( s"${message} [code=${code}]: ${Exception.stringifyErrorData(data)}" ) {
-    def this( errorResponse : Response.Error ) = this( errorResponse.error.code, errorResponse.error.message, errorResponse.error.data ) 
-  }
-
-  type Response = YinYang[Response.Error,Response.Success]
 
   final object Compilation {
 
@@ -155,26 +129,6 @@ package object jsonrpc extends YinYang.YangBias.Base[Response.Error]( Response.E
     }
     final case class Developer( title : Option[String], methods : Option[immutable.Map[String, Developer.MethodInfo]] ) extends MaybeEmpty {
       def isEmpty : Boolean = title.isEmpty && ( methods.isEmpty || methods.get.isEmpty )
-    }
-  }
-
-  implicit val SuccessResponseFormat = Json.format[Response.Success]
-
-  implicit val ErrorReportFormat   = Json.format[Response.Error.Report]
-  implicit val ErrorResponseFormat = Json.format[Response.Error]
-
-  implicit val ResponseFormat : Format[Response] = new Format[Response] {
-    def reads( jsv : JsValue ) : JsResult[Response] = {
-      jsv match {
-        case jso : JsObject if jso.keys("result") => SuccessResponseFormat.reads( jso ).map( Yang(_) )
-        case jso : JsObject if jso.keys("error")  => ErrorResponseFormat.reads( jso ).map( Yin(_) )
-        case jso : JsObject                       => JsError( s"Response is expected to contain either a 'result' or 'error' field" )
-        case _                                    => JsError( s"Response is expected as a JsObject, found ${jsv}" )
-      }
-    }
-    def writes( response : Response ) : JsValue = response match {
-      case Yin( errorResponse ) => ErrorResponseFormat.writes( errorResponse )
-      case Yang( goodResponse ) => SuccessResponseFormat.writes( goodResponse )
     }
   }
 
