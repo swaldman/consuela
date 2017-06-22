@@ -16,11 +16,13 @@ object Generator {
     "scala.collection._",
     "scala.concurrent._",
     "scala.concurrent.duration.Duration",
+    "com.mchange.sc.v2.concurrent.Poller",
     "com.mchange.sc.v1.consuela._",
     "com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash}",
     "com.mchange.sc.v1.consuela.ethereum.ethabi",
     "com.mchange.sc.v1.consuela.ethereum.stub._",
-    "com.mchange.sc.v1.consuela.ethereum.jsonrpc.{Abi,Invoker}"
+    "com.mchange.sc.v1.consuela.ethereum.jsonrpc",
+    "com.mchange.sc.v1.consuela.ethereum.jsonrpc.{Abi,ClientTransactionReceipt}"
   )
 
   private def fillArgs( inputs : immutable.Seq[Abi.Function.Parameter] ) : immutable.Seq[Abi.Function.Parameter] = {
@@ -51,7 +53,7 @@ object Generator {
       iw.println()
 
 
-      iw.println( s"final case class $className( val contractAddress : EthAddress )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) {" )
+      iw.println( s"final case class $className( val contractAddress : EthAddress )( implicit icontext : jsonrpc.Invoker.Context, cfactory : jsonrpc.Client.Factory, poller : Poller, econtext : ExecutionContext ) {" )
       iw.upIndent()
       iw.println( s"final object transaction {" )
       iw.upIndent()
@@ -111,7 +113,7 @@ object Generator {
     iw.println( s"""val callData = ethabi.callDataForAbiFunctionFromEncoderRepresentations( reps, fcn ).get""" )
 
     if ( constantSection ) {
-      iw.println( s"""val futRetBytes = Invoker.constant.sendMessage( sender.address, contractAddress, optionalPaymentInWei.getOrElse( Zero ), callData )""" )
+      iw.println( s"""val futRetBytes = jsonrpc.Invoker.constant.sendMessage( sender.address, contractAddress, optionalPaymentInWei.getOrElse( Zero ), callData )""" )
       iw.println( s"""val futDecodedReturnValues = futRetBytes.map( bytes => ethabi.decodeReturnValuesForFunction( bytes, fcn ) )""" )
       iw.println( s"""val futDecodedReps = futDecodedReturnValues.map( _.get.map( _.value  ).toVector )""" )
 
@@ -139,11 +141,12 @@ object Generator {
         iw.println( s"""Await.result( futOut, Duration.Inf )""" )
       }
     } else {
-      iw.println( s"""val futHash = Invoker.transaction.sendMessage( sender.findSigner(), contractAddress, optionalPaymentInWei.getOrElse( Zero ), callData )""" )
+      iw.println( s"""val futHash = jsonrpc.Invoker.transaction.sendMessage( sender.findSigner(), contractAddress, optionalPaymentInWei.getOrElse( Zero ), callData )""" )
+      iw.println( s"""val futMaybeReceipt = futHash.flatMap( hash => jsonrpc.Invoker.futureTransactionReceipt( hash ) )""" )
       if ( async ) {
-        iw.println( "futHash" )
+        iw.println( "futMaybeReceipt" )
       } else {
-        iw.println( s"""Await.result( futHash, Duration.Inf )""" )
+        iw.println( s"""Await.result( futMaybeReceipt, Duration.Inf )""" )
       }
     }
 
@@ -174,7 +177,7 @@ object Generator {
     val post = {
       val raw = {
         if (!constantSection) {
-          "EthHash"
+          "Option[ClientTransactionReceipt]"
         } else {
           fcn.outputs.length match {
             case 0 => {

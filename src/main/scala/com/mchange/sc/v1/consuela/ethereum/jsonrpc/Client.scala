@@ -159,15 +159,16 @@ object Client {
   }
 
   final object Factory {
-    def createSimpl() : Factory = Client.Simple
-    def createAsync() : Factory = new Async
+    def createSimpleFactory() : Factory = Client.Simple
+    def createAsyncFactory() : Factory = new Async( new JettyExchanger.Factory )
 
-    class Async extends Client.Factory {
-      val exfactory = new JettyExchanger.Factory
+    implicit lazy val Default = new Async( Exchanger.Factory.Default ) // wrap around the default Exchanger, which is asynchronous
 
-      def apply( httpUrl : URL ) : Client = new Client.forExchanger( exfactory( httpUrl ) )
+    class Async( exchangerFactory : Exchanger.Factory.Async ) extends Client.Factory {
 
-      def close() : Unit = exfactory.close()
+      def apply( httpUrl : URL ) : Client = new Client.forExchanger( exchangerFactory( httpUrl ) )
+
+      def close() : Unit = exchangerFactory.close()
     }
   }
   trait Factory extends AutoCloseable {

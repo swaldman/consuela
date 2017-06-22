@@ -7,6 +7,8 @@ import com.mchange.sc.v2.lang.borrow
 
 import com.mchange.sc.v2.jsonrpc._
 
+import com.mchange.sc.v2.concurrent.Poller
+
 import com.mchange.sc.v1.log.MLevel._
 
 import java.net.URL
@@ -17,6 +19,10 @@ import scala.collection._
 
 import scala.concurrent.{Await,ExecutionContext,Future,blocking}
 import scala.concurrent.duration._
+
+import scala.util.{Try,Success,Failure}
+
+import java.util.concurrent.atomic.AtomicReference
 
 object Invoker {
 
@@ -47,7 +53,7 @@ object Invoker {
     def compute( default : BigInt ) : BigInt = value
   }
 
-  final case class Context( jsonRpcUrl : String, gasPriceTweak : MarkupOrOverride = Markup(0), gasLimitTweak : MarkupOrOverride = Markup(0.2), pollPeriod : Duration = 5.seconds )
+  final case class Context( jsonRpcUrl : String, gasPriceTweak : MarkupOrOverride = Markup(0), gasLimitTweak : MarkupOrOverride = Markup(0.2), pollPeriod : Duration = 3.seconds, pollTimeout : Duration = Duration.Inf )
 
   private def gasPriceGas(
     client     : Client,
@@ -70,48 +76,48 @@ object Invoker {
     }
   }
 
-  def futureTransactionReceipt( transactionHash : EthHash, timeout : Duration )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Future[Option[ClientTransactionReceipt]] = {
-    val pollPeriodMillis = icontext.pollPeriod.toMillis
-    val timeoutMillis = if ( timeout == Duration.Inf ) Long.MaxValue else System.currentTimeMillis + timeout.toMillis
+  def futureTransactionReceipt(
+    transactionHash : EthHash
+  )( implicit icontext : Invoker.Context, cfactory : Client.Factory, poller : Poller, econtext : ExecutionContext ) : Future[Option[ClientTransactionReceipt]] = {
 
-    borrow( new Client.Simple( new URL( icontext.jsonRpcUrl ) ) ) { client =>
+    borrow( cfactory( new URL( icontext.jsonRpcUrl ) ) ) { client =>
 
-      def onePoll = client.eth.getTransactionReceipt( transactionHash )
+      def repoll = client.eth.getTransactionReceipt( transactionHash )
 
-      // this method is not tail recursive... but it isn't actually recursive, as each call to Future.flatMap(...)
-      // runs as its own task dispatched to a Thread pool. i wonder whether, after waiting a very, very long, it might
-      // consume a lot of memory. but for now i think it is okay.
-      //
-      // see https://stackoverflow.com/questions/44146832/tail-recursive-functional-polling-in-scala
+      val holder = new AtomicReference[Future[Option[ClientTransactionReceipt]]]( repoll )
 
-      def poll( last : Future[Option[ClientTransactionReceipt]] ) : Future[Option[ClientTransactionReceipt]] = {
-        last.flatMap { mbReceipt =>
-          mbReceipt match {
-            case Some( _ ) => last // cool, we got it :)
-            case None      => {    // it wasn't available when we checked :(
-              if (System.currentTimeMillis > timeoutMillis ) { // we give up
-                last
-              } else {                                         // try again!
-                blocking {
-                  Thread.sleep( pollPeriodMillis )
-                }
-                poll( onePoll )
-              }
-            }
+      def doPoll() : Option[ClientTransactionReceipt] = {
+        holder.get.value match {
+          case None => {
+            None // we just have to wait for the HTTP request to complete
+          }
+          case Some( Success( None ) ) => { // the HTTP request returned, we don't yet have the receipt, we have to repoll
+            holder.set( repoll )
+            None
+          }
+          case Some( Success( someClientTransactionReceipt ) ) => { // hooray, we found it!
+            someClientTransactionReceipt
+          }
+          case Some( Failure( t ) ) => { // oops, something broke, we throw the Exception to our wrapping future
+            throw t
           }
         }
       }
 
-      poll( onePoll )
+      val task = new Poller.Task( s"Polling for transaction hash '0x${transactionHash.hex}'", icontext.pollPeriod, doPoll, icontext.pollTimeout )
+
+      poller.addTask( task ).map( Some.apply ).recover {
+        case e : Poller.TimeoutException => None 
+      }
     }
   }
 
-  def awaitTransactionReceipt( transactionHash : EthHash, timeout : Duration )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Option[ClientTransactionReceipt] = {
-      Await.result( futureTransactionReceipt( transactionHash, timeout ), Duration.Inf ) // the timeout in enforced within futureTransactionReceipt( ... ), not here
+  def awaitTransactionReceipt( transactionHash : EthHash )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Option[ClientTransactionReceipt] = {
+    Await.result( futureTransactionReceipt( transactionHash ), Duration.Inf ) // the timeout is enforced within futureTransactionReceipt( ... ), not here
   }
 
   def requireTransactionReceipt( transactionHash : EthHash, timeout : Duration = Duration.Inf )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : ClientTransactionReceipt = {
-    awaitTransactionReceipt( transactionHash, timeout ).getOrElse( throw new TimeoutException( transactionHash, timeout ) )
+    awaitTransactionReceipt( transactionHash ).getOrElse( throw new TimeoutException( transactionHash, timeout ) )
   }
 
 
