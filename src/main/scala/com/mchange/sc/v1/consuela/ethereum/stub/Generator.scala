@@ -142,7 +142,7 @@ object Generator {
       }
     } else {
       iw.println( s"""val futHash = jsonrpc.Invoker.transaction.sendMessage( sender.findSigner(), contractAddress, optionalPaymentInWei.getOrElse( Zero ), callData )""" )
-      iw.println( s"""val futTransactionInfo = futHash.flatMap( hash => jsonrpc.Invoker.futureTransactionReceipt( hash ).map( mbcti => TransactionInfo.Message.fromJsonrpcReceipt( hash, mbcit ) ) )""" )
+      iw.println( s"""val futTransactionInfo = futHash.flatMap( hash => jsonrpc.Invoker.futureTransactionReceipt( hash ).map( mbctr => TransactionInfo.Message.fromJsonrpcReceipt( hash, mbctr ) ) )""" )
       if ( async ) {
         iw.println( "futTransactionInfo" )
       } else {
