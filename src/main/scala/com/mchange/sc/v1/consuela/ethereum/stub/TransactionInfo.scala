@@ -43,11 +43,12 @@ object TransactionInfo {
   case class Message (
     val transactionHash : EthHash,
     val details         : Option[TransactionInfo.Details.Message]
-  )
+  ) extends TransactionInfo
+
   case class ContractDeployment (
     val transactionHash : EthHash,
     val details         : Option[TransactionInfo.Details.ContractDeployment]
-  )
+  ) extends TransactionInfo
 }
 trait TransactionInfo {
   def transactionHash : EthHash
