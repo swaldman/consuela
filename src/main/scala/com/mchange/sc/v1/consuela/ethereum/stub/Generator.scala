@@ -142,11 +142,11 @@ object Generator {
       }
     } else {
       iw.println( s"""val futHash = jsonrpc.Invoker.transaction.sendMessage( sender.findSigner(), contractAddress, optionalPaymentInWei.getOrElse( Zero ), callData )""" )
-      iw.println( s"""val futMaybeReceipt = futHash.flatMap( hash => jsonrpc.Invoker.futureTransactionReceipt( hash ) )""" )
+      iw.println( s"""val futTransactionInfo = futHash.flatMap( hash => jsonrpc.Invoker.futureTransactionReceipt( hash ).map( mbcti => TransactionInfo.Message.fromJsonrpcReceipt( hash, mbcit ) ) )""" )
       if ( async ) {
-        iw.println( "futMaybeReceipt" )
+        iw.println( "futTransactionInfo" )
       } else {
-        iw.println( s"""Await.result( futMaybeReceipt, Duration.Inf )""" )
+        iw.println( s"""Await.result( futTransactionInfo, Duration.Inf )""" )
       }
     }
 
@@ -177,7 +177,7 @@ object Generator {
     val post = {
       val raw = {
         if (!constantSection) {
-          "Option[ClientTransactionReceipt]"
+          "TransactionInfo.Message"
         } else {
           fcn.outputs.length match {
             case 0 => {
