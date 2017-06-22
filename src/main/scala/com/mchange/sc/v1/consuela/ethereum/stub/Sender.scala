@@ -5,8 +5,7 @@ import scala.concurrent.{ExecutionContext, Future}
 
 import com.mchange.sc.v1.consuela.crypto.jce
 import com.mchange.sc.v1.consuela.ethereum.wallet
-import com.mchange.sc.v1.consuela.ethereum.jsonrpc.Invoker
-import com.mchange.sc.v2.jsonrpc._
+import com.mchange.sc.v1.consuela.ethereum.jsonrpc
 
 import com.mchange.sc.v1.consuela.ethereum.{EthAddress, EthHash, EthKeyPair, EthPrivateKey, EthSigner}
 
@@ -41,10 +40,10 @@ trait Sender {
 
   def findSigner() : EthSigner
 
-  def sendWei( to : EthAddress, valueInWei : Unsigned256 )(implicit icontext : Invoker.Context, xfactory : Exchanger.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
-    Invoker.transaction.sendWei( this.findSigner(), to, valueInWei )
+  def sendWei( to : EthAddress, valueInWei : Unsigned256 )(implicit icontext : jsonrpc.Invoker.Context, cfactory : jsonrpc.Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
+    jsonrpc.Invoker.transaction.sendWei( this.findSigner(), to, valueInWei )
   }
-  def sendMessage( to : EthAddress, valueInWei : Unsigned256, data : immutable.Seq[Byte] )(implicit icontext : Invoker.Context, xfactory : Exchanger.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
-    Invoker.transaction.sendMessage( this.findSigner(), to, valueInWei, data )
+  def sendMessage( to : EthAddress, valueInWei : Unsigned256, data : immutable.Seq[Byte] )(implicit icontext : jsonrpc.Invoker.Context, cfactory : jsonrpc.Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
+    jsonrpc.Invoker.transaction.sendMessage( this.findSigner(), to, valueInWei, data )
   }
 }

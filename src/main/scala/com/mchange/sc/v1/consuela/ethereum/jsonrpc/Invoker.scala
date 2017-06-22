@@ -121,7 +121,7 @@ object Invoker {
       senderSigner  : EthSigner,
       to            : EthAddress,
       valueInWei    : Unsigned256
-    )(implicit icontext : Invoker.Context, xfactory : Exchanger.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
+    )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
       sendMessage( senderSigner, to, valueInWei, immutable.Seq.empty[Byte] )
     }
 
@@ -130,8 +130,8 @@ object Invoker {
       to            : EthAddress,
       valueInWei    : Unsigned256,
       data          : immutable.Seq[Byte]
-    )(implicit icontext : Invoker.Context, xfactory : Exchanger.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
-      borrow( Client( icontext.jsonRpcUrl ) ) { client =>
+    )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
+      borrow( cfactory( icontext.jsonRpcUrl ) ) { client =>
 
         val from = senderSigner.address
 
@@ -157,8 +157,8 @@ object Invoker {
       to         : EthAddress,
       valueInWei : Unsigned256,
       data       : immutable.Seq[Byte]
-    )(implicit icontext : Invoker.Context, xfactory : Exchanger.Factory, econtext : ExecutionContext ) : Future[immutable.Seq[Byte]] = {
-      borrow( Client( icontext.jsonRpcUrl ) ) { client =>
+    )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext ) : Future[immutable.Seq[Byte]] = {
+      borrow( cfactory( icontext.jsonRpcUrl ) ) { client =>
         val fGasPriceGas = gasPriceGas( client, from, to, valueInWei, data )
         for {
           ( effectiveGasPrice, effectiveGas ) <- fGasPriceGas
