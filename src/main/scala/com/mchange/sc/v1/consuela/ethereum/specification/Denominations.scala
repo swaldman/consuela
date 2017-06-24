@@ -17,6 +17,11 @@ object Denominations {
 
     override def fromWei( wei : BigInt ) : BigDecimal = BigDecimal(wei)
   }
+  final object GWei extends Denomination( Multiplier.BigDecimal.GWei ) {
+    val unitName : String = "gwei"
+
+    override def fromWei( wei : BigInt ) : BigDecimal = BigDecimal(wei)
+  }
   final object Szabo extends Denomination( Multiplier.BigDecimal.Szabo ) {
     val unitName : String = "szabo"
   }
@@ -30,18 +35,21 @@ object Denominations {
   final object Multiplier {
     final object Long extends Multiplier[scala.Long] {
       val Wei    = Math.pow(10, 0).toLong;
+      val GWei   = Math.pow(10, 9).toLong;
       val Szabo  = Math.pow(10, 12).toLong;
       val Finney = Math.pow(10, 15).toLong;
       val Ether  = Math.pow(10, 18).toLong;
     }
     final object BigInt extends Multiplier[scala.BigInt] {
       val Wei    = scala.BigInt( Long.Wei );
+      val GWei   = scala.BigInt( Long.GWei );
       val Szabo  = scala.BigInt( Long.Szabo );
       val Finney = scala.BigInt( Long.Finney );
       val Ether  = scala.BigInt( Long.Ether );
     }
     final object BigDecimal extends Multiplier[scala.BigDecimal] {
       val Wei    = scala.BigDecimal( BigInt.Wei );
+      val GWei   = scala.BigDecimal( BigInt.GWei );
       val Szabo  = scala.BigDecimal( BigInt.Szabo );
       val Finney = scala.BigDecimal( BigInt.Finney );
       val Ether  = scala.BigDecimal( BigInt.Ether );
@@ -49,6 +57,7 @@ object Denominations {
   }
   trait Multiplier[T] {
     val Wei    : T
+    val GWei    : T
     val Szabo  : T
     val Finney : T
     val Ether  : T
@@ -56,6 +65,7 @@ object Denominations {
     def apply( caseInsensitiveUnitName : String ): T = {
       caseInsensitiveUnitName.toLowerCase match {
         case "wei"    => Wei
+        case "gwei"   => GWei
         case "szabo"  => Szabo
         case "finney" => Finney
         case "ether"  => Ether
@@ -68,27 +78,31 @@ object Denominations {
 
   implicit class DoubleEther ( val value : Double ) extends AnyVal {
     def wei    = rounded( BigDecimal( value ) * Multiplier.BigDecimal.Wei ).toBigInt
+    def gwei   = rounded( BigDecimal( value ) * Multiplier.BigDecimal.GWei ).toBigInt
     def szabo  = rounded( BigDecimal( value ) * Multiplier.BigDecimal.Szabo ).toBigInt
     def finney = rounded( BigDecimal( value ) * Multiplier.BigDecimal.Finney ).toBigInt
     def ether  = rounded( BigDecimal( value ) * Multiplier.BigDecimal.Ether ).toBigInt
   }
   implicit class BigDecimalEther ( val value : BigDecimal ) extends AnyVal {
     def wei    = rounded( value * Multiplier.BigDecimal.Wei ).toBigInt
+    def gwei   = rounded( value * Multiplier.BigDecimal.GWei ).toBigInt
     def szabo  = rounded( value * Multiplier.BigDecimal.Szabo ).toBigInt
     def finney = rounded( value * Multiplier.BigDecimal.Finney ).toBigInt
     def ether  = rounded( value * Multiplier.BigDecimal.Ether ).toBigInt
   }
   implicit class LongEther( val value : Long ) extends AnyVal {
-    def wei    = BigInt( value ) * Multiplier.Long.Wei;
-    def szabo  = BigInt( value ) * Multiplier.Long.Szabo;
-    def finney = BigInt( value ) * Multiplier.Long.Finney;
-    def ether  = BigInt( value ) * Multiplier.Long.Ether;
+    def wei    = BigInt( value ) * Multiplier.Long.Wei
+    def gwei   = BigInt( value ) * Multiplier.Long.GWei
+    def szabo  = BigInt( value ) * Multiplier.Long.Szabo
+    def finney = BigInt( value ) * Multiplier.Long.Finney
+    def ether  = BigInt( value ) * Multiplier.Long.Ether
   }
   implicit class BigIntEther( val value : BigInt ) extends AnyVal {
-    def wei    = value * Multiplier.BigInt.Wei;
-    def szabo  = value * Multiplier.BigInt.Szabo;
-    def finney = value * Multiplier.BigInt.Finney;
-    def ether  = value * Multiplier.BigInt.Ether;
+    def wei    = value * Multiplier.BigInt.Wei
+    def gwei   = value * Multiplier.BigInt.GWei
+    def szabo  = value * Multiplier.BigInt.Szabo
+    def finney = value * Multiplier.BigInt.Finney
+    def ether  = value * Multiplier.BigInt.Ether
   }
 }
 trait Denominations {
