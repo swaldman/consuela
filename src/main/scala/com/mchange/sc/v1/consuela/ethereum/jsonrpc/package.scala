@@ -266,7 +266,9 @@ package object jsonrpc {
     cumulativeGasUsed : Unsigned256,
     gasUsed           : Unsigned256,
     contractAddress   : Option[EthAddress],
-    logs              : immutable.Seq[EthLogEntry]
+    logs              : immutable.Seq[EthLogEntry],
+    root              : Option[EthHash],
+    status            : Option[Unsigned256]
   )
 
 
