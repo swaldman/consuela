@@ -38,7 +38,9 @@ package object jsonrpc {
 
     def str[T : Format]( t : T ) : String = Json.stringify( Json.toJson( t ) )
 
-    def opt[T <: MaybeEmpty : Format ]( t : T ) : Option[String] = if ( t.isEmpty ) None else Some( str( t ) )
+    def optStr[T <: MaybeEmpty : Format ]( t : T ) : Option[String] = if ( t.isEmpty ) None else Some( str( t ) )
+
+    def opt[T <: MaybeEmpty : Format ]( t : T ) : Option[T] = if ( t.isEmpty ) None else Some( t )
 
     final object Contract {
 
@@ -60,15 +62,18 @@ package object jsonrpc {
         developerDoc    : Option[Doc.Developer],
         metadata        : Option[String]
       ) {
-        def mbSource          = source.flatMap( opt )
-        def mbLanguage        = language.flatMap( opt )
-        def mbLanguageVersion = languageVersion.flatMap( opt )
-        def mbCompilerVersion = compilerVersion.flatMap( opt )
-        def mbCompilerOptions = compilerOptions.flatMap( opt )
-        def mbAbi             = abi.flatMap( opt[Abi] )
-        def mbUserDoc         = userDoc.flatMap( opt[Doc.User] )
-        def mbDeveloperDoc    = developerDoc.flatMap( opt[Doc.Developer] )
-        def mbMetadata        = metadata.flatMap( opt )
+        def mbSource               = source.flatMap( opt )
+        def mbLanguage             = language.flatMap( opt )
+        def mbLanguageVersion      = languageVersion.flatMap( opt )
+        def mbCompilerVersion      = compilerVersion.flatMap( opt )
+        def mbCompilerOptions      = compilerOptions.flatMap( opt )
+        def mbAbi                  = abi.flatMap( opt[Abi] )
+        def mbAbiAsString          = abi.flatMap( optStr[Abi] )
+        def mbUserDoc              = userDoc.flatMap( opt[Doc.User] )
+        def mbUserDocAsString      = userDoc.flatMap( optStr[Doc.User] )
+        def mbDeveloperDoc         = developerDoc.flatMap( opt[Doc.Developer] )
+        def mbDeveloperDocAsString = developerDoc.flatMap( optStr[Doc.Developer] )
+        def mbMetadata             = metadata.flatMap( opt )
       }
     }
     final case class Contract( code : String, info : Contract.Info )
