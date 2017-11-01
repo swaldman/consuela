@@ -159,8 +159,8 @@ object Client {
   }
 
   final object Factory {
-    def createSimpleFactory() : Factory = Client.Simple
-    def createAsyncFactory() : Factory = new Async( new JettyExchanger.Factory )
+    def createSimpleFactory() : Factory       = Client.Simple
+    def createAsyncFactory()  : Factory.Async = new Async( new JettyExchanger.Factory )
 
     implicit lazy val Default = new Async( Exchanger.Factory.Default ) // wrap around the default Exchanger, which is asynchronous
 
