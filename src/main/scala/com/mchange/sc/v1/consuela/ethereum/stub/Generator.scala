@@ -98,7 +98,14 @@ object Generator {
     def abiFunctionCtor = {
       def paramctor( param : Abi.Function.Parameter ) = s"""Abi.Function.Parameter( "${param.name}", s"${param.`type`}" )"""
       def paramctors( seq : immutable.Seq[Abi.Function.Parameter] ) = seq.map( paramctor ).mkString( ", " )
-      s"""Abi.Function( name = "${fcn.name}", inputs = immutable.Seq( ${paramctors(fcn.inputs)} ), outputs = immutable.Seq( ${paramctors(fcn.outputs)} ), constant = ${fcn.constant}, payable = ${fcn.payable} )"""
+      s"""|Abi.Function( 
+          |  name = "${fcn.name}",
+          |  inputs = immutable.Seq( ${paramctors(fcn.inputs)} ),
+          |  outputs = immutable.Seq( ${paramctors(fcn.outputs)} ),
+          |  constant = ${fcn.constant},
+          |  payable = ${fcn.payable},
+          |  stateMutability = ${fcn.stateMutability} 
+          |)""".stripMargin
     }
 
     iw.println( functionSignature( fcn, constantSection, async ) + " = {" )
