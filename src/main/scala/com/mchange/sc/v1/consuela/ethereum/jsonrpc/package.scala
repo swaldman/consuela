@@ -91,7 +91,7 @@ package object jsonrpc {
     object Function {
       case class Parameter( name : String, `type` : String ) extends Abi.Parameter
     }
-    final case class Function( name : String, inputs : immutable.Seq[Function.Parameter], outputs : immutable.Seq[Function.Parameter], constant : Boolean, payable : Boolean )
+    final case class Function( name : String, inputs : immutable.Seq[Function.Parameter], outputs : immutable.Seq[Function.Parameter], constant : Boolean, payable : Boolean, stateMutability : String )
 
     object Constructor {
       val noArg = Constructor( Nil )
@@ -137,13 +137,8 @@ package object jsonrpc {
     }
   }
 
-  private val DefaultTrue  = Some( JsBoolean( true ) )
-  private val DefaultFalse = Some( JsBoolean( false ) )
-
-  private def rd[T]( spec : (String,Option[JsValue])* )( inner : Format[T] ) : Format[T] = new RestrictingDefaultingFormat( spec.toMap )( inner )
-
   /*
-   *  The defaults here are meant to fill in for attributes not omitted by earlier versions of the solidity compiler.
+   *  The defaults here are meant to fill in for attributes not emitted by earlier versions of the solidity compiler.
    * 
    *  In older versions, all functions were payable, so that defaults to true.
    *                     there were no anonymous events, so that defaults to false.
@@ -155,13 +150,89 @@ package object jsonrpc {
    *  always accept payment. So our default, if no payable field is present, is to consider "payable" true, so that
    *  we do not alter or break behavior when we read and then rewrite ABI.
    */              
-  implicit val AbiFunctionParameterFormat    = rd( "name" -> None, "type" -> None )                                                                                  ( Json.format[Abi.Function.Parameter]    )
-  implicit val AbiFunctionFormat             = rd( "name" -> None, "inputs" -> None, "outputs" -> None, "constant"-> None, "payable" -> DefaultTrue, "type" -> None )( Json.format[Abi.Function]              )
-  implicit val AbiEventParameterFormat       = rd( "name" -> None, "type" -> None, "indexed" -> None )                                                               ( Json.format[Abi.Event.Parameter]       )
-  implicit val AbiEventFormat                = rd( "name" -> None, "inputs" -> None, "anonymous" -> DefaultFalse, "type" -> None )                                   ( Json.format[Abi.Event]                 )
-  implicit val AbiConstructorParameterFormat = rd( "name" -> None, "type" -> None )                                                                                  ( Json.format[Abi.Constructor.Parameter] )
-  implicit val AbiConstructorFormat          = rd( "inputs" -> None, "payable" -> DefaultTrue, "type" -> None )                                                      ( Json.format[Abi.Constructor]           )
-  implicit val AbiFallbackFormat             = rd( "payable" -> DefaultTrue, "type" -> None )                                                                        ( Json.format[Abi.Fallback]              )
+  private val DefaultTrue  = Some( JsBoolean( true ) )
+  private val DefaultFalse = Some( JsBoolean( false ) )
+
+  private def restrictTransformAbiFunctionValue( jsv : JsValue ) : JsResult[JsObject] = {
+    jsv match {
+      case jso : JsObject => restrictTransformAbiFunctionObject( jso )
+      case oops           => JsError( s"An abi function must be a JsObject, found $oops" )
+    }
+  }
+
+  private def restrictTransformAbiFunctionObject( jso : JsObject ) : JsResult[JsObject] = {
+    val keys = jso.keys
+
+    // these keys required for all versions
+    val requiredKeys = "name" :: "inputs" :: "outputs" :: "type" :: "constant" :: Nil
+
+    def requiredKeysCheck = requiredKeys.foldLeft( None : Option[JsResult[JsObject]] ) { ( nascent, next ) =>
+      nascent match {
+        case Some( _ ) => nascent
+        case None      => if (!keys(next)) Some( JsError(s"Required key for ABI function '${next}' not found.") ) else None
+      }
+    }
+    def constantValue : Boolean = jso.value("constant").asInstanceOf[JsBoolean].value
+    def payableValue  : Boolean = jso.value("payable").asInstanceOf[JsBoolean].value
+
+    def informalAbiVersion = {
+      val hasPayable         = keys("payable")
+      val hasStateMutability = keys("stateMutability")
+
+      (hasPayable, hasStateMutability) match {
+        case ( false, false ) => 1
+        case ( true, false  ) => 2
+        case ( true, true   ) => 3
+        case ( false, true  ) => 4 // we're required to fill in the payable field from stateMutability
+      }
+    }
+    def constructBaseObject : JsObject = {
+      requiredKeys.foldLeft(JsObject(Nil)){ ( nascent, next ) => nascent + (next, jso.value(next)) }
+    }
+    def augmentForInformalAbiVersion( informalAbiVersion : Int )( baseObject : JsObject ) : JsResult[JsObject] = {
+      informalAbiVersion match {
+        case 1 => {
+          if ( constantValue ) {
+            JsSuccess[JsObject]( baseObject + ("payable", JsBoolean( false )) + ("stateMutability", JsString("view")) )
+          } else {
+            JsSuccess[JsObject]( baseObject + ("payable", JsBoolean( true )) + ("stateMutability", JsString("payable")) ) // maintain compatability, under old compilations all functions payable
+          }
+        }
+        case 2 => {
+          if ( payableValue ) {
+            JsSuccess[JsObject]( baseObject + ("payable", JsBoolean( true )) + ("stateMutability", JsString("payable")) )
+          }
+          else {
+            if (constantValue) {
+              JsSuccess[JsObject]( baseObject + ("payable", JsBoolean( false )) + ("stateMutability", JsString("view")) ) // we can't guarantee pure, so we call this view
+            }
+            else {
+              JsSuccess[JsObject]( baseObject + ("payable", JsBoolean( false )) + ("stateMutability", JsString("nonpayable")) )
+            }
+          }
+        }
+        case 3 => {
+          JsSuccess[JsObject]( Seq( "payable", "stateMutability" ).foldLeft( baseObject ){ ( nascent, next ) => nascent + ( next, jso.value(next) ) } )
+        }
+        case 4 => {
+          val sm = jso.value("stateMutability").asInstanceOf[JsString]
+          JsSuccess[JsObject]( baseObject + ("payable", JsBoolean( sm.value == "payable" )) + ("stateMutability", sm) )
+        }
+        case _ => throw new InternalError("Unexpected 'Informal ABI Version', this should never happen!")
+      }
+    }
+    requiredKeysCheck.getOrElse( augmentForInformalAbiVersion( informalAbiVersion )( constructBaseObject ) )
+  }
+
+  private def rd[T]( spec : (String,Option[JsValue])* )( inner : Format[T] ) : Format[T] = new RestrictingDefaultingFormat( spec.toMap )( inner )
+
+  implicit val AbiFunctionParameterFormat    = rd( "name" -> None, "type" -> None )                                                ( Json.format[Abi.Function.Parameter]    )
+  implicit val AbiFunctionFormat             = new RestrictTransformingFormat( Seq( restrictTransformAbiFunctionValue ) )         ( Json.format[Abi.Function]              )
+  implicit val AbiEventParameterFormat       = rd( "name" -> None, "type" -> None, "indexed" -> None )                             ( Json.format[Abi.Event.Parameter]       )
+  implicit val AbiEventFormat                = rd( "name" -> None, "inputs" -> None, "anonymous" -> DefaultFalse, "type" -> None ) ( Json.format[Abi.Event]                 )
+  implicit val AbiConstructorParameterFormat = rd( "name" -> None, "type" -> None )                                                ( Json.format[Abi.Constructor.Parameter] )
+  implicit val AbiConstructorFormat          = rd( "inputs" -> None, "payable" -> DefaultTrue, "type" -> None )                    ( Json.format[Abi.Constructor]           )
+  implicit val AbiFallbackFormat             = rd( "payable" -> DefaultTrue, "type" -> None )                                      ( Json.format[Abi.Fallback]              )
 
   implicit val UserMethodInfoFormat          = Json.format[Doc.User.MethodInfo]
   implicit val DeveloperMethodInfoFormat     = Json.format[Doc.Developer.MethodInfo]

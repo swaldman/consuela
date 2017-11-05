@@ -22,12 +22,13 @@ resolvers += ("Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases")
 
 resolvers += ("Typesafe repository" at "http://repo.typesafe.com/typesafe/releases/")
 
-publishTo <<= version {
-  (v: String) => {
-    if (v.trim.endsWith("SNAPSHOT"))
-      Some("snapshots" at nexusSnapshots )
-    else
-      Some("releases"  at nexusReleases )
+publishTo := {
+  val v = version.value
+  if (v.trim.endsWith("SNAPSHOT")) {
+    Some("snapshots" at nexusSnapshots )
+  }
+  else {
+    Some("releases"  at nexusReleases )
   }
 }
 
