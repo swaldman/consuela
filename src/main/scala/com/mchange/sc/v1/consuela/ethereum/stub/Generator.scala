@@ -104,7 +104,7 @@ object Generator {
           |  outputs = immutable.Seq( ${paramctors(fcn.outputs)} ),
           |  constant = ${fcn.constant},
           |  payable = ${fcn.payable},
-          |  stateMutability = ${fcn.stateMutability} 
+          |  stateMutability = "${fcn.stateMutability}" 
           |)""".stripMargin
     }
 

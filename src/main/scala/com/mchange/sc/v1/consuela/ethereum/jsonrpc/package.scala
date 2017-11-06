@@ -88,23 +88,25 @@ package object jsonrpc {
     def apply( json : String ) : Abi = Json.parse( json ).as[Abi]
     val empty = Abi( immutable.Seq.empty, immutable.Seq.empty, immutable.Seq.empty, None )
 
-    object Function {
+    final object Function {
       case class Parameter( name : String, `type` : String ) extends Abi.Parameter
     }
     final case class Function( name : String, inputs : immutable.Seq[Function.Parameter], outputs : immutable.Seq[Function.Parameter], constant : Boolean, payable : Boolean, stateMutability : String )
 
-    object Constructor {
-      val noArg = Constructor( Nil )
+    final object Constructor {
+      val noArgNoEffect = Constructor( Nil, false, "pure" )
       case class Parameter( name : String, `type` : String ) extends Abi.Parameter
     }
-    final case class Constructor( inputs : immutable.Seq[Function.Parameter] )
+    final case class Constructor( inputs : immutable.Seq[Function.Parameter], payable : Boolean, stateMutability : String )
 
-    object Event {
+    final object Event {
       final case class Parameter( name : String, `type` : String, indexed : Boolean ) extends Abi.Parameter
     }
     final case class Event( name : String, inputs : immutable.Seq[Event.Parameter], anonymous : Boolean )
 
-    final case class Fallback( payable : Boolean )
+    final case class Fallback( payable : Boolean, stateMutability : String ) {
+      def this( payable : Boolean ) = this( payable, if (payable) "payable" else "nonpayable" )
+    }
 
     sealed trait Parameter {
       val name : String
@@ -152,6 +154,8 @@ package object jsonrpc {
    */              
   private val DefaultTrue  = Some( JsBoolean( true ) )
   private val DefaultFalse = Some( JsBoolean( false ) )
+
+  private val DefaultPayable = Some( JsString( "payable" ) )
 
   private def restrictTransformAbiFunctionValue( jsv : JsValue ) : JsResult[JsObject] = {
     jsv match {
@@ -226,13 +230,13 @@ package object jsonrpc {
 
   private def rd[T]( spec : (String,Option[JsValue])* )( inner : Format[T] ) : Format[T] = new RestrictingDefaultingFormat( spec.toMap )( inner )
 
-  implicit val AbiFunctionParameterFormat    = rd( "name" -> None, "type" -> None )                                                ( Json.format[Abi.Function.Parameter]    )
-  implicit val AbiFunctionFormat             = new RestrictTransformingFormat( Seq( restrictTransformAbiFunctionValue ) )         ( Json.format[Abi.Function]              )
-  implicit val AbiEventParameterFormat       = rd( "name" -> None, "type" -> None, "indexed" -> None )                             ( Json.format[Abi.Event.Parameter]       )
-  implicit val AbiEventFormat                = rd( "name" -> None, "inputs" -> None, "anonymous" -> DefaultFalse, "type" -> None ) ( Json.format[Abi.Event]                 )
-  implicit val AbiConstructorParameterFormat = rd( "name" -> None, "type" -> None )                                                ( Json.format[Abi.Constructor.Parameter] )
-  implicit val AbiConstructorFormat          = rd( "inputs" -> None, "payable" -> DefaultTrue, "type" -> None )                    ( Json.format[Abi.Constructor]           )
-  implicit val AbiFallbackFormat             = rd( "payable" -> DefaultTrue, "type" -> None )                                      ( Json.format[Abi.Fallback]              )
+  implicit val AbiFunctionParameterFormat    = rd( "name" -> None, "type" -> None )                                                                 ( Json.format[Abi.Function.Parameter]    )
+  implicit val AbiFunctionFormat             = new RestrictTransformingFormat( Seq( restrictTransformAbiFunctionValue ) )                           ( Json.format[Abi.Function]              )
+  implicit val AbiEventParameterFormat       = rd( "name" -> None, "type" -> None, "indexed" -> None )                                              ( Json.format[Abi.Event.Parameter]       )
+  implicit val AbiEventFormat                = rd( "name" -> None, "inputs" -> None, "anonymous" -> DefaultFalse, "type" -> None )                  ( Json.format[Abi.Event]                 )
+  implicit val AbiConstructorParameterFormat = rd( "name" -> None, "type" -> None )                                                                 ( Json.format[Abi.Constructor.Parameter] )
+  implicit val AbiConstructorFormat          = rd( "inputs" -> None, "payable" -> DefaultTrue, "stateMutability" -> DefaultPayable, "type" -> None )( Json.format[Abi.Constructor]           )
+  implicit val AbiFallbackFormat             = rd( "payable" -> DefaultTrue, "stateMutability" -> DefaultPayable, "type" -> None )                  ( Json.format[Abi.Fallback]              )
 
   implicit val UserMethodInfoFormat          = Json.format[Doc.User.MethodInfo]
   implicit val DeveloperMethodInfoFormat     = Json.format[Doc.Developer.MethodInfo]
