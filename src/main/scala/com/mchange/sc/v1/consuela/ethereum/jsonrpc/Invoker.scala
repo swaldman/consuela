@@ -155,6 +155,29 @@ object Invoker {
         }
       }
     }
+    def createContract(
+      creatorSigner : EthSigner,
+      valueInWei    : Unsigned256,
+      init          : immutable.Seq[Byte]
+    )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
+      borrow( cfactory( icontext.jsonRpcUrl ) ) { client =>
+
+        val from = creatorSigner.address
+
+        val fGasPriceGas = gasPriceGas( client, from, EthAddress.Zero, valueInWei, init )
+        val fNextNonce = client.eth.getTransactionCount( from, Client.BlockNumber.Pending )
+
+        for {
+          ( effectiveGasPrice, effectiveGas ) <- fGasPriceGas
+          nextNonce <- fNextNonce
+          unsigned = EthTransaction.Unsigned.ContractCreation( Unsigned256(nextNonce), Unsigned256(effectiveGasPrice), Unsigned256(effectiveGas), valueInWei, init )
+          signed = unsigned.sign( creatorSigner )
+          hash <- client.eth.sendSignedTransaction( signed )
+        } yield {
+          hash
+        }
+      }
+    }
   }
 
   final object constant {
