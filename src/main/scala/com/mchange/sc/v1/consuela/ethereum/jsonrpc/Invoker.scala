@@ -30,6 +30,7 @@ object Invoker {
 
   class InvokerException( message : String, cause : Throwable = null ) extends EthereumException( message, cause )
   final class TimeoutException( transactionHash : EthHash, timeout : Duration ) extends InvokerException( s"Could not retrieve receipt for transaction '0x${transactionHash.hex}' within ${timeout}" )
+  final class GasDisapprovedException( message : String, computedGas : ComputedGas ) extends InvokerException( message + s" [Disapproved: gasPrice -> ${computedGas.gasPrice}, gasLimit -> ${computedGas.gasLimit}]" )
 
   private def rounded( bd : BigDecimal ) = bd.round( bd.mc ) // work around absence of default rounded method in scala 2.10 BigDecimal
 
@@ -55,13 +56,19 @@ object Invoker {
 
   final case class Context( jsonRpcUrl : String, gasPriceTweak : MarkupOrOverride = Markup(0), gasLimitTweak : MarkupOrOverride = Markup(0.2), pollPeriod : Duration = 3.seconds, pollTimeout : Duration = Duration.Inf )
 
-  private def gasPriceGas(
+  final case class ComputedGas( gasPrice : BigInt, gasLimit : BigInt )
+
+  type GasApprover = ComputedGas => Future[Unit] // a failure, usually a GasDisapprovedException, signifies disapproval
+
+  val AlwaysApprover : GasApprover = _ => Future.successful( () )
+
+  private def computedGas(
     client     : Client,
     from       : EthAddress,
     to         : EthAddress,
     valueInWei : Unsigned256,
     data       : immutable.Seq[Byte]
-  )(implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Future[( BigInt, BigInt )] = {
+  )(implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Future[ComputedGas] = {
 
     val fDefaultGasPrice = client.eth.gasPrice()
     val fDefaultGas      = client.eth.estimateGas( Some( from ), Some( to ), None, None, Some( valueInWei.widen ), Some ( data ) );
@@ -72,7 +79,7 @@ object Invoker {
       defaultGas <- fDefaultGas
       effectiveGas = icontext.gasLimitTweak.compute( defaultGas )
     } yield {
-      ( effectiveGasPrice, effectiveGas )
+      ComputedGas( effectiveGasPrice, effectiveGas )
     }
   }
 
@@ -104,7 +111,7 @@ object Invoker {
         }
       }
 
-      val task = new Poller.Task( s"Polling for transaction hash '0x${transactionHash.hex}'", icontext.pollPeriod, doPoll, icontext.pollTimeout )
+      val task = new Poller.Task( s"Polling for transaction hash '0x${transactionHash.hex}'", icontext.pollPeriod, doPoll _, icontext.pollTimeout )
 
       poller.addTask( task ).map( Some.apply ).recover {
         case e : Poller.TimeoutException => None 
@@ -116,8 +123,8 @@ object Invoker {
     Await.result( futureTransactionReceipt( transactionHash ), Duration.Inf ) // the timeout is enforced within futureTransactionReceipt( ... ), not here
   }
 
-  def requireTransactionReceipt( transactionHash : EthHash, timeout : Duration = Duration.Inf )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : ClientTransactionReceipt = {
-    awaitTransactionReceipt( transactionHash ).getOrElse( throw new TimeoutException( transactionHash, timeout ) )
+  def requireTransactionReceipt( transactionHash : EthHash )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : ClientTransactionReceipt = {
+    awaitTransactionReceipt( transactionHash ).getOrElse( throw new TimeoutException( transactionHash, icontext.pollTimeout ) )
   }
 
 
@@ -126,28 +133,31 @@ object Invoker {
     def sendWei(
       senderSigner  : EthSigner,
       to            : EthAddress,
-      valueInWei    : Unsigned256
+      valueInWei    : Unsigned256,
+      gasApprover   : GasApprover = AlwaysApprover
     )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
-      sendMessage( senderSigner, to, valueInWei, immutable.Seq.empty[Byte] )
+      sendMessage( senderSigner, to, valueInWei, immutable.Seq.empty[Byte], gasApprover )
     }
 
     def sendMessage(
       senderSigner  : EthSigner,
       to            : EthAddress,
       valueInWei    : Unsigned256,
-      data          : immutable.Seq[Byte]
+      data          : immutable.Seq[Byte],
+      gasApprover   : GasApprover = AlwaysApprover
     )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
       borrow( cfactory( icontext.jsonRpcUrl ) ) { client =>
 
         val from = senderSigner.address
 
-        val fGasPriceGas = gasPriceGas( client, from, to, valueInWei, data )
+        val fComputedGas = computedGas( client, from, to, valueInWei, data )
         val fNextNonce = client.eth.getTransactionCount( from, Client.BlockNumber.Pending )
 
         for {
-          ( effectiveGasPrice, effectiveGas ) <- fGasPriceGas
+          cg <- fComputedGas
+          _ <- gasApprover(cg)
           nextNonce <- fNextNonce
-          unsigned = EthTransaction.Unsigned.Message( Unsigned256(nextNonce), Unsigned256(effectiveGasPrice), Unsigned256(effectiveGas), to, valueInWei, data )
+          unsigned = EthTransaction.Unsigned.Message( Unsigned256(nextNonce), Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), to, valueInWei, data )
           signed = unsigned.sign( senderSigner )
           hash <- client.eth.sendSignedTransaction( signed )
         } yield {
@@ -158,19 +168,21 @@ object Invoker {
     def createContract(
       creatorSigner : EthSigner,
       valueInWei    : Unsigned256,
-      init          : immutable.Seq[Byte]
+      init          : immutable.Seq[Byte],
+      gasApprover   : GasApprover = AlwaysApprover
     )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
       borrow( cfactory( icontext.jsonRpcUrl ) ) { client =>
 
         val from = creatorSigner.address
 
-        val fGasPriceGas = gasPriceGas( client, from, EthAddress.Zero, valueInWei, init )
+        val fComputedGas = computedGas( client, from, EthAddress.Zero, valueInWei, init )
         val fNextNonce = client.eth.getTransactionCount( from, Client.BlockNumber.Pending )
 
         for {
-          ( effectiveGasPrice, effectiveGas ) <- fGasPriceGas
+          cg <- fComputedGas
+          _ <- gasApprover(cg)
           nextNonce <- fNextNonce
-          unsigned = EthTransaction.Unsigned.ContractCreation( Unsigned256(nextNonce), Unsigned256(effectiveGasPrice), Unsigned256(effectiveGas), valueInWei, init )
+          unsigned = EthTransaction.Unsigned.ContractCreation( Unsigned256(nextNonce), Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), valueInWei, init )
           signed = unsigned.sign( creatorSigner )
           hash <- client.eth.sendSignedTransaction( signed )
         } yield {
@@ -188,10 +200,10 @@ object Invoker {
       data       : immutable.Seq[Byte]
     )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext ) : Future[immutable.Seq[Byte]] = {
       borrow( cfactory( icontext.jsonRpcUrl ) ) { client =>
-        val fGasPriceGas = gasPriceGas( client, from, to, valueInWei, data )
+        val fComputedGas = computedGas( client, from, to, valueInWei, data )
         for {
-          ( effectiveGasPrice, effectiveGas ) <- fGasPriceGas
-          outBytes <- client.eth.call( Some( from ), Some( to ), Some( effectiveGas ), Some( effectiveGasPrice ), Some( valueInWei.widen ), Some( data ) )
+          cg <- fComputedGas
+          outBytes <- client.eth.call( Some( from ), Some( to ), Some( cg.gasLimit ), Some( cg.gasPrice ), Some( valueInWei.widen ), Some( data ) )
         } yield {
           outBytes
         }
