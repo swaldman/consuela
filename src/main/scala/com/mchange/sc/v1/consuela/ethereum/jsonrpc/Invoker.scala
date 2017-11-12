@@ -65,13 +65,13 @@ object Invoker {
   private def computedGas(
     client     : Client,
     from       : EthAddress,
-    to         : EthAddress,
+    to         : Option[EthAddress],
     valueInWei : Unsigned256,
     data       : immutable.Seq[Byte]
   )(implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Future[ComputedGas] = {
 
     val fDefaultGasPrice = client.eth.gasPrice()
-    val fDefaultGas      = client.eth.estimateGas( Some( from ), Some( to ), None, None, Some( valueInWei.widen ), Some ( data ) );
+    val fDefaultGas      = client.eth.estimateGas( Some( from ), to, None, None, Some( valueInWei.widen ), Some ( data ) );
 
     for {
       defaultGasPrice <- fDefaultGasPrice
@@ -150,14 +150,14 @@ object Invoker {
 
         val from = senderSigner.address
 
-        val fComputedGas = computedGas( client, from, to, valueInWei, data )
+        val fComputedGas = computedGas( client, from, Some(to), valueInWei, data )
         val fNextNonce = client.eth.getTransactionCount( from, Client.BlockNumber.Pending )
 
         for {
           cg <- fComputedGas
           _ <- gasApprover(cg)
           nextNonce <- fNextNonce
-          unsigned = EthTransaction.Unsigned.Message( Unsigned256(nextNonce), Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), to, valueInWei, data )
+          unsigned = TRACE.logEval( "Message transaction" )( EthTransaction.Unsigned.Message( Unsigned256(nextNonce), Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), to, valueInWei, data ) )
           signed = unsigned.sign( senderSigner )
           hash <- client.eth.sendSignedTransaction( signed )
         } yield {
@@ -175,14 +175,14 @@ object Invoker {
 
         val from = creatorSigner.address
 
-        val fComputedGas = computedGas( client, from, EthAddress.Zero, valueInWei, init )
+        val fComputedGas = computedGas( client, from, None, valueInWei, init )
         val fNextNonce = client.eth.getTransactionCount( from, Client.BlockNumber.Pending )
 
         for {
           cg <- fComputedGas
           _ <- gasApprover(cg)
           nextNonce <- fNextNonce
-          unsigned = EthTransaction.Unsigned.ContractCreation( Unsigned256(nextNonce), Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), valueInWei, init )
+          unsigned = TRACE.logEval("Contract creation transaction")( EthTransaction.Unsigned.ContractCreation( Unsigned256(nextNonce), Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), valueInWei, init ) )
           signed = unsigned.sign( creatorSigner )
           hash <- client.eth.sendSignedTransaction( signed )
         } yield {
@@ -200,7 +200,7 @@ object Invoker {
       data       : immutable.Seq[Byte]
     )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext ) : Future[immutable.Seq[Byte]] = {
       borrow( cfactory( icontext.jsonRpcUrl ) ) { client =>
-        val fComputedGas = computedGas( client, from, to, valueInWei, data )
+        val fComputedGas = computedGas( client, from, Some(to), valueInWei, data )
         for {
           cg <- fComputedGas
           outBytes <- client.eth.call( Some( from ), Some( to ), Some( cg.gasLimit ), Some( cg.gasPrice ), Some( valueInWei.widen ), Some( data ) )
