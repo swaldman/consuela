@@ -36,9 +36,9 @@
 package com.mchange.sc.v1.consuela.ethereum;
 
 import com.mchange.sc.v1.consuela._;
-import encoding.Nibble;
+import encoding.{RLP,Nibble}
 
-import com.mchange.sc.v1.consuela.ethereum.specification.Types.ByteSeqExact20;
+import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact20, Unsigned256}
 
 object EthAddress {
   val ByteLength = 20;
@@ -52,6 +52,13 @@ object EthAddress {
   def apply( bytes : Array[Byte] ) : EthAddress = EthAddress( ByteSeqExact20( bytes ) )
 
   def apply( bytes : Seq[Byte] ) : EthAddress = EthAddress( ByteSeqExact20( bytes ) )
+
+  def forContract( creator : EthAddress, nonce : Unsigned256 ) : EthAddress = {  // see https://ethereum.stackexchange.com/questions/760/how-is-the-address-of-an-ethereum-contract-computed
+    val seq = RLP.Element.Seq.of( RLP.toElement(creator), RLP.toElement(nonce) )
+    val seqBytes = RLP.Element.encode( seq )
+    val hashBytes = EthHash.hash( seqBytes ).bytes
+    EthAddress( hashBytes.drop(12) )
+  }
 
   val Zero = EthAddress( ByteSeqExact20( Array.fill[Byte](20)(0.toByte) ) )
 
