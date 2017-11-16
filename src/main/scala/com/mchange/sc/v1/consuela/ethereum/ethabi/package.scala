@@ -80,8 +80,8 @@ package object ethabi {
             case Some( abiEvent ) => {
               val (indexed, nonIndexed ) = indexedNonindexed( abiEvent )
               for {
-                iencoders  <- encodersForAbiParameters( indexed )
-                ivalues    <- decodeIndexed( indexed, iencoders, log.topics )
+                iencoders  <- encodersForAbiParameters( indexed ) 
+                ivalues    <- decodeIndexed( indexed, iencoders, log.topics.tail ) // remember, the head (zeroeth) topic was the identifier
                 nivalues   <- decodeOutValues( nonIndexed, encodersForAbiParameters( nonIndexed ) )( log.data )
               }
               yield {
