@@ -37,6 +37,11 @@ package com.mchange.sc.v1.consuela.ethereum;
 
 import scala.collection._;
 
-import specification.Types.{ByteSeqExact32 => Topic}
+import specification.Types.ByteSeqExact32
 
-final case class EthLogEntry( address : EthAddress, topics : immutable.Seq[Topic], data : immutable.Seq[Byte] );
+object EthLogEntry {
+  type Topic = ByteSeqExact32
+  val  Topic = ByteSeqExact32
+}
+
+final case class EthLogEntry( address : EthAddress, topics : immutable.Seq[EthLogEntry.Topic], data : immutable.Seq[Byte] );
