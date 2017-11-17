@@ -1,5 +1,6 @@
 package com.mchange.sc.v1.consuela.ethereum.jsonrpc
 
+import com.mchange.sc.v1.consuela._
 import com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash,EthTransaction}
 import com.mchange.sc.v1.consuela.ethereum.encoding.RLP
 
@@ -31,6 +32,9 @@ object Client {
   }
   sealed abstract class BlockNumber( val jsValue : JsValue )
 
+  final class BlockFilter( val identifier : String ) extends AnyVal
+
+  val EmptyParams = Seq.empty[JsValue]
 
   trait eth {
     def call(
@@ -61,6 +65,9 @@ object Client {
     def getTransactionCount( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[BigInt]
     def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext )                     : Future[Option[ClientTransactionReceipt]]
 
+    def newBlockFilter()( implicit ec : ExecutionContext ) : Future[BlockFilter]
+    def getBlockFilterChanges( filter : BlockFilter )( implicit ec : ExecutionContext ) : Future[immutable.Seq[EthHash]]
+
     def sendRawTransaction( bytes : Seq[Byte] )( implicit ec : ExecutionContext ) : Future[EthHash]
 
     def sendSignedTransaction( signedTransaction : EthTransaction.Signed )( implicit ec : ExecutionContext ) : Future[EthHash]
@@ -81,7 +88,9 @@ object Client {
       exchanger.exchange( methodName, JsArray( params ) ).map( responseHandler( successHandler ) )
     }
 
-    val eth = new Client.eth {
+    val eth = ExchangerEth
+
+    final object ExchangerEth extends Client.eth {
 
       private def createTransactionCallObject(
         from     : Option[EthAddress] = None,
@@ -128,7 +137,7 @@ object Client {
         doExchange( "eth_estimateGas", Seq(txnCallObject) )( extractBigInt )
       }
       def gasPrice()( implicit ec : ExecutionContext ) : Future[BigInt] = {
-        doExchange( "eth_gasPrice", Seq() )( extractBigInt )
+        doExchange( "eth_gasPrice", EmptyParams )( extractBigInt )
       }
       def getBalance( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[BigInt] = {
         doExchange( "eth_getBalance", Seq( encodeAddress( address ), blockNumber.jsValue ) )( extractBigInt )
@@ -137,7 +146,7 @@ object Client {
         doExchange( "eth_getCode", Seq( encodeAddress( address ), blockNumber.jsValue ) )( resp => decodeBytes( resp.result.as[String] ) )
       }
       def getCompilers()( implicit ec : ExecutionContext ) : Future[immutable.Set[String]] = {
-        doExchange( "eth_getCompilers", Seq() )( _.result.as[immutable.Set[String]] )
+        doExchange( "eth_getCompilers", EmptyParams )( _.result.as[immutable.Set[String]] )
       }
       def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext ) : Future[Option[ClientTransactionReceipt]] = {
         doExchange( "eth_getTransactionReceipt", Seq( encodeBytes( transactionHash.bytes ) ) )( _.result.as[Option[ClientTransactionReceipt]] )
@@ -152,6 +161,12 @@ object Client {
       }
       def getTransactionCount( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[BigInt] = {
         doExchange( "eth_getTransactionCount", Seq( encodeAddress( address ), blockNumber.jsValue ) )( extractBigInt )
+      }
+      def newBlockFilter()( implicit ec : ExecutionContext ) : Future[BlockFilter] = {
+        doExchange( "eth_newBlockFilter", EmptyParams )( success => new BlockFilter( success.result.as[String] ) )
+      }
+      def getBlockFilterChanges( filter : BlockFilter )( implicit ec : ExecutionContext ) : Future[immutable.IndexedSeq[EthHash]] = {
+        doExchange( "eth_getFilterChanges", Seq( JsString(filter.identifier) ) )( success =>  success.result.as[immutable.IndexedSeq[JsValue]].map( jss => EthHash.withBytes( jss.as[String].decodeHex ) ) )
       }
     }
 
