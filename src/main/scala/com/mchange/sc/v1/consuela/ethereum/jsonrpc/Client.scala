@@ -64,13 +64,11 @@ object Client {
     def getCompilers()( implicit ec : ExecutionContext )                                                         : Future[immutable.Set[String]]
     def getTransactionCount( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[BigInt]
     def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext )                     : Future[Option[ClientTransactionReceipt]]
-
-    def newBlockFilter()( implicit ec : ExecutionContext ) : Future[BlockFilter]
-    def getBlockFilterChanges( filter : BlockFilter )( implicit ec : ExecutionContext ) : Future[immutable.Seq[EthHash]]
-
-    def sendRawTransaction( bytes : Seq[Byte] )( implicit ec : ExecutionContext ) : Future[EthHash]
-
-    def sendSignedTransaction( signedTransaction : EthTransaction.Signed )( implicit ec : ExecutionContext ) : Future[EthHash]
+    def getBlockFilterChanges( filter : BlockFilter )( implicit ec : ExecutionContext )                          : Future[immutable.Seq[EthHash]]
+    def newBlockFilter()( implicit ec : ExecutionContext )                                                       : Future[BlockFilter]
+    def sendRawTransaction( bytes : Seq[Byte] )( implicit ec : ExecutionContext )                                : Future[EthHash]
+    def sendSignedTransaction( signedTransaction : EthTransaction.Signed )( implicit ec : ExecutionContext )     : Future[EthHash]
+    def uninstallFilter( blockFilter : BlockFilter )( implicit ec : ExecutionContext )                           : Future[Boolean]
   }
 
   class forExchanger( exchanger : Exchanger ) extends Client {
@@ -87,8 +85,6 @@ object Client {
       TRACE.log( s"methodName = ${methodName}; params = ${params}" )
       exchanger.exchange( methodName, JsArray( params ) ).map( responseHandler( successHandler ) )
     }
-
-    val eth = ExchangerEth
 
     final object ExchangerEth extends Client.eth {
 
@@ -168,7 +164,13 @@ object Client {
       def getBlockFilterChanges( filter : BlockFilter )( implicit ec : ExecutionContext ) : Future[immutable.IndexedSeq[EthHash]] = {
         doExchange( "eth_getFilterChanges", Seq( JsString(filter.identifier) ) )( success =>  success.result.as[immutable.IndexedSeq[JsValue]].map( jss => EthHash.withBytes( jss.as[String].decodeHex ) ) )
       }
+      private def _uninstallFilter( identifier : String )( implicit ec : ExecutionContext ) : Future[Boolean] = {
+        doExchange( "eth_uinstallFilter", Seq( JsString(identifier) ) )( success =>  success.result.as[Boolean] )
+      }
+      def uninstallFilter( blockFilter : BlockFilter )( implicit ec : ExecutionContext ) : Future[Boolean] = _uninstallFilter( blockFilter.identifier )( ec )
     }
+
+    val eth = ExchangerEth
 
     def close() = exchanger.close()
   }
