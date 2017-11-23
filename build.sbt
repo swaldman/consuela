@@ -39,10 +39,11 @@ libraryDependencies ++= Seq(
   "com.mchange"             %% "mlog-scala"                      % "0.3.10",
   "com.mchange"             %% "restricted-type"                 % restrictedTypeVersion,
   "com.mchange"             %% "yinyang"                         % "0.0.2",
-  "com.mchange"             %% "mchange-commons-scala"           % "0.4.3",
+  "com.mchange"             %% "mchange-commons-scala"           % "0.4.4-SNAPSHOT" changing(),
   "com.mchange"             %% "literal"                         % "0.0.2",
   "com.mchange"             %% "mchange-play-json-util"          % "0.0.1",
   "com.mchange"             %% "jsonrpc-client"                  % "0.0.1",
+  "org.reactivestreams"     %  "reactive-streams"                % "1.0.1",
   "com.typesafe"            %  "config"                          % "1.2.1",
   "org.bouncycastle"        %  "bcprov-jdk15on"                  % "1.54",
   "com.madgag.spongycastle" %  "prov"                            % "1.54.0.0"            % "compile,optional", //only necessary on android
