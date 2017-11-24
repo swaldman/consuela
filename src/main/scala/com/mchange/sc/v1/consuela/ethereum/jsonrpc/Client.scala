@@ -32,7 +32,10 @@ object Client {
   }
   sealed abstract class BlockNumber( val jsValue : JsValue )
 
-  final class BlockFilter( val identifier : String ) extends AnyVal
+  sealed trait Filter {
+    def identifier : String
+  }
+  final class BlockFilter( val identifier : String ) extends Filter
 
   val EmptyParams = Seq.empty[JsValue]
 
@@ -68,7 +71,7 @@ object Client {
     def newBlockFilter()( implicit ec : ExecutionContext )                                                       : Future[BlockFilter]
     def sendRawTransaction( bytes : Seq[Byte] )( implicit ec : ExecutionContext )                                : Future[EthHash]
     def sendSignedTransaction( signedTransaction : EthTransaction.Signed )( implicit ec : ExecutionContext )     : Future[EthHash]
-    def uninstallFilter( blockFilter : BlockFilter )( implicit ec : ExecutionContext )                           : Future[Boolean]
+    def uninstallFilter( filter : Filter )( implicit ec : ExecutionContext )                                     : Future[Boolean]
   }
 
   class forExchanger( exchanger : Exchanger ) extends Client {
@@ -164,10 +167,9 @@ object Client {
       def getBlockFilterChanges( filter : BlockFilter )( implicit ec : ExecutionContext ) : Future[immutable.IndexedSeq[EthHash]] = {
         doExchange( "eth_getFilterChanges", Seq( JsString(filter.identifier) ) )( success =>  success.result.as[immutable.IndexedSeq[JsValue]].map( jss => EthHash.withBytes( jss.as[String].decodeHex ) ) )
       }
-      private def _uninstallFilter( identifier : String )( implicit ec : ExecutionContext ) : Future[Boolean] = {
-        doExchange( "eth_uinstallFilter", Seq( JsString(identifier) ) )( success =>  success.result.as[Boolean] )
+      def uninstallFilter( filter : Filter )( implicit ec : ExecutionContext ) : Future[Boolean] = {
+        doExchange( "eth_uinstallFilter", Seq( JsString( filter.identifier ) ) )( success =>  success.result.as[Boolean] )
       }
-      def uninstallFilter( blockFilter : BlockFilter )( implicit ec : ExecutionContext ) : Future[Boolean] = _uninstallFilter( blockFilter.identifier )( ec )
     }
 
     val eth = ExchangerEth
