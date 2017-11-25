@@ -1,7 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum.jsonrpc
 
 import com.mchange.sc.v1.consuela._
-import com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash,EthTransaction}
+import com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash,EthLogEntry,EthTransaction}
 import com.mchange.sc.v1.consuela.ethereum.encoding.RLP
 
 import com.mchange.sc.v2.jsonrpc._
@@ -37,6 +37,45 @@ object Client {
   }
   final class BlockFilter( val identifier : String ) extends Filter
 
+  final object LogFilter {
+    object TopicRestriction {
+      final case class  Exact( topic : EthLogEntry.Topic   ) extends TopicRestriction {
+        val jsValue = encodeBytes( topic.widen )
+      }
+      final case class  AnyOf( topics : EthLogEntry.Topic* ) extends TopicRestriction {
+        val jsValue = JsArray( topics.map( topic => encodeBytes( topic.widen ) ) )
+      }
+      final case object Any extends TopicRestriction {
+        val jsValue = JsNull
+      }
+    }
+    sealed trait TopicRestriction {
+      def jsValue : JsValue
+    }
+    final case class Query(
+      address       : Option[EthAddress],
+      fromBlock     : BlockNumber = BlockNumber.Latest,
+      toBlock       : BlockNumber = BlockNumber.Latest,
+      restriction_1 : TopicRestriction = TopicRestriction.Any,
+      restriction_2 : TopicRestriction = TopicRestriction.Any,
+      restriction_3 : TopicRestriction = TopicRestriction.Any,
+      restriction_4 : TopicRestriction = TopicRestriction.Any
+    ) {
+      def jsValue = {
+        val fields = {
+          val always = immutable.Seq(
+            "fromBlock" -> fromBlock.jsValue,
+            "toBlock"   -> toBlock.jsValue,
+            "topics"    -> JsArray( restriction_1.jsValue :: restriction_2.jsValue :: restriction_3.jsValue :: restriction_4.jsValue :: Nil )
+          )
+          address.fold( always )( a => always :+ ("address" -> encodeBytes( a.bytes.widen )) )
+        }
+        JsObject( fields )
+      }
+    }
+  }
+  final class LogFilter( val identifier : String ) extends Filter
+
   val EmptyParams = Seq.empty[JsValue]
 
   trait eth {
@@ -69,6 +108,7 @@ object Client {
     def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext )                     : Future[Option[ClientTransactionReceipt]]
     def getBlockFilterChanges( filter : BlockFilter )( implicit ec : ExecutionContext )                          : Future[immutable.Seq[EthHash]]
     def newBlockFilter()( implicit ec : ExecutionContext )                                                       : Future[BlockFilter]
+    def newLogFilter( query : LogFilter.Query )( implicit ec : ExecutionContext )                                : Future[LogFilter]
     def sendRawTransaction( bytes : Seq[Byte] )( implicit ec : ExecutionContext )                                : Future[EthHash]
     def sendSignedTransaction( signedTransaction : EthTransaction.Signed )( implicit ec : ExecutionContext )     : Future[EthHash]
     def uninstallFilter( filter : Filter )( implicit ec : ExecutionContext )                                     : Future[Boolean]
@@ -163,6 +203,9 @@ object Client {
       }
       def newBlockFilter()( implicit ec : ExecutionContext ) : Future[BlockFilter] = {
         doExchange( "eth_newBlockFilter", EmptyParams )( success => new BlockFilter( success.result.as[String] ) )
+      }
+      def newLogFilter( query : LogFilter.Query )( implicit ec : ExecutionContext ) : Future[LogFilter] = {
+        doExchange( "eth_newFilter", Seq( query.jsValue ) )( success => new LogFilter( success.result.as[String] ) )
       }
       def getBlockFilterChanges( filter : BlockFilter )( implicit ec : ExecutionContext ) : Future[immutable.IndexedSeq[EthHash]] = {
         doExchange( "eth_getFilterChanges", Seq( JsString(filter.identifier) ) )( success =>  success.result.as[immutable.IndexedSeq[JsValue]].map( jss => EthHash.withBytes( jss.as[String].decodeHex ) ) )
