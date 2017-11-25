@@ -1,17 +1,13 @@
 package com.mchange.sc.v1.consuela.ethereum
 
-
-import com.mchange.sc.v1.consuela._
-
-import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact32,Unsigned256}
-
-import scala.collection._
-
-import scala.util.control.NonFatal
-
 import play.api.libs.json._
 
+import com.mchange.sc.v1.consuela._
+import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact32,Unsigned256}
 import com.mchange.sc.v2.playjson._
+
+import scala.collection._
+import scala.util.control.NonFatal
 
 package object jsonrpc {
 
@@ -32,7 +28,17 @@ package object jsonrpc {
 
   private[jsonrpc] def encodeAddress( address : EthAddress ) : JsString = encodeBytes( address.bytes.widen )
 
-  final object Compilation {
+  trait MaybeEmpty {
+    def isEmpty : Boolean
+  }
+
+  /**
+    * A Compilation is just a mapping of String -> Compilation.Contract. We define this as a type
+    * definition, in the package object (package.scala), rather than as a separate file, because Scala does not
+    * permit top-level type declarations, they must be in a class, trait, or object (but package
+    * objects are fine.
+    */ 
+  object Compilation {
 
     def opt( str : String ) : Option[String] = if( str.trim == "" ) None else Some( str )
 
@@ -41,6 +47,22 @@ package object jsonrpc {
     def optStr[T <: MaybeEmpty : Format ]( t : T ) : Option[String] = if ( t.isEmpty ) None else Some( str( t ) )
 
     def opt[T <: MaybeEmpty : Format ]( t : T ) : Option[T] = if ( t.isEmpty ) None else Some( t )
+
+    final object Doc {
+      final object User {
+        final case class MethodInfo( notice : Option[String] )
+      }
+      final case class User( methods : Option[immutable.Map[String,User.MethodInfo]] ) extends MaybeEmpty {
+        def isEmpty : Boolean = methods.isEmpty || methods.get.isEmpty
+      }
+
+      final object Developer {
+        final case class MethodInfo( details : Option[String], params : Option[immutable.Map[String,String]] )
+      }
+      final case class Developer( title : Option[String], methods : Option[immutable.Map[String, Developer.MethodInfo]] ) extends MaybeEmpty {
+        def isEmpty : Boolean = title.isEmpty && ( methods.isEmpty || methods.get.isEmpty )
+      }
+    }
 
     final object Contract {
 
@@ -79,65 +101,6 @@ package object jsonrpc {
     final case class Contract( code : String, info : Contract.Info )
   }
   type Compilation = immutable.Map[String,Compilation.Contract]
-
-  trait MaybeEmpty {
-    def isEmpty : Boolean
-  }
-
-  final object Abi {
-    def apply( json : String ) : Abi = Json.parse( json ).as[Abi]
-    val empty = Abi( immutable.Seq.empty, immutable.Seq.empty, immutable.Seq.empty, None )
-
-    final object Function {
-      case class Parameter( name : String, `type` : String ) extends Abi.Parameter
-    }
-    final case class Function( name : String, inputs : immutable.Seq[Function.Parameter], outputs : immutable.Seq[Function.Parameter], constant : Boolean, payable : Boolean, stateMutability : String )
-
-    final object Constructor {
-      val noArgNoEffect = Constructor( Nil, false, "pure" )
-      case class Parameter( name : String, `type` : String ) extends Abi.Parameter
-    }
-    final case class Constructor( inputs : immutable.Seq[Function.Parameter], payable : Boolean, stateMutability : String )
-
-    final object Event {
-      final case class Parameter( name : String, `type` : String, indexed : Boolean ) extends Abi.Parameter
-    }
-    final case class Event( name : String, inputs : immutable.Seq[Event.Parameter], anonymous : Boolean )
-
-    final case class Fallback( payable : Boolean, stateMutability : String ) {
-      def this( payable : Boolean ) = this( payable, if (payable) "payable" else "nonpayable" )
-    }
-
-    sealed trait Parameter {
-      val name : String
-      val `type`  : String
-      def tpe = `type`
-    }
-  }
-  final case class Abi(
-    functions : immutable.Seq[Abi.Function],
-    events : immutable.Seq[Abi.Event],
-    constructors : immutable.Seq[Abi.Constructor],
-    fallback : Option[Abi.Fallback]
-  ) extends MaybeEmpty {
-    def isEmpty : Boolean = functions.isEmpty && events.isEmpty && constructors.isEmpty
-  }
-
-  final object Doc {
-    final object User {
-      final case class MethodInfo( notice : Option[String] )
-    }
-    final case class User( methods : Option[immutable.Map[String,User.MethodInfo]] ) extends MaybeEmpty {
-      def isEmpty : Boolean = methods.isEmpty || methods.get.isEmpty
-    }
-
-    final object Developer {
-      final case class MethodInfo( details : Option[String], params : Option[immutable.Map[String,String]] )
-    }
-    final case class Developer( title : Option[String], methods : Option[immutable.Map[String, Developer.MethodInfo]] ) extends MaybeEmpty {
-      def isEmpty : Boolean = title.isEmpty && ( methods.isEmpty || methods.get.isEmpty )
-    }
-  }
 
   /*
    *  The defaults here are meant to fill in for attributes not emitted by earlier versions of the solidity compiler.
@@ -238,10 +201,10 @@ package object jsonrpc {
   implicit val AbiConstructorFormat          = rd( "inputs" -> None, "payable" -> DefaultTrue, "stateMutability" -> DefaultPayable, "type" -> None )( Json.format[Abi.Constructor]           )
   implicit val AbiFallbackFormat             = rd( "payable" -> DefaultTrue, "stateMutability" -> DefaultPayable, "type" -> None )                  ( Json.format[Abi.Fallback]              )
 
-  implicit val UserMethodInfoFormat          = Json.format[Doc.User.MethodInfo]
-  implicit val DeveloperMethodInfoFormat     = Json.format[Doc.Developer.MethodInfo]
-  implicit val UserDocFormat                 = Json.format[Doc.User]
-  implicit val DeveloperDocFormat            = Json.format[Doc.Developer]
+  implicit val UserMethodInfoFormat          = Json.format[Compilation.Doc.User.MethodInfo]
+  implicit val DeveloperMethodInfoFormat     = Json.format[Compilation.Doc.Developer.MethodInfo]
+  implicit val UserDocFormat                 = Json.format[Compilation.Doc.User]
+  implicit val DeveloperDocFormat            = Json.format[Compilation.Doc.Developer]
 
   // these we'll have to do ourselves
   implicit val AbiFormat : Format[Abi] = new Format[Abi] {
@@ -252,7 +215,7 @@ package object jsonrpc {
             def accumulate(
               tuple : Tuple5[List[JsValue],List[JsValue],List[JsValue],Option[JsValue],Option[String]],
               elem : JsValue
-            ) : Tuple5[List[JsValue],List[JsValue],List[JsValue],Option[JsValue],Option[String]] = { 
+            ) : Tuple5[List[JsValue],List[JsValue],List[JsValue],Option[JsValue],Option[String]] = {
               val ( fs, es, cs, fb, m ) = tuple
               m match {
                 case Some( _ ) => ( fs, es, cs, fb, m )
@@ -315,7 +278,7 @@ package object jsonrpc {
       }
     }
     def writes( definition : immutable.Map[String,Compilation.Contract] ) : JsValue = {
-      JsObject( definition.map{ case ( k , v ) => ( k , Json.toJson(v) ) } ) 
+      JsObject( definition.map{ case ( k , v ) => ( k , Json.toJson(v) ) } )
     }
   }
   implicit val EthLogEntryFormat = new Format[EthLogEntry] {
