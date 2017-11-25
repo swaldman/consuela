@@ -30,13 +30,15 @@ object SimplePublisher {
 abstract class SimplePublisher[T, F <: Filter]( ethJsonRpcUrl : String, blockPollDelay : Duration = 3.seconds, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
   cfactory                 : Client.Factory   = Client.Factory.Default,
   scheduler                : Scheduler        = Scheduler.Default,
-  executionContext         : ExecutionContext = ExecutionContext.global
+  executionContext         : ExecutionContext = ExecutionContext.global // XXX: SHould we reorganize so that by default we use the Scheduler's thread pool?
 ) extends Publisher[T] {
 
   import SimplePublisher.logger
 
   protected def acquireFilter( client : Client )          : Future[F]
   protected def getChanges( client : Client, filter : F ) : Future[immutable.Seq[T]]
+
+  protected def isTerminating( items : immutable.Seq[T] ) : Boolean = false
 
   protected def cancelFilter( client : Client, filter : F ) : Future[_] = {
     client.eth.uninstallFilter( filter )
@@ -114,19 +116,45 @@ abstract class SimplePublisher[T, F <: Filter]( ethJsonRpcUrl : String, blockPol
 
   class Subscription( subscriber : Subscriber[_ >: T] ) extends RxSubscription {
 
-    //MT: Protected by this' lock
+    // MT: Protected by this' lock
     private var active = true
+    private var terminated = false // this means we still have buffered items to signal, but we've received a logical termination and will accept no more
     private var requested : Long = 0
     private val q = mutable.Queue.empty[T]
 
-    private def update() : Unit = {
+    // MT: should be called only by blocks synchronized on this' lock
+    def readyToPublish = requested > 0 && q.nonEmpty
+    def readyToComplete = q.isEmpty && terminated
+
+    // start the update process...
+    Future( updateSubscriber() )
+
+    // note that we take care not to interact with subscribers while holding this' lock
+    // as this would permit a bad subscriber from holding up the publisher's attempts to
+    // enqueue
+    //
+    // we don't use a repeating schedule, so there is no risk that a slow subscriber could
+    // cause updates to pile up and be concurrent to the subscriber and/or out of order
+
+    private def updateSubscriber() : Unit = {
       try {
+        val tmpQ = mutable.Queue.empty[T] // local to this methods, so we can interact without syncing
         this.synchronized {
-          while ( requested > 0 && q.nonEmpty ) {
-            subscriber.onNext( q.dequeue )
+          while ( active && readyToPublish ) {
+            tmpQ.enqueue( q.dequeue )
             requested -= 1
           }
         }
+        tmpQ.foreach( subscriber.onNext( _ ) )
+        val shouldComplete = this.synchronized {
+          active && readyToComplete
+        }
+        if ( shouldComplete ) {
+          subscriber.onComplete()
+          this.cancel()
+        }
+        val again = this.synchronized { active }
+        if ( again ) rescheduleUpdate()
       }
       catch {
         case t : Throwable => {
@@ -136,14 +164,22 @@ abstract class SimplePublisher[T, F <: Filter]( ethJsonRpcUrl : String, blockPol
       }
     }
 
-    private val scheduled = scheduler.scheduleWithFixedDelay( update _, 0.seconds, subscriptionUpdateDelay )
-
-    private [SimplePublisher] def enqueue( next : T ) = this.synchronized {
-      if ( active ) q.enqueue( next )
+    private def rescheduleUpdate() : Unit = {
+      scheduler.schedule( updateSubscriber _, subscriptionUpdateDelay )
     }
 
-    private [SimplePublisher] def enqueue( nexts : Seq[T] ) = this.synchronized {
-      if ( active ) nexts.foreach( q.enqueue( _ ) )
+    private [SimplePublisher] def enqueue( nexts : immutable.Seq[T] ) = this.synchronized {
+      if ( active ) {
+        if (! terminated ) { // not previously terminated!
+          nexts.foreach( q.enqueue( _ ) )
+          if ( isTerminating( nexts ) ) {
+            this.terminated = true
+          }
+        }
+        else {
+          WARNING.log( "Received items after this publisher has been marked terminated. This is probably a bug in the definition of the publisher! Ignoring items." )
+        }
+      }
     }
 
     def request( n : Long ) : Unit = this.synchronized {
@@ -158,15 +194,10 @@ abstract class SimplePublisher[T, F <: Filter]( ethJsonRpcUrl : String, blockPol
     }
 
     def cancel() = {
-      try {
-        this.synchronized {
-          this.active = false
-        }
-        removeSubscription( this )
+      this.synchronized {
+        this.active = false
       }
-      finally {
-        scheduled.attemptCancel()
-      }
+      SimplePublisher.this.removeSubscription( this )
     }
   }
 }
