@@ -3,6 +3,7 @@ package com.mchange.sc.v1.consuela.ethereum.jsonrpc
 import com.mchange.sc.v1.consuela._
 import com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash,EthLogEntry,EthTransaction}
 import com.mchange.sc.v1.consuela.ethereum.encoding.RLP
+import com.mchange.sc.v1.consuela.ethereum.specification.Types.Unsigned256
 
 import com.mchange.sc.v2.jsonrpc._
 import jetty.JettyExchanger
@@ -75,6 +76,21 @@ object Client {
     }
   }
   final class LogFilter( val identifier : String ) extends Filter
+
+  private object RawLog {
+    implicit val RawLogFormat = Json.format[RawLog]
+  }
+  private final case class RawLog(
+    removed          : Boolean,
+    logIndex         : Option[Unsigned256],
+    transactionIndex : Option[Unsigned256],
+    transactionHash  : Option[EthHash],
+    blockHash        : Option[EthHash],
+    blockNumber      : Option[Unsigned256],
+    address          : EthAddress,
+    data             : immutable.Seq[Byte],
+    topics           : immutable.Seq[immutable.Seq[Byte]]
+  )
 
   val EmptyParams = Seq.empty[JsValue]
 

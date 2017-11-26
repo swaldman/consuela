@@ -347,6 +347,17 @@ package object jsonrpc {
   }
   implicit val ClientTransactionReceiptFormat = Json.format[ClientTransactionReceipt]
 
+  implicit val ByteDataFormat = new Format[immutable.Seq[Byte]] {
+    def reads( jsv : JsValue ) : JsResult[immutable.Seq[Byte]] = {
+      try {
+        JsSuccess( decodeBytes( jsv.as[String] ) )
+      } catch {
+        case NonFatal( t ) => JsError( t.toString() )
+      }
+    }
+    def writes( data : immutable.Seq[Byte] ) : JsValue = encodeBytes( data )
+  }
+
   class OptionFormat[T : Format] extends Format[Option[T]] {
     def reads( jsv : JsValue ) : JsResult[Option[T]] = {
       try {
