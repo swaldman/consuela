@@ -3,7 +3,7 @@ package com.mchange.sc.v1.consuela.ethereum.jsonrpc
 import com.mchange.sc.v1.consuela._
 import com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash,EthLogEntry,EthTransaction}
 import com.mchange.sc.v1.consuela.ethereum.encoding.RLP
-import com.mchange.sc.v1.consuela.ethereum.specification.Types.Unsigned256
+import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact32,Unsigned256}
 
 import com.mchange.sc.v2.jsonrpc._
 import jetty.JettyExchanger
@@ -89,8 +89,67 @@ object Client {
     blockNumber      : Option[Unsigned256],
     address          : EthAddress,
     data             : immutable.Seq[Byte],
-    topics           : immutable.Seq[immutable.Seq[Byte]]
+    topics           : immutable.IndexedSeq[ByteSeqExact32]
   )
+
+  object Log {
+    def apply( rl : RawLog ) : Log = {
+      val optionals = immutable.Seq.apply[Option[Any]]( rl.logIndex, rl.transactionIndex, rl.transactionHash, rl.blockHash, rl.blockNumber )
+      val looksPending  = optionals.forall( _.isEmpty )
+      val looksRecorded = optionals.forall( _.nonEmpty )
+
+      ( looksPending, looksRecorded, rl.removed ) match {
+        case ( true, false, false ) => Pending( rl.address, rl.data, rl.topics )
+        case ( true, false, true ) => Removed( rl.address, rl.data, rl.topics )
+        case ( false, true, false ) => {
+          Recorded(
+            logIndex = rl.logIndex.get,
+            transactionIndex = rl.transactionIndex.get,
+            transactionHash = rl.transactionHash.get,
+            blockHash = rl.blockHash.get,
+            blockNumber = rl.blockNumber.get,
+            address = rl.address,
+            data = rl.data,
+            topics = rl.topics
+          )
+        }
+        case ( false, true, true ) => {
+          WARNING.log( s"${rl} is a removed log entry from a block with full block information. Perhaps we should redefine (or bifurcate) Client.Log.Pending" )
+          Pending( rl.address, rl.data, rl.topics )
+        }
+        case ( true, true, _ ) | ( false, false, _ ) => throw new InternalError( s"${optionals} can't both be nonEmpty and empty at the same time. Should never happen." )
+      }
+    }
+    final case class Pending (
+      val address : EthAddress,
+      val data    : immutable.Seq[Byte],
+      val topics  : immutable.IndexedSeq[ByteSeqExact32]
+    ) extends Log
+
+    final case class Removed (
+      val address : EthAddress,
+      val data    : immutable.Seq[Byte],
+      val topics  : immutable.IndexedSeq[ByteSeqExact32]
+    ) extends Log
+
+    final case class Recorded (
+      logIndex         : Unsigned256,
+      transactionIndex : Unsigned256,
+      transactionHash  : EthHash,
+      blockHash        : EthHash,
+      blockNumber      : Unsigned256,
+      address          : EthAddress,
+      data             : immutable.Seq[Byte],
+      topics           : immutable.IndexedSeq[ByteSeqExact32]
+    ) extends Log
+  }
+  sealed trait Log {
+    def address : EthAddress
+    def data    : immutable.Seq[Byte]
+    def topics  : immutable.IndexedSeq[ByteSeqExact32]
+  }
+
+
 
   val EmptyParams = Seq.empty[JsValue]
 

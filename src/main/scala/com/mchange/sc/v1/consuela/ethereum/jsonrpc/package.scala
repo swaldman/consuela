@@ -358,6 +358,20 @@ package object jsonrpc {
     def writes( data : immutable.Seq[Byte] ) : JsValue = encodeBytes( data )
   }
 
+  // See EthLogEntry.Topic
+  implicit val TopicsFormat = new Format[immutable.IndexedSeq[ByteSeqExact32]] {
+    def reads( jsv : JsValue ) : JsResult[immutable.IndexedSeq[ByteSeqExact32]] = {
+      try {
+        JsSuccess( jsv.as[JsArray].value.toVector.map( elem => ByteSeqExact32( decodeBytes( elem.as[String] ) ) ) )
+      }
+      catch {
+        case NonFatal( t ) => JsError( t.toString() )
+      }
+    }
+    def writes( data : immutable.IndexedSeq[ByteSeqExact32] ) : JsValue = JsArray( data.map( bse => encodeBytes(bse.widen) ) )
+  }
+
+
   class OptionFormat[T : Format] extends Format[Option[T]] {
     def reads( jsv : JsValue ) : JsResult[Option[T]] = {
       try {
