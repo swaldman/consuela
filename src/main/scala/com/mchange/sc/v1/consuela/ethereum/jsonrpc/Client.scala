@@ -98,9 +98,11 @@ object Client {
       val looksPending  = optionals.forall( _.isEmpty )
       val looksRecorded = optionals.forall( _.nonEmpty )
 
+      val ele = EthLogEntry( rl.address, rl.topics, rl.data )
+
       ( looksPending, looksRecorded, rl.removed ) match {
-        case ( true, false, false ) => Pending( rl.address, rl.data, rl.topics )
-        case ( true, false, true ) => Removed( rl.address, rl.data, rl.topics )
+        case ( true, false, false ) => Pending( ele )
+        case ( true, false, true )  => Removed( ele )
         case ( false, true, false ) => {
           Recorded(
             logIndex = rl.logIndex.get,
@@ -108,45 +110,35 @@ object Client {
             transactionHash = rl.transactionHash.get,
             blockHash = rl.blockHash.get,
             blockNumber = rl.blockNumber.get,
-            address = rl.address,
-            data = rl.data,
-            topics = rl.topics
+            ethLogEntry = ele 
           )
         }
         case ( false, true, true ) => {
           WARNING.log( s"${rl} is a removed log entry from a block with full block information. Perhaps we should redefine (or bifurcate) Client.Log.Pending" )
-          Pending( rl.address, rl.data, rl.topics )
+          Pending( ele )
         }
         case ( true, true, _ ) | ( false, false, _ ) => throw new InternalError( s"${optionals} can't both be nonEmpty and empty at the same time. Should never happen." )
       }
     }
     final case class Pending (
-      val address : EthAddress,
-      val data    : immutable.Seq[Byte],
-      val topics  : immutable.IndexedSeq[ByteSeqExact32]
+      val ethLogEntry : EthLogEntry
     ) extends Log
 
     final case class Removed (
-      val address : EthAddress,
-      val data    : immutable.Seq[Byte],
-      val topics  : immutable.IndexedSeq[ByteSeqExact32]
+      val ethLogEntry : EthLogEntry
     ) extends Log
 
     final case class Recorded (
-      logIndex         : Unsigned256,
-      transactionIndex : Unsigned256,
-      transactionHash  : EthHash,
-      blockHash        : EthHash,
-      blockNumber      : Unsigned256,
-      address          : EthAddress,
-      data             : immutable.Seq[Byte],
-      topics           : immutable.IndexedSeq[ByteSeqExact32]
+      val logIndex         : Unsigned256,
+      val transactionIndex : Unsigned256,
+      val transactionHash  : EthHash,
+      val blockHash        : EthHash,
+      val blockNumber      : Unsigned256,
+      val ethLogEntry      : EthLogEntry
     ) extends Log
   }
   sealed trait Log {
-    def address : EthAddress
-    def data    : immutable.Seq[Byte]
-    def topics  : immutable.IndexedSeq[ByteSeqExact32]
+    def ethLogEntry : EthLogEntry
   }
 
 
