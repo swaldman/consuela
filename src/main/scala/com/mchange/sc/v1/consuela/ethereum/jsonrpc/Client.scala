@@ -141,8 +141,6 @@ object Client {
     def ethLogEntry : EthLogEntry
   }
 
-
-
   val EmptyParams = Seq.empty[JsValue]
 
   trait eth {
@@ -171,6 +169,9 @@ object Client {
     def getBalance( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext )          : Future[BigInt]
     def getCode( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext )             : Future[immutable.Seq[Byte]]
     def getCompilers()( implicit ec : ExecutionContext )                                                         : Future[immutable.Set[String]]
+    def getLogs( query : LogFilter.Query )( implicit ec : ExecutionContext )                                     : Future[immutable.Seq[Client.Log]]
+    def getLogs( filter : LogFilter )( implicit ec : ExecutionContext )                                          : Future[immutable.Seq[Client.Log]]
+    def getNewLogs( filter : LogFilter )( implicit ec : ExecutionContext )                                       : Future[immutable.Seq[Client.Log]]
     def getTransactionCount( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[BigInt]
     def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext )                     : Future[Option[ClientTransactionReceipt]]
     def getBlockFilterChanges( filter : BlockFilter )( implicit ec : ExecutionContext )                          : Future[immutable.Seq[EthHash]]
@@ -253,6 +254,15 @@ object Client {
       }
       def getCompilers()( implicit ec : ExecutionContext ) : Future[immutable.Set[String]] = {
         doExchange( "eth_getCompilers", EmptyParams )( _.result.as[immutable.Set[String]] )
+      }
+      def getLogs( query : LogFilter.Query )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Client.Log]] = {
+        doExchange( "eth_getLogs", Seq( query.jsValue ) )( _.result.as[immutable.Seq[RawLog]].map( Client.Log.apply ) )
+      }
+      def getLogs( filter : LogFilter )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Client.Log]] = {
+        doExchange( "eth_getFilterLogs", Seq( JsString(filter.identifier) ) )( _.result.as[immutable.Seq[RawLog]].map( Client.Log.apply ) )
+      }
+      def getNewLogs( filter : LogFilter )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Client.Log]] = {
+        doExchange( "eth_getFilterChanges", Seq( JsString(filter.identifier) ) )( _.result.as[immutable.Seq[RawLog]].map( Client.Log.apply ) )
       }
       def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext ) : Future[Option[ClientTransactionReceipt]] = {
         doExchange( "eth_getTransactionReceipt", Seq( encodeBytes( transactionHash.bytes ) ) )( _.result.as[Option[ClientTransactionReceipt]] )
