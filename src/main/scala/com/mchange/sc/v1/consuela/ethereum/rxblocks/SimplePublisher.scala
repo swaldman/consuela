@@ -14,7 +14,7 @@ import org.reactivestreams.{Publisher, Subscriber, Subscription => RxSubscriptio
 import scala.collection._
 import scala.concurrent.{ExecutionContext,Future}
 import scala.concurrent.duration._
-
+import scala.util.Failure
 
 /**
   * Unless the chosen filter supports a "fromBlock", there is no way to control precisely at what
@@ -25,7 +25,9 @@ import scala.concurrent.duration._
   * Fortunately, the most important filters (log filters) do support "fromBlock"
   */
 object SimplePublisher {
-  private [rxblocks] implicit lazy val logger = mlogger( this )
+  private [SimplePublisher] implicit lazy val logger = mlogger( this )
+
+  final case class Transformed[T]( items : immutable.Seq[T], shouldTerminate : Boolean ) // we don't make inner because of annoying outer reference issues and warnings
 }
 abstract class SimplePublisher[T, F <: Filter]( ethJsonRpcUrl : String, blockPollDelay : Duration = 3.seconds, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
   cfactory                 : Client.Factory   = Client.Factory.Default,
@@ -33,12 +35,25 @@ abstract class SimplePublisher[T, F <: Filter]( ethJsonRpcUrl : String, blockPol
   executionContext         : ExecutionContext = ExecutionContext.global // XXX: SHould we reorganize so that by default we use the Scheduler's thread pool?
 ) extends Publisher[T] {
 
-  import SimplePublisher.logger
+  import SimplePublisher.{logger, Transformed}
 
   protected def acquireFilter( client : Client )          : Future[F]
   protected def getChanges( client : Client, filter : F ) : Future[immutable.Seq[T]]
 
-  protected def isTerminating( items : immutable.Seq[T] ) : Boolean = false
+  /**
+    * This is an opportunity to transform acquited items -- to filter items that should not be published, to map items into something else
+    * etc. If the stream should terminate, excess items (thise beyond the termination point) should be trimmed.
+    * 
+    * At the same time it is a place where termination can be noticed, by inspecting acquired items. Signal termination
+    * by setting `transformed.shouldTerminate` to true.
+    * 
+    * A client is provided, primarily in case it is helpful for deciding termination.
+    * 
+    * By default, this does nothing. It simply forwards the untransformed items and does not provoke termination of the stream.
+    */ 
+  protected def transformTerminate( client : Client, items : immutable.Seq[T] ) : Future[Transformed[T]] = {
+    Future.successful( Transformed[T]( items, false ) )
+  }
 
   protected def cancelFilter( client : Client, filter : F ) : Future[_] = {
     client.eth.uninstallFilter( filter )
@@ -83,13 +98,22 @@ abstract class SimplePublisher[T, F <: Filter]( ethJsonRpcUrl : String, blockPol
     }
   }
 
-  private def doPoll() = {
+  private def doPoll() : Unit= {
     val ( c, ff, sl ) = this.synchronized { (_client, f_filter, subscriptions.toList) }
-    for {
-      filter <- ff
-      items <- getChanges( this._client, filter )
-    } {
-       sl.foreach( _.enqueue( items ) )
+    val pollFuture = {
+      for {
+        filter <- ff
+        items <- getChanges( c, filter )
+        transformed <- transformTerminate( c, items )
+      } yield {
+        sl.foreach( _.enqueue( transformed.items, transformed.shouldTerminate ) )
+      }
+    }
+    pollFuture recover { case t =>
+      SEVERE.log("An error occured while trying to poll for items to publish!", t )
+      sl.foreach( _.break( t ) )
+      SEVERE.log( s"${this} shutting down due to error." )
+      shutdownPolling()
     }
   }
 
@@ -157,10 +181,7 @@ abstract class SimplePublisher[T, F <: Filter]( ethJsonRpcUrl : String, blockPol
         if ( again ) rescheduleUpdate()
       }
       catch {
-        case t : Throwable => {
-          subscriber.onError( t )
-          this.cancel()
-        }
+        case t : Throwable => break( t )
       }
     }
 
@@ -168,11 +189,16 @@ abstract class SimplePublisher[T, F <: Filter]( ethJsonRpcUrl : String, blockPol
       scheduler.schedule( updateSubscriber _, subscriptionUpdateDelay )
     }
 
-    private [SimplePublisher] def enqueue( nexts : immutable.Seq[T] ) = this.synchronized {
+    private [SimplePublisher] def break( t : Throwable ) : Unit = {
+      subscriber.onError( t )
+      this.cancel()
+    }
+
+    private [SimplePublisher] def enqueue( nexts : immutable.Seq[T], shouldTerminate : Boolean ) = this.synchronized {
       if ( active ) {
         if (! terminated ) { // not previously terminated!
           nexts.foreach( q.enqueue( _ ) )
-          if ( isTerminating( nexts ) ) {
+          if ( shouldTerminate ) {
             this.terminated = true
           }
         }

@@ -54,14 +54,14 @@ object Client {
       def jsValue : JsValue
     }
     final case class Query(
-      address       : Option[EthAddress],
-      fromBlock     : BlockNumber = BlockNumber.Latest,
-      toBlock       : BlockNumber = BlockNumber.Latest,
-      restriction_1 : TopicRestriction = TopicRestriction.Any,
-      restriction_2 : TopicRestriction = TopicRestriction.Any,
-      restriction_3 : TopicRestriction = TopicRestriction.Any,
-      restriction_4 : TopicRestriction = TopicRestriction.Any,
-      minTopics     : Int = 0
+      addresses     : Seq[EthAddress]     = Nil,
+      fromBlock     : Option[BlockNumber] = None,
+      toBlock       : Option[BlockNumber] = None,
+      restriction_1 : TopicRestriction    = TopicRestriction.Any,
+      restriction_2 : TopicRestriction    = TopicRestriction.Any,
+      restriction_3 : TopicRestriction    = TopicRestriction.Any,
+      restriction_4 : TopicRestriction    = TopicRestriction.Any,
+      minTopics     : Int                 = 0
     ) {
       require( minTopics <= 4, s"The maximum number of topics an event supports is 4. minTopics cannot be ${minTopics}" )
       lazy val topicRestrictionList = {
@@ -83,12 +83,25 @@ object Client {
         finalReverse.reverse
       }
       def jsValue = {
-        val fields = immutable.Seq(
-          "address"   -> address.fold( JsNull : JsValue )( a => encodeBytes( a.bytes.widen ) ),
-          "fromBlock" -> fromBlock.jsValue,
-          "toBlock"   -> toBlock.jsValue,
-          "topics"    -> JsArray( topicRestrictionList.map( _.jsValue ) )
-        )
+        val fields = {
+          val f1 : List[Tuple2[String,JsValue]] = {
+            addresses.length match {
+              case 0 => Nil
+              case 1 => ( "address" -> encodeAddress( addresses(0) ) ) :: Nil
+              case _ => ( "address" -> JsArray( addresses.map( encodeAddress ) ) ) :: Nil 
+            }
+          }
+          val f2 = fromBlock.fold( f1 ){ fb => ("fromBlock" -> fb.jsValue) :: f1 }
+          val f3 = toBlock.fold( f2 ){ tb => ("toBlock" -> tb.jsValue) :: f2 }
+          val f4 = {
+            if ( topicRestrictionList.forall( _ == TopicRestriction.Any ) ) { // no restriction
+              f3
+            } else {
+              ( "topics" -> JsArray( topicRestrictionList.map( _.jsValue ) ) ) :: f3
+            }
+          }
+          f4.reverse
+        }
         JsObject( fields )
       }
     }
@@ -162,6 +175,9 @@ object Client {
   val EmptyParams = Seq.empty[JsValue]
 
   trait eth {
+
+    def blockNumber()( implicit ec : ExecutionContext ) : Future[BigInt]
+
     def call(
       from        : Option[EthAddress]     = None,
       to          : Option[EthAddress]     = None,
@@ -233,6 +249,10 @@ object Client {
         val _value    = listify("value", value.map( encodeQuantity ))
         val _data     = listify("data", data.map( encodeBytes ))
         JsObject( _from ::: _to ::: _gas ::: _gasPrice ::: _value ::: _data ::: Nil )
+      }
+
+      def blockNumber()( implicit ec : ExecutionContext ) : Future[BigInt] = {
+        doExchange( "eth_blockNumber", EmptyParams )( success => decodeQuantity( success.result.as[String] ) )
       }
 
       def call(
