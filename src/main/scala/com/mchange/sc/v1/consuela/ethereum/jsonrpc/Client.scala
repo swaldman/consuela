@@ -60,17 +60,35 @@ object Client {
       restriction_1 : TopicRestriction = TopicRestriction.Any,
       restriction_2 : TopicRestriction = TopicRestriction.Any,
       restriction_3 : TopicRestriction = TopicRestriction.Any,
-      restriction_4 : TopicRestriction = TopicRestriction.Any
+      restriction_4 : TopicRestriction = TopicRestriction.Any,
+      minTopics     : Int = 0
     ) {
-      def jsValue = {
-        val fields = {
-          val always = immutable.Seq(
-            "fromBlock" -> fromBlock.jsValue,
-            "toBlock"   -> toBlock.jsValue,
-            "topics"    -> JsArray( restriction_1.jsValue :: restriction_2.jsValue :: restriction_3.jsValue :: restriction_4.jsValue :: Nil )
-          )
-          address.fold( always )( a => always :+ ("address" -> encodeBytes( a.bytes.widen )) )
+      require( minTopics <= 4, s"The maximum number of topics an event supports is 4. minTopics cannot be ${minTopics}" )
+      lazy val topicRestrictionList = {
+        val rawReverse = restriction_4 :: restriction_3 :: restriction_2 :: restriction_1 :: Nil
+
+        // JsNulls mean any topic, but insist on existence. By chopping the tail, we support fewer than 4 topics present
+        val rawReverseClipped = rawReverse.dropWhile( _ == TopicRestriction.Any )
+
+        def fulfillMinimumReverse( lastReverse : List[TopicRestriction] ) : List[TopicRestriction] = {
+          if (lastReverse.length < minTopics ) {
+            fulfillMinimumReverse( TopicRestriction.Any :: lastReverse )
+          }
+          else {
+            lastReverse
+          }
         }
+
+        val finalReverse = fulfillMinimumReverse( rawReverseClipped )
+        finalReverse.reverse
+      }
+      def jsValue = {
+        val fields = immutable.Seq(
+          "address"   -> address.fold( JsNull : JsValue )( a => encodeBytes( a.bytes.widen ) ),
+          "fromBlock" -> fromBlock.jsValue,
+          "toBlock"   -> toBlock.jsValue,
+          "topics"    -> JsArray( topicRestrictionList.map( _.jsValue ) )
+        )
         JsObject( fields )
       }
     }
