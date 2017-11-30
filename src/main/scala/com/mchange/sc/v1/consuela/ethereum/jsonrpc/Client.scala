@@ -133,7 +133,9 @@ object Client {
 
       ( looksPending, looksRecorded, rl.removed ) match {
         case ( true, false, false ) => Pending( ele )
-        case ( true, false, true )  => Removed( ele )
+        case ( true, false, true )  => {
+          throw new Exception( s"We should never see a removal of an event that was merely pending! Raw log: ${rl}" )
+        }
         case ( false, true, false ) => {
           Recorded(
             logIndex = rl.logIndex.get,
@@ -145,8 +147,14 @@ object Client {
           )
         }
         case ( false, true, true ) => {
-          WARNING.log( s"${rl} is a removed log entry from a block with full block information. Perhaps we should redefine (or bifurcate) Client.Log.Pending" )
-          Pending( ele )
+          Removed(
+            logIndex = rl.logIndex.get,
+            transactionIndex = rl.transactionIndex.get,
+            transactionHash = rl.transactionHash.get,
+            blockHash = rl.blockHash.get,
+            blockNumber = rl.blockNumber.get,
+            ethLogEntry = ele 
+          )
         }
         case ( true, true, _ ) | ( false, false, _ ) => throw new InternalError( s"${optionals} can't both be nonEmpty and empty at the same time. Should never happen." )
       }
@@ -156,7 +164,12 @@ object Client {
     ) extends Log
 
     final case class Removed (
-      val ethLogEntry : EthLogEntry
+      val logIndex         : Unsigned256,
+      val transactionIndex : Unsigned256,
+      val transactionHash  : EthHash,
+      val blockHash        : EthHash,
+      val blockNumber      : Unsigned256,
+      val ethLogEntry      : EthLogEntry
     ) extends Log
 
     final case class Recorded (
