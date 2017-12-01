@@ -170,7 +170,7 @@ object Client {
       val blockHash        : EthHash,
       val blockNumber      : Unsigned256,
       val ethLogEntry      : EthLogEntry
-    ) extends Log
+    ) extends Log.Full
 
     final case class Recorded (
       val logIndex         : Unsigned256,
@@ -179,7 +179,15 @@ object Client {
       val blockHash        : EthHash,
       val blockNumber      : Unsigned256,
       val ethLogEntry      : EthLogEntry
-    ) extends Log
+    ) extends Log.Full
+
+    trait Full extends Log {
+      def logIndex         : Unsigned256
+      def transactionIndex : Unsigned256
+      def transactionHash  : EthHash
+      def blockHash        : EthHash
+      def blockNumber      : Unsigned256
+    }
   }
   sealed trait Log {
     def ethLogEntry : EthLogEntry
