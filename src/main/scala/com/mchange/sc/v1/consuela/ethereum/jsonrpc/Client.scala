@@ -33,6 +33,11 @@ object Client {
   }
   sealed abstract class BlockNumber( val jsValue : JsValue )
 
+  object Filter {
+    final case object Dummy extends Filter {
+      def identifier : String = null
+    }
+  }
   sealed trait Filter {
     def identifier : String
   }

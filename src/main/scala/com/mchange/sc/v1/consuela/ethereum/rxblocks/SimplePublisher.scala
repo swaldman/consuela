@@ -23,13 +23,22 @@ import scala.util.Failure
   * they won't miss anything.
   * 
   * Fortunately, the most important filters (log filters) do support "fromBlock"
+  * 
+  * Unfortunately, it seems that clients don't pay attantion to an already-past "fromBlock" in
+  * the eth_getFilterChanges most implementations will rly upon.
+  * 
+  * T is the type that subscribers will receive.
+  * S is an intermediate type, that might be acquired then transformed to T. If this is not necessary,
+  *   just define S to the same type as T.
+  * F is the Client.Filter type of the object usually used to specify the items that will get
+  *   published. (Filter.Dummy can be acquired and left unused if no filter is necessary.)
   */
 object SimplePublisher {
   private [SimplePublisher] implicit lazy val logger = mlogger( this )
 
   final case class Transformed[T]( items : immutable.Seq[T], shouldTerminate : Boolean ) // we don't make inner because of annoying outer reference issues and warnings
 }
-abstract class SimplePublisher[T, F <: Filter]( ethJsonRpcUrl : String, blockPollDelay : Duration = 3.seconds, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
+abstract class SimplePublisher[T, S, F <: Filter]( ethJsonRpcUrl : String, blockPollDelay : Duration = 3.seconds, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
   cfactory                 : Client.Factory   = Client.Factory.Default,
   scheduler                : Scheduler        = Scheduler.Default,
   executionContext         : ExecutionContext = ExecutionContext.global // XXX: SHould we reorganize so that by default we use the Scheduler's thread pool?
@@ -38,25 +47,31 @@ abstract class SimplePublisher[T, F <: Filter]( ethJsonRpcUrl : String, blockPol
   import SimplePublisher.{logger, Transformed}
 
   protected def acquireFilter( client : Client )          : Future[F]
-  protected def getChanges( client : Client, filter : F ) : Future[immutable.Seq[T]]
+  protected def getChanges( client : Client, filter : F ) : Future[immutable.Seq[S]]
 
   /**
-    * This is an opportunity to transform acquited items -- to filter items that should not be published, to map items into something else
+    * This is an opportunity to transform acquired items -- to filter items that should not be published, to map items into something else
     * etc. If the stream should terminate, excess items (thise beyond the termination point) should be trimmed.
     * 
     * At the same time it is a place where termination can be noticed, by inspecting acquired items. Signal termination
     * by setting `transformed.shouldTerminate` to true.
     * 
-    * A client is provided, primarily in case it is helpful for deciding termination.
+    * A client is provided (primarily in case it is helpful for deciding termination).
     * 
-    * By default, this does nothing. It simply forwards the untransformed items and does not provoke termination of the stream.
+    * In the simple case where T and S are the same type, no transformation need happen,
+    * and the stream of events is unbounded, a straightforward implementation is 
+    * Future.successful( Transformed[T]( items, false ) )
+    * 
+    * See BlockHashPublisher for an example.
     */ 
-  protected def transformTerminate( client : Client, items : immutable.Seq[T] ) : Future[Transformed[T]] = {
-    Future.successful( Transformed[T]( items, false ) )
-  }
+  protected def transformTerminate( client : Client, items : immutable.Seq[S] ) : Future[Transformed[T]]
 
   protected def cancelFilter( client : Client, filter : F ) : Future[_] = {
-    client.eth.uninstallFilter( filter )
+    if ( filter != Client.Filter.Dummy ) {
+      client.eth.uninstallFilter( filter )
+    } else {
+      Future.successful( () )
+    }
   }
 
   def subscribe( subscriber : RxSubscriber[_ >: T] ) : Unit = {

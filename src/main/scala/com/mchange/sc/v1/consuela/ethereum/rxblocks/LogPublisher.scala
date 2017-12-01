@@ -20,7 +20,7 @@ class LogPublisher( ethJsonRpcUrl : String, query : Client.LogFilter.Query,  blo
   cfactory                 : Client.Factory   = Client.Factory.Default,
   scheduler                : Scheduler        = Scheduler.Default,
   executionContext         : ExecutionContext = ExecutionContext.global
-) extends SimplePublisher[Client.Log,Client.LogFilter]( ethJsonRpcUrl, blockPollDelay, subscriptionUpdateDelay )( cfactory, scheduler, executionContext ) {
+) extends SimplePublisher[Client.Log,Client.Log,Client.LogFilter]( ethJsonRpcUrl, blockPollDelay, subscriptionUpdateDelay )( cfactory, scheduler, executionContext ) {
 
   import LogPublisher.logger
 
