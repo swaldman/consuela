@@ -20,11 +20,11 @@ class LogPublisher( ethJsonRpcUrl : String, query : Client.LogFilter.Query,  blo
   cfactory                 : Client.Factory   = Client.Factory.Default,
   scheduler                : Scheduler        = Scheduler.Default,
   executionContext         : ExecutionContext = ExecutionContext.global
-) extends SimplePublisher[Client.Log.Recorded,Client.LogFilter]( ethJsonRpcUrl, blockPollDelay, subscriptionUpdateDelay )( cfactory, scheduler, executionContext ) {
+) extends SimplePublisher[Client.Log,Client.LogFilter]( ethJsonRpcUrl, blockPollDelay, subscriptionUpdateDelay )( cfactory, scheduler, executionContext ) {
 
   import LogPublisher.logger
 
-  val mbLastBlock : Option[BigInt] = {
+  val mbEndBlock : Option[BigInt] = {
     val raw = query.toBlock
     raw match {
       case Some( Client.BlockNumber.Quantity( quantity ) ) => Some( quantity )
@@ -34,22 +34,21 @@ class LogPublisher( ethJsonRpcUrl : String, query : Client.LogFilter.Query,  blo
 
   protected def acquireFilter( client : Client ) : Future[Client.LogFilter] = client.eth.newLogFilter( query )
 
-  protected def getChanges( client : Client, filter : Client.LogFilter ) : Future[immutable.Seq[Client.Log.Recorded]] = {
-    for {
-      allLogs <- client.eth.getNewLogs( filter )
-    } yield {
-      val (recorded, unrecorded) = allLogs.partition( _.isInstanceOf[Client.Log.Recorded] )
-      logUnrecorded( unrecorded )
-      recorded.map( _.asInstanceOf[Client.Log.Recorded] )
-    }
+  protected def getChanges( client : Client, filter : Client.LogFilter ) : Future[immutable.Seq[Client.Log]] = {
+    client.eth.getNewLogs( filter )
   }
 
-  override protected def transformTerminate( client : Client, items : immutable.Seq[Client.Log.Recorded] ) : Future[Transformed[Client.Log.Recorded]] = {
-    mbLastBlock.fold( Future.successful( Transformed(items,false) ) ){ lastBlock =>
-      if ( items.nonEmpty ) {
-        val shouldTerminate = items.exists( _.blockNumber.widen > lastBlock )
+  override protected def transformTerminate( client : Client, items : immutable.Seq[Client.Log] ) : Future[Transformed[Client.Log]] = {
+    mbEndBlock.fold( Future.successful( Transformed(items,false) ) ){ endBlock =>
+      val ( rawFull, pending ) = items.partition( _.isInstanceOf[Client.Log.Full] )
+      val full = rawFull.map( _.asInstanceOf[Client.Log.Full] )
+      if ( full.nonEmpty ) {
+        def expired( clf : Client.Log.Full ) : Boolean = clf.blockNumber.widen > endBlock
+
+        val shouldTerminate = full.exists( expired )
         val preterminal = if ( shouldTerminate ) {
-          items.takeWhile( _.blockNumber.widen <= lastBlock )
+          val bad = full.filter( expired )
+          items.filterNot( bad.contains(_) )
         } else {
           items
         }
@@ -57,14 +56,10 @@ class LogPublisher( ethJsonRpcUrl : String, query : Client.LogFilter.Query,  blo
       }
       else { // check the current block number to see if we can terminate
         client.eth.blockNumber() map { curBlock =>
-          Transformed( items, curBlock > lastBlock )
+          Transformed( items, curBlock > endBlock )
         }
       }
     }
-  }
-
-  private def logUnrecorded( unrecorded : immutable.Seq[Client.Log] ) : Unit = {
-    unrecorded.foreach( clog => WARNING.log( s"A removed or pending log was found by ${this}, and was not published: ${clog}." ) )
   }
 }
 
