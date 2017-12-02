@@ -35,7 +35,7 @@ class BlockNumberPublisher( ethJsonRpcUrl : String, blockPollDelay : Duration = 
         if ( current > lastSeen ) {
           val out = {
             if ( lastSeen >= 0 ) { // don't publish every blocknumber from genesis to the first we see
-              lastSeen to current
+              (lastSeen + 1) to current
             } else {
               current :: Nil
             }
