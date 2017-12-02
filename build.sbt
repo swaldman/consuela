@@ -32,7 +32,7 @@ publishTo := {
   }
 }
 
-val restrictedTypeVersion = "0.0.3"
+val restrictedTypeVersion = "0.0.4-SNAPSHOT"
 
 
 libraryDependencies ++= Seq(
