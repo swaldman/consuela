@@ -301,20 +301,6 @@ package object jsonrpc {
     }
   }
 
-  case class ClientTransactionReceipt (
-    transactionHash   : EthHash,
-    transactionIndex  : Unsigned256,
-    blockHash         : EthHash,
-    blockNumber       : Unsigned256,
-    cumulativeGasUsed : Unsigned256,
-    gasUsed           : Unsigned256,
-    contractAddress   : Option[EthAddress],
-    logs              : immutable.Seq[EthLogEntry],
-    root              : Option[EthHash],
-    status            : Option[Unsigned256]
-  )
-
-
   implicit val EthHashFormat = new Format[EthHash] {
     def reads( jsv : JsValue ) : JsResult[EthHash] = {
       try {
@@ -345,7 +331,7 @@ package object jsonrpc {
     }
     def writes( num : Unsigned256 ) : JsValue = encodeQuantity( num.widen )
   }
-  implicit val ClientTransactionReceiptFormat = Json.format[ClientTransactionReceipt]
+  implicit val ClientTransactionReceiptFormat = Json.format[Client.TransactionReceipt]
 
   implicit val ByteDataFormat = new Format[immutable.Seq[Byte]] {
     def reads( jsv : JsValue ) : JsResult[immutable.Seq[Byte]] = {

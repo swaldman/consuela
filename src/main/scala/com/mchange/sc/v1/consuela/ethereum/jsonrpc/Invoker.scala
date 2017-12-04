@@ -85,15 +85,15 @@ object Invoker {
 
   def futureTransactionReceipt(
     transactionHash : EthHash
-  )( implicit icontext : Invoker.Context, cfactory : Client.Factory, poller : Poller, econtext : ExecutionContext ) : Future[Option[ClientTransactionReceipt]] = {
+  )( implicit icontext : Invoker.Context, cfactory : Client.Factory, poller : Poller, econtext : ExecutionContext ) : Future[Option[Client.TransactionReceipt]] = {
 
     borrow( cfactory( new URL( icontext.jsonRpcUrl ) ) ) { client =>
 
       def repoll = client.eth.getTransactionReceipt( transactionHash )
 
-      val holder = new AtomicReference[Future[Option[ClientTransactionReceipt]]]( repoll )
+      val holder = new AtomicReference[Future[Option[Client.TransactionReceipt]]]( repoll )
 
-      def doPoll() : Option[ClientTransactionReceipt] = {
+      def doPoll() : Option[Client.TransactionReceipt] = {
         holder.get.value match {
           case None => {
             None // we just have to wait for the HTTP request to complete
@@ -119,11 +119,11 @@ object Invoker {
     }
   }
 
-  def awaitTransactionReceipt( transactionHash : EthHash )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Option[ClientTransactionReceipt] = {
+  def awaitTransactionReceipt( transactionHash : EthHash )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Option[Client.TransactionReceipt] = {
     Await.result( futureTransactionReceipt( transactionHash ), Duration.Inf ) // the timeout is enforced within futureTransactionReceipt( ... ), not here
   }
 
-  def requireTransactionReceipt( transactionHash : EthHash )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : ClientTransactionReceipt = {
+  def requireTransactionReceipt( transactionHash : EthHash )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Client.TransactionReceipt = {
     awaitTransactionReceipt( transactionHash ).getOrElse( throw new TimeoutException( transactionHash, icontext.pollTimeout ) )
   }
 

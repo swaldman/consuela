@@ -16,11 +16,11 @@ import SimplePublisher.Transformed
 object LogPublisher {
   private [LogPublisher] implicit lazy val logger = mlogger( this )
 }
-class LogPublisher( ethJsonRpcUrl : String, query : Client.LogFilter.Query,  blockPollDelay : Duration = 3.seconds, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
+class LogPublisher( ethJsonRpcUrl : String, query : Client.Log.Filter.Query,  blockPollDelay : Duration = 3.seconds, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
   cfactory                 : Client.Factory   = Client.Factory.Default,
   scheduler                : Scheduler        = Scheduler.Default,
   executionContext         : ExecutionContext = ExecutionContext.global
-) extends SimplePublisher[Client.Log,Client.Log,Client.LogFilter]( ethJsonRpcUrl, blockPollDelay, subscriptionUpdateDelay )( cfactory, scheduler, executionContext ) {
+) extends SimplePublisher[Client.Log,Client.Log,Client.Log.Filter]( ethJsonRpcUrl, blockPollDelay, subscriptionUpdateDelay )( cfactory, scheduler, executionContext ) {
 
   import LogPublisher.logger
 
@@ -32,9 +32,9 @@ class LogPublisher( ethJsonRpcUrl : String, query : Client.LogFilter.Query,  blo
     }
   }
 
-  protected def acquireFilter( client : Client ) : Future[Client.LogFilter] = client.eth.newLogFilter( query )
+  protected def acquireFilter( client : Client ) : Future[Client.Log.Filter] = client.eth.newLogFilter( query )
 
-  protected def getChanges( client : Client, filter : Client.LogFilter ) : Future[immutable.Seq[Client.Log]] = {
+  protected def getChanges( client : Client, filter : Client.Log.Filter ) : Future[immutable.Seq[Client.Log]] = {
     client.eth.getNewLogs( filter )
   }
 

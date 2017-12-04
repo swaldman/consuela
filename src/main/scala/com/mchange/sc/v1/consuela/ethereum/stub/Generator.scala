@@ -22,7 +22,7 @@ object Generator {
     "com.mchange.sc.v1.consuela.ethereum.ethabi",
     "com.mchange.sc.v1.consuela.ethereum.stub._",
     "com.mchange.sc.v1.consuela.ethereum.jsonrpc",
-    "com.mchange.sc.v1.consuela.ethereum.jsonrpc.{Abi,ClientTransactionReceipt}"
+    "com.mchange.sc.v1.consuela.ethereum.jsonrpc.Abi"
   )
 
   private def fillArgs( inputs : immutable.Seq[Abi.Function.Parameter] ) : immutable.Seq[Abi.Function.Parameter] = {

@@ -43,76 +43,6 @@ object Client {
   }
   final class BlockFilter( val identifier : String ) extends Filter
 
-  final object LogFilter {
-    object TopicRestriction {
-      final case class  Exact( topic : EthLogEntry.Topic   ) extends TopicRestriction {
-        val jsValue = encodeBytes( topic.widen )
-      }
-      final case class  AnyOf( topics : EthLogEntry.Topic* ) extends TopicRestriction {
-        val jsValue = JsArray( topics.map( topic => encodeBytes( topic.widen ) ) )
-      }
-      final case object Any extends TopicRestriction {
-        val jsValue = JsNull
-      }
-    }
-    sealed trait TopicRestriction {
-      def jsValue : JsValue
-    }
-    final case class Query(
-      addresses     : Seq[EthAddress]     = Nil,
-      fromBlock     : Option[BlockNumber] = None,
-      toBlock       : Option[BlockNumber] = None,
-      restriction_1 : TopicRestriction    = TopicRestriction.Any,
-      restriction_2 : TopicRestriction    = TopicRestriction.Any,
-      restriction_3 : TopicRestriction    = TopicRestriction.Any,
-      restriction_4 : TopicRestriction    = TopicRestriction.Any,
-      minTopics     : Int                 = 0
-    ) {
-      require( minTopics <= 4, s"The maximum number of topics an event supports is 4. minTopics cannot be ${minTopics}" )
-      lazy val topicRestrictionList = {
-        val rawReverse = restriction_4 :: restriction_3 :: restriction_2 :: restriction_1 :: Nil
-
-        // JsNulls mean any topic, but insist on existence. By chopping the tail, we support fewer than 4 topics present
-        val rawReverseClipped = rawReverse.dropWhile( _ == TopicRestriction.Any )
-
-        def fulfillMinimumReverse( lastReverse : List[TopicRestriction] ) : List[TopicRestriction] = {
-          if (lastReverse.length < minTopics ) {
-            fulfillMinimumReverse( TopicRestriction.Any :: lastReverse )
-          }
-          else {
-            lastReverse
-          }
-        }
-
-        val finalReverse = fulfillMinimumReverse( rawReverseClipped )
-        finalReverse.reverse
-      }
-      def jsValue = {
-        val fields = {
-          val f1 : List[Tuple2[String,JsValue]] = {
-            addresses.length match {
-              case 0 => Nil
-              case 1 => ( "address" -> encodeAddress( addresses(0) ) ) :: Nil
-              case _ => ( "address" -> JsArray( addresses.map( encodeAddress ) ) ) :: Nil 
-            }
-          }
-          val f2 = fromBlock.fold( f1 ){ fb => ("fromBlock" -> fb.jsValue) :: f1 }
-          val f3 = toBlock.fold( f2 ){ tb => ("toBlock" -> tb.jsValue) :: f2 }
-          val f4 = {
-            if ( topicRestrictionList.forall( _ == TopicRestriction.Any ) ) { // no restriction
-              f3
-            } else {
-              ( "topics" -> JsArray( topicRestrictionList.map( _.jsValue ) ) ) :: f3
-            }
-          }
-          f4.reverse
-        }
-        JsObject( fields )
-      }
-    }
-  }
-  final class LogFilter( val identifier : String ) extends Filter
-
   private object RawLog {
     implicit val RawLogFormat = Json.format[RawLog]
   }
@@ -129,6 +59,76 @@ object Client {
   )
 
   object Log {
+    final object Filter {
+      object TopicRestriction {
+        final case class  Exact( topic : EthLogEntry.Topic   ) extends TopicRestriction {
+          val jsValue = encodeBytes( topic.widen )
+        }
+        final case class  AnyOf( topics : EthLogEntry.Topic* ) extends TopicRestriction {
+          val jsValue = JsArray( topics.map( topic => encodeBytes( topic.widen ) ) )
+        }
+        final case object Any extends TopicRestriction {
+          val jsValue = JsNull
+        }
+      }
+      sealed trait TopicRestriction {
+        def jsValue : JsValue
+      }
+      final case class Query(
+        addresses     : Seq[EthAddress]     = Nil,
+        fromBlock     : Option[BlockNumber] = None,
+        toBlock       : Option[BlockNumber] = None,
+        restriction_1 : TopicRestriction    = TopicRestriction.Any,
+        restriction_2 : TopicRestriction    = TopicRestriction.Any,
+        restriction_3 : TopicRestriction    = TopicRestriction.Any,
+        restriction_4 : TopicRestriction    = TopicRestriction.Any,
+        minTopics     : Int                 = 0
+      ) {
+        require( minTopics <= 4, s"The maximum number of topics an event supports is 4. minTopics cannot be ${minTopics}" )
+        lazy val topicRestrictionList = {
+          val rawReverse = restriction_4 :: restriction_3 :: restriction_2 :: restriction_1 :: Nil
+
+          // JsNulls mean any topic, but insist on existence. By chopping the tail, we support fewer than 4 topics present
+          val rawReverseClipped = rawReverse.dropWhile( _ == TopicRestriction.Any )
+
+          def fulfillMinimumReverse( lastReverse : List[TopicRestriction] ) : List[TopicRestriction] = {
+            if (lastReverse.length < minTopics ) {
+              fulfillMinimumReverse( TopicRestriction.Any :: lastReverse )
+            }
+            else {
+              lastReverse
+            }
+          }
+
+          val finalReverse = fulfillMinimumReverse( rawReverseClipped )
+          finalReverse.reverse
+        }
+        def jsValue = {
+          val fields = {
+            val f1 : List[Tuple2[String,JsValue]] = {
+              addresses.length match {
+                case 0 => Nil
+                case 1 => ( "address" -> encodeAddress( addresses(0) ) ) :: Nil
+                case _ => ( "address" -> JsArray( addresses.map( encodeAddress ) ) ) :: Nil
+              }
+            }
+            val f2 = fromBlock.fold( f1 ){ fb => ("fromBlock" -> fb.jsValue) :: f1 }
+            val f3 = toBlock.fold( f2 ){ tb => ("toBlock" -> tb.jsValue) :: f2 }
+            val f4 = {
+              if ( topicRestrictionList.forall( _ == TopicRestriction.Any ) ) { // no restriction
+                f3
+              } else {
+                ( "topics" -> JsArray( topicRestrictionList.map( _.jsValue ) ) ) :: f3
+              }
+            }
+            f4.reverse
+          }
+          JsObject( fields )
+        }
+      }
+    }
+    final class Filter( val identifier : String ) extends Client.Filter
+
     def apply( rl : RawLog ) : Log = {
       val optionals = immutable.Seq.apply[Option[Any]]( rl.logIndex, rl.transactionIndex, rl.transactionHash, rl.blockHash, rl.blockNumber )
       val looksPending  = optionals.forall( _.isEmpty )
@@ -201,6 +201,19 @@ object Client {
     def ethLogEntry : EthLogEntry
   }
 
+  case class TransactionReceipt (
+    transactionHash   : EthHash,
+    transactionIndex  : Unsigned256,
+    blockHash         : EthHash,
+    blockNumber       : Unsigned256,
+    cumulativeGasUsed : Unsigned256,
+    gasUsed           : Unsigned256,
+    contractAddress   : Option[EthAddress],
+    logs              : immutable.Seq[EthLogEntry],
+    root              : Option[EthHash],
+    status            : Option[Unsigned256]
+  )
+
   val EmptyParams = Seq.empty[JsValue]
 
   trait eth {
@@ -232,14 +245,14 @@ object Client {
     def getBalance( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext )          : Future[BigInt]
     def getCode( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext )             : Future[immutable.Seq[Byte]]
     def getCompilers()( implicit ec : ExecutionContext )                                                         : Future[immutable.Set[String]]
-    def getLogs( query : LogFilter.Query )( implicit ec : ExecutionContext )                                     : Future[immutable.Seq[Client.Log]]
-    def getLogs( filter : LogFilter )( implicit ec : ExecutionContext )                                          : Future[immutable.Seq[Client.Log]]
-    def getNewLogs( filter : LogFilter )( implicit ec : ExecutionContext )                                       : Future[immutable.Seq[Client.Log]]
+    def getLogs( query : Log.Filter.Query )( implicit ec : ExecutionContext )                                    : Future[immutable.Seq[Client.Log]]
+    def getLogs( filter : Log.Filter )( implicit ec : ExecutionContext )                                         : Future[immutable.Seq[Client.Log]]
+    def getNewLogs( filter : Log.Filter )( implicit ec : ExecutionContext )                                      : Future[immutable.Seq[Client.Log]]
     def getTransactionCount( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[BigInt]
-    def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext )                     : Future[Option[ClientTransactionReceipt]]
+    def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext )                     : Future[Option[Client.TransactionReceipt]]
     def getBlockFilterChanges( filter : BlockFilter )( implicit ec : ExecutionContext )                          : Future[immutable.Seq[EthHash]]
     def newBlockFilter()( implicit ec : ExecutionContext )                                                       : Future[BlockFilter]
-    def newLogFilter( query : LogFilter.Query )( implicit ec : ExecutionContext )                                : Future[LogFilter]
+    def newLogFilter( query : Log.Filter.Query )( implicit ec : ExecutionContext )                               : Future[Log.Filter]
     def sendRawTransaction( bytes : Seq[Byte] )( implicit ec : ExecutionContext )                                : Future[EthHash]
     def sendSignedTransaction( signedTransaction : EthTransaction.Signed )( implicit ec : ExecutionContext )     : Future[EthHash]
     def uninstallFilter( filter : Filter )( implicit ec : ExecutionContext )                                     : Future[Boolean]
@@ -322,17 +335,17 @@ object Client {
       def getCompilers()( implicit ec : ExecutionContext ) : Future[immutable.Set[String]] = {
         doExchange( "eth_getCompilers", EmptyParams )( _.result.as[immutable.Set[String]] )
       }
-      def getLogs( query : LogFilter.Query )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Client.Log]] = {
+      def getLogs( query : Log.Filter.Query )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Client.Log]] = {
         doExchange( "eth_getLogs", Seq( query.jsValue ) )( _.result.as[immutable.Seq[RawLog]].map( Client.Log.apply ) )
       }
-      def getLogs( filter : LogFilter )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Client.Log]] = {
+      def getLogs( filter : Log.Filter )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Client.Log]] = {
         doExchange( "eth_getFilterLogs", Seq( JsString(filter.identifier) ) )( _.result.as[immutable.Seq[RawLog]].map( Client.Log.apply ) )
       }
-      def getNewLogs( filter : LogFilter )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Client.Log]] = {
+      def getNewLogs( filter : Log.Filter )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Client.Log]] = {
         doExchange( "eth_getFilterChanges", Seq( JsString(filter.identifier) ) )( _.result.as[immutable.Seq[RawLog]].map( Client.Log.apply ) )
       }
-      def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext ) : Future[Option[ClientTransactionReceipt]] = {
-        doExchange( "eth_getTransactionReceipt", Seq( encodeBytes( transactionHash.bytes ) ) )( _.result.as[Option[ClientTransactionReceipt]] )
+      def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext ) : Future[Option[Client.TransactionReceipt]] = {
+        doExchange( "eth_getTransactionReceipt", Seq( encodeBytes( transactionHash.bytes ) ) )( _.result.as[Option[Client.TransactionReceipt]] )
       }
       def sendRawTransaction( bytes : Seq[Byte] )( implicit ec : ExecutionContext ) : Future[EthHash] = {
         doExchange( "eth_sendRawTransaction", Seq( encodeBytes( bytes ) ) )( success => EthHash.withBytes( decodeBytes( success.result.as[String] ) ) )
@@ -348,8 +361,8 @@ object Client {
       def newBlockFilter()( implicit ec : ExecutionContext ) : Future[BlockFilter] = {
         doExchange( "eth_newBlockFilter", EmptyParams )( success => new BlockFilter( success.result.as[String] ) )
       }
-      def newLogFilter( query : LogFilter.Query )( implicit ec : ExecutionContext ) : Future[LogFilter] = {
-        doExchange( "eth_newFilter", Seq( query.jsValue ) )( success => new LogFilter( success.result.as[String] ) )
+      def newLogFilter( query : Log.Filter.Query )( implicit ec : ExecutionContext ) : Future[Log.Filter] = {
+        doExchange( "eth_newFilter", Seq( query.jsValue ) )( success => new Log.Filter( success.result.as[String] ) )
       }
       def getBlockFilterChanges( filter : BlockFilter )( implicit ec : ExecutionContext ) : Future[immutable.IndexedSeq[EthHash]] = {
         doExchange( "eth_getFilterChanges", Seq( JsString(filter.identifier) ) )( success =>  success.result.as[immutable.IndexedSeq[JsValue]].map( jss => EthHash.withBytes( jss.as[String].decodeHex ) ) )

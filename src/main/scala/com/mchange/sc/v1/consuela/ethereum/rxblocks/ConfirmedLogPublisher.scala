@@ -17,7 +17,7 @@ import com.mchange.sc.v2.concurrent.Scheduler
 object ConfirmedLogPublisher {
   private lazy implicit val logger = mlogger(this)
 }
-class ConfirmedLogPublisher( ethJsonRpcUrl : String, query : Client.LogFilter.Query, numConfirmations : Int, blockPollDelay : Duration = 3.seconds, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
+class ConfirmedLogPublisher( ethJsonRpcUrl : String, query : Client.Log.Filter.Query, numConfirmations : Int, blockPollDelay : Duration = 3.seconds, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
   cfactory                 : Client.Factory   = Client.Factory.Default,
   scheduler                : Scheduler        = Scheduler.Default,
   executionContext         : ExecutionContext = ExecutionContext.global

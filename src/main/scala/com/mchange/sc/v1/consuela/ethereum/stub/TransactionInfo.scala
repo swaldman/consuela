@@ -2,7 +2,7 @@ package com.mchange.sc.v1.consuela.ethereum.stub
 
 import scala.collection.immutable
 import com.mchange.sc.v1.consuela.ethereum.{EthHash,EthLogEntry}
-import com.mchange.sc.v1.consuela.ethereum.jsonrpc.ClientTransactionReceipt
+import com.mchange.sc.v1.consuela.ethereum.jsonrpc.Client
 
 
 object TransactionInfo {
@@ -35,7 +35,7 @@ object TransactionInfo {
   }
 
   object Message {
-    def fromJsonrpcReceipt( transactionHash : EthHash, mbReceipt : Option[ClientTransactionReceipt] ) : TransactionInfo.Message = {
+    def fromJsonrpcReceipt( transactionHash : EthHash, mbReceipt : Option[Client.TransactionReceipt] ) : TransactionInfo.Message = {
       val details = mbReceipt.map( ctr => TransactionInfo.Details.Message( ctr.transactionIndex, ctr.blockHash, ctr.blockNumber, ctr.cumulativeGasUsed, ctr.gasUsed, ctr.logs ) )
       this.apply( transactionHash, details )
     }
