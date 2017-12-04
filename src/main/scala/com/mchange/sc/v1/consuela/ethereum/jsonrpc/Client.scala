@@ -175,7 +175,7 @@ object Client {
       val blockHash        : EthHash,
       val blockNumber      : Unsigned256,
       val ethLogEntry      : EthLogEntry
-    ) extends Log.Full
+    ) extends Log with Log.Full
 
     final case class Recorded (
       val logIndex         : Unsigned256,
@@ -184,9 +184,12 @@ object Client {
       val blockHash        : EthHash,
       val blockNumber      : Unsigned256,
       val ethLogEntry      : EthLogEntry
-    ) extends Log.Full
+    ) extends Log with Log.Full
 
-    trait Full extends Log {
+    // we use a self-type rather than extending so matched on Log types don't
+    // want Log.Full to be provably exhaustive
+    trait Full {
+      _ : Log => 
       def logIndex         : Unsigned256
       def transactionIndex : Unsigned256
       def transactionHash  : EthHash

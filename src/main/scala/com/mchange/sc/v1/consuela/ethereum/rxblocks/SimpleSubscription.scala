@@ -90,6 +90,8 @@ class SimpleSubscription[T] private [rxblocks] (
     }
   }
 
+  private [rxblocks] def complete() = enqueue( Nil, true )
+
   def request( n : Long ) : Unit = this.synchronized {
     require( n >= 0, s"Only positive quantities should be requested from a publisher. Requested ${n}." )
     requested = {
