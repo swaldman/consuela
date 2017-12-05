@@ -10,7 +10,7 @@ object WatchAddressLogs {
       case 3 => ( argv(0), EthAddress( argv(1) ), Client.BlockNumber.Quantity( BigInt(argv(2)) ) )
       case _ => throw new Exception( s"""${this} requires a jsonrpc URL and a hex address. A terminal blocknumber can also be supplied. Nothing else is permitted. ${argv.mkString(",")}""" )
     }
-    val query = Client.LogFilter.Query( addresses = Seq(address), fromBlock = Some(Client.BlockNumber.Earliest), toBlock = Some(toBlock) )
+    val query = Client.Log.Filter.Query( addresses = Seq(address), fromBlock = Some(Client.BlockNumber.Earliest), toBlock = Some(toBlock) )
     val logPublisher = new LogPublisher( ethJsonRpcUrl, query )
     val subscriber = new TestSubscriber() {
       override def onComplete() : Unit = {

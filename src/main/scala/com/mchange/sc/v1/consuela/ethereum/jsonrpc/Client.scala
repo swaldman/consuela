@@ -195,6 +195,7 @@ object Client {
       def transactionHash  : EthHash
       def blockHash        : EthHash
       def blockNumber      : Unsigned256
+      def ethLogEntry      : EthLogEntry
     }
   }
   sealed trait Log {
