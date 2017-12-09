@@ -1,6 +1,8 @@
 package com.mchange.sc.v1.consuela.ethereum
 
 import scala.collection._
+import scala.math.Ordering
+import com.mchange.sc.v1.consuela.ethereum.jsonrpc.Abi
 
 // TODO: Fixed rational types are not yet implemented
 //       (Are they implemenetd in solidity?)
@@ -15,6 +17,35 @@ package object stub {
     def apply( scalaTypeName : String ) : ScalaParameterHelper = this.apply( scalaTypeName, identity, name => s"${name}.asInstanceOf[${scalaTypeName}]" )
   }
   final case class ScalaParameterHelper( scalaTypeName : String, inConversionGen : String => String, outConversionGen : String => String )
+
+  val AbiEventOrdering = {
+    import Ordering.Implicits._ // for Seq ordering
+    implicit val EventParamOrdering = Ordering.by( (param : Abi.Event.Parameter) => Tuple3( param.name, param.`type`, param.indexed ) )
+    Ordering.by( ( event : Abi.Event ) => Tuple3( event.name, event.inputs, event.anonymous ) )
+  }
+
+  private [stub] def abiEventToResolvedName( event : Abi.Event, abi : Abi ) : String = {
+    val name = event.name
+    val allEventsWithName = abi.events.filter( _.name == name )
+    if ( allEventsWithName.length == 1 ) {
+      name
+    }
+    else if ( allEventsWithName.length > 1 ) {
+      val ordered = immutable.TreeSet.empty[Abi.Event]( AbiEventOrdering ) ++ allEventsWithName
+      val pairs = ordered.zip( Stream.from( 0 ) )
+      pairs.find( _._1 == event ) match {
+        case Some( ( _, index )  ) => {
+          event.name + "_" + index
+        }
+        case other => {
+          throw new StubException( s"Huh? Searching for an event apparently not in the ABI! event: ${event}, abi: ${abi}" )
+        }
+      }
+    }
+    else {
+      throw new StubException( s"Huh? Searching for an event in an ABI without events! event: ${event}, abi: ${abi}, abi.events.length ${abi.events.length}" )
+    }
+  }
 
   def anyIntegralToBigInt( a : Any ) : BigInt = {
     a match {

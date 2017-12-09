@@ -21,9 +21,12 @@ object Generator {
     "com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash}",
     "com.mchange.sc.v1.consuela.ethereum.ethabi",
     "com.mchange.sc.v1.consuela.ethereum.stub._",
+    "com.mchange.sc.v1.consuela.ethereum.stub.{Event => GenericEvent}",
     "com.mchange.sc.v1.consuela.ethereum.jsonrpc",
     "com.mchange.sc.v1.consuela.ethereum.jsonrpc.Abi"
   )
+
+  private val AnonymousEventName = "Anonymous"
 
   private def fillArgs( inputs : immutable.Seq[Abi.Function.Parameter] ) : immutable.Seq[Abi.Function.Parameter] = {
     inputs.zip( Stream.from(1) ).map { case ( param, index ) =>
@@ -53,6 +56,13 @@ object Generator {
       iw.println()
 
 
+      iw.println( s"final object $className {" )
+      iw.upIndent()
+      iw.println( "sealed trait Event extends GenericEvent" )
+      iw.println()
+      writeAllEventDefinitions( AnonymousEventName, className, abi, iw )
+      iw.downIndent()
+      iw.println(  "}" )
       iw.println( s"final case class $className( val contractAddress : EthAddress )( implicit icontext : jsonrpc.Invoker.Context, cfactory : jsonrpc.Client.Factory, poller : Poller, econtext : ExecutionContext ) {" )
       iw.upIndent()
       iw.println( s"final object transaction {" )
@@ -84,12 +94,118 @@ object Generator {
     }
   }
 
-  private def writeFunction( fcn : Abi.Function, constantSection : Boolean, async : Boolean, iw : IndentedWriter ) : Unit = {
-    def paramName( param : Abi.Function.Parameter ) : String = {
-      val tpe = param.`type`
-      val helper = forceHelper( tpe )
-      param.name
+  private def scalaSignatureParam( param : Abi.Parameter ) : String = {
+    val tpe = param.`type`
+    val helper = forceHelper( tpe )
+    s"${param.name} : ${helper.scalaTypeName}"
+  }
+
+  /*
+   * If there is just one anonymous event type defined, we know its type signature,
+   * so we can define it as a typed event.
+   * 
+   * If there are multiple anonymous events defined, we can't easily know at runtime
+   * which anonymous event we are encountering, so we defined a generic event wrapping
+   * the raw log entry
+   */ 
+  private def writeAllEventDefinitions( anonEventName : String, stubClassName : String, abi : Abi, iw : IndentedWriter ) : Unit = {
+    val ( named, anonymous ) = abi.events.partition( _.anonymous == false )
+    named foreach { event =>
+      val resolvedEventName = abiEventToResolvedName( event, abi )
+      writeTypedEventDefinition( event, resolvedEventName, stubClassName, iw )
     }
+    anonymous.length match {
+      case 1 => writeTypedAnonymousEventDefinition( anonymous(0), anonEventName, stubClassName, iw )
+      case _ => anonymous foreach { event =>
+        writeUntypedAnonymousEventDefinition( anonEventName, stubClassName, iw )
+      }
+    }
+  }
+
+  private def writeUntypedAnonymousEventDefinition (
+    anonEventName : String,
+    stubClassName : String,
+    iw            : IndentedWriter
+  ) : Unit = {
+    iw.println( s"final object ${ anonEventName } {" )
+    iw.upIndent()
+    iw.println( "def apply( solidityEvent : SolidityEvent.Anonymous, metadata : GenericEvent.Metadata ) : ${ anonEventName } = {" )
+    iw.upIndent()
+    iw.println( "this.apply (" )
+    iw.upIndent()
+    iw.println( "metadata," )
+    iw.println( "solidityEvent.logEntry" )
+    iw.downIndent()
+    iw.println( ")" )
+    iw.downIndent()
+    iw.println( "}" )
+    iw.downIndent()
+    iw.println(  "}" )
+    iw.println( s"final case class ${anonEventName} (" )
+    iw.upIndent()
+    iw.println( "metadata : GenericEvent.Metadata," )
+    iw.println( "logEntry : EthLogEntry" )
+    iw.downIndent()
+    iw.println( s") extends ${stubClassName}.Event" )
+  }
+
+  private def writeTypedAnonymousEventDefinition (
+    event         : Abi.Event,
+    anonEventName : String,
+    stubClassName : String,
+    iw            : IndentedWriter
+  ) : Unit = {
+    writeTypedEventDefinition( event, anonEventName, stubClassName, iw ) 
+  }
+
+  private def writeTypedEventDefinition (
+    event             : Abi.Event,
+    resolvedEventName : String, // usually just event.name, but not for overloaded or typed anonymous events
+    stubClassName     : String,
+    iw                : IndentedWriter ) : Unit = {
+    val helpers = event.inputs.map( input => forceHelper( input.`type` ) )
+    val extractedParamValues = {
+      for {
+        i <- 0 until helpers.length
+      } yield {
+        helpers(i).outConversionGen( s"(solidityEvent.inputs( ${i} ).value)" )
+      }
+    }
+    val solidityEventType = {
+      if ( event.anonymous ) {
+        "Anonymous"
+      }
+      else {
+        "Named"
+      }
+    }
+    iw.println( s"final object ${ resolvedEventName } {" )
+    iw.upIndent()
+    iw.println( "def apply( solidityEvent : SolidityEvent.${solidityEventType}, metadata : GenericEvent.Metadata ) : ${ resolvedEventName } = {" )
+    iw.upIndent()
+    iw.println( "this.apply (" )
+    iw.upIndent()
+    extractedParamValues.foreach { epv =>
+      iw.println( epv + "," )
+    }
+    iw.println( "metadata," )
+    iw.println( "solidityEvent.logEntry" )
+    iw.downIndent()
+    iw.println( ")" )
+    iw.downIndent()
+    iw.println( "}" )
+    iw.downIndent()
+    iw.println(  "}" )
+    iw.println( s"final case class ${ resolvedEventName } (" )
+    iw.upIndent()
+    event.inputs.map( scalaSignatureParam ).map( _ + "," ).foreach( iw.println )
+    iw.println( "metadata : GenericEvent.Metadata," )
+    iw.println( "logEntry : EthLogEntry" )
+    iw.downIndent()
+    iw.println( s") extends ${stubClassName}.Event" )
+  }
+
+  private def writeFunction( fcn : Abi.Function, constantSection : Boolean, async : Boolean, iw : IndentedWriter ) : Unit = {
     def toRepLambda( param : Abi.Function.Parameter ) : String = {
       val tpe = param.`type`
       val helper = forceHelper( tpe )
@@ -163,12 +279,6 @@ object Generator {
   }
 
   private def functionSignature( fcn : Abi.Function, constantSection : Boolean, async : Boolean ) : String = {
-    def param( param : Abi.Function.Parameter ) : String = {
-      val tpe = param.`type`
-      val helper = forceHelper( tpe )
-      s"${param.name} : ${helper.scalaTypeName}"
-    }
-
     def scalaType( param : Abi.Function.Parameter ) : String = {
       val tpe = param.`type`
       val helper = forceHelper( tpe )
@@ -177,7 +287,7 @@ object Generator {
 
     def paymentArg = "optionalPaymentInWei : Option[sol.UInt256] = None"
 
-    val params = fcn.inputs.map(param) ++ ( if ( fcn.payable ) immutable.Seq( paymentArg ) else immutable.Seq.empty[String] )
+    val params = fcn.inputs.map( scalaSignatureParam ) ++ ( if ( fcn.payable ) immutable.Seq( paymentArg ) else immutable.Seq.empty[String] )
     
     val prereturn = s"""def ${fcn.name}( ${params.mkString(", ")} )( implicit sender : Sender )"""
 
