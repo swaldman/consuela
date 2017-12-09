@@ -18,8 +18,9 @@ object Generator {
     "scala.concurrent.duration.Duration",
     "com.mchange.sc.v2.concurrent.Poller",
     "com.mchange.sc.v1.consuela._",
-    "com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash}",
+    "com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash,EthLogEntry}",
     "com.mchange.sc.v1.consuela.ethereum.ethabi",
+    "com.mchange.sc.v1.consuela.ethereum.ethabi.SolidityEvent",
     "com.mchange.sc.v1.consuela.ethereum.stub._",
     "com.mchange.sc.v1.consuela.ethereum.stub.{Event => GenericEvent}",
     "com.mchange.sc.v1.consuela.ethereum.jsonrpc",
@@ -147,6 +148,7 @@ object Generator {
     iw.println( "logEntry : EthLogEntry" )
     iw.downIndent()
     iw.println( s") extends ${stubClassName}.Event" )
+    iw.println()
   }
 
   private def writeTypedAnonymousEventDefinition (
@@ -181,7 +183,7 @@ object Generator {
     }
     iw.println( s"final object ${ resolvedEventName } {" )
     iw.upIndent()
-    iw.println( "def apply( solidityEvent : SolidityEvent.${solidityEventType}, metadata : GenericEvent.Metadata ) : ${ resolvedEventName } = {" )
+    iw.println( s"def apply( solidityEvent : SolidityEvent.${solidityEventType}, metadata : GenericEvent.Metadata ) : ${ resolvedEventName } = {" )
     iw.upIndent()
     iw.println( "this.apply (" )
     iw.upIndent()
@@ -203,6 +205,7 @@ object Generator {
     iw.println( "logEntry : EthLogEntry" )
     iw.downIndent()
     iw.println( s") extends ${stubClassName}.Event" )
+    iw.println()
   }
 
   private def writeFunction( fcn : Abi.Function, constantSection : Boolean, async : Boolean, iw : IndentedWriter ) : Unit = {
