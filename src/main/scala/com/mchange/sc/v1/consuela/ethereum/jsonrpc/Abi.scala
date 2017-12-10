@@ -32,6 +32,25 @@ final object Abi {
     val `type`  : String
     def tpe = `type`
   }
+
+  def toConstructorSource( fparam : Abi.Function.Parameter )    = s"Abi.Function.Parameter( name = ${fparam.name}, `type` = ${fparam.type} )"
+  def toConstructorSource( cparam : Abi.Constructor.Parameter ) = s"Abi.Constructor.Parameter( name = ${cparam.name}, `type` = ${cparam.type} )"
+  def toConstructorSource( eparam : Abi.Event.Parameter )       = s"Abi.Event.Parameter( name = ${eparam.name}, `type` = ${eparam.type}, indexed = ${eparam.indexed} )"
+
+  def toConstructorSource( f : Abi.Function ) = {
+    s"""Abi.Function( name = ${f.name}, inputs = immutable.Seq( ${f.inputs.map( toConstructorSource ).mkString(", ")} ), """ +
+    s"""outputs = immutable.Seq( ${f.outputs.map( toConstructorSource ).mkString(", ")} ), constant = ${f.constant}, """ +
+    s"""payable = ${f.payable}, stateMutability = ${f.stateMutability} )"""
+  }
+  def toConstructorSource( c : Abi.Constructor ) = {
+    s"""Abi.Constructor( inputs = immutable.Seq( ${c.inputs.map( toConstructorSource ).mkString(", ")} ), payable = ${c.payable}, stateMutability = ${c.stateMutability} )"""
+  }
+  def toConstructorSource( e : Abi.Event ) = {
+    s"""Abi.Event( name = ${e.name}, inputs = immutable.Seq( ${e.inputs.map( toConstructorSource ).mkString(", ")} ), anonymous = ${e.anonymous} )"""
+  }
+  def toConstructorSource( f : Abi.Fallback ) = {
+    s"""Abi.Fallback( payable = ${f.payable}, stateMutability = ${f.stateMutability} )"""
+  }
 }
 final case class Abi(
   functions : immutable.Seq[Abi.Function],
