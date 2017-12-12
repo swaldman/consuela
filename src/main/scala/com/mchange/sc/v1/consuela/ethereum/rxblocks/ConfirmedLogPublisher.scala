@@ -152,9 +152,24 @@ class ConfirmedLogPublisher( ethJsonRpcUrl : String, query : Client.Log.Filter.Q
   }
 
   private def removePending( removed : Client.Log.Removed ) : Unit = this.synchronized {
+    def warnNoChange() = WARNING.log(
+      s"""|Received a notification to remove an event, but no such event was found to be removed. 
+          |The event may have been emitted prior to subscription start (in which case there is no problem),
+          |or the invalidated event may already have been emitted to subscribers. 
+          |
+          |If you see this message frequently, consider increasing 'numConfirmations'. And always
+          |verify that blockchain state is as expected before taking consequential actions in
+          |response to events.
+          |
+          |Removal notification:
+          |${removed}""".stripMargin
+    )
+
     val mbBlockMap = pendingConfirmation.get( removed.blockNumber.widen )
-    mbBlockMap.foreach { blockMap =>
+    mbBlockMap.fold( warnNoChange() ) { blockMap =>
+      val initSize = blockMap.size
       blockMap -= LogIdentifier( removed )
+      if (blockMap.size == initSize ) warnNoChange()
       if ( blockMap.isEmpty ) {
         pendingConfirmation -= removed.blockNumber.widen
       }
