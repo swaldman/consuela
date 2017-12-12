@@ -16,48 +16,39 @@ import com.mchange.sc.v1.log.MLevel._
 
 import org.reactivestreams.{Publisher => RxPublisher, Subscriber => RxSubscriber, Subscription => RxSubscription, Processor => RxProcessor}
 
-object StubEventTransformer {
+object SimpleTransformer {
   implicit lazy val logger = mlogger( this )
 }
-final class StubEventTransformer( abi : Abi, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
+abstract class SimpleTransformer[FROM,TO]( subscriptionUpdateDelay : Duration = 3.seconds )( implicit
   scheduler : Scheduler,
   executionContext : ExecutionContext
-) extends RxProcessor[Client.Log.Recorded,(SolidityEvent, stub.Event.Metadata)] with SimpleSubscription.Parent[(SolidityEvent, stub.Event.Metadata)] {
-  import StubEventTransformer.logger
+) extends RxProcessor[FROM,TO] with SimpleSubscription.Parent[TO] {
+  import SimpleTransformer.logger
 
-  val interpretor = SolidityEvent.Interpretor( abi )
+  def ftransform( recorded : FROM ) : Failable[TO]
 
   // MT: protected by this' lock
   private var recordedSubscription : RxSubscription = null
-  private val subscriptions : mutable.HashSet[SimpleSubscription[(SolidityEvent, stub.Event.Metadata)]] = mutable.HashSet.empty[SimpleSubscription[(SolidityEvent, stub.Event.Metadata)]]
+  private val subscriptions : mutable.HashSet[SimpleSubscription[TO]] = mutable.HashSet.empty[SimpleSubscription[TO]]
 
-  private def addSubscription( s : SimpleSubscription[(SolidityEvent, stub.Event.Metadata)] ) : Unit = this.synchronized {
+  private def addSubscription( s : SimpleSubscription[TO] ) : Unit = this.synchronized {
     subscriptions += s
   }
-  private [rxblocks] def removeSubscription( s : SimpleSubscription[(SolidityEvent, stub.Event.Metadata)] ) : Unit = this.synchronized {
+  private [rxblocks] def removeSubscription( s : SimpleSubscription[TO] ) : Unit = this.synchronized {
     subscriptions -= s
   }
   private def init( rs : RxSubscription ) : Unit = this.synchronized {
     recordedSubscription = rs
   }
-  private def broadcast( terminate : Boolean )( f : (SimpleSubscription[(SolidityEvent, stub.Event.Metadata)]) => Unit ) : Unit = this.synchronized {
+  private def broadcast( terminate : Boolean )( f : (SimpleSubscription[TO]) => Unit ) : Unit = this.synchronized {
     subscriptions.foreach( f )
     if ( terminate ) recordedSubscription = null
-  }
-
-  def ftransform( recorded : Client.Log.Recorded ) : Failable[ (SolidityEvent, stub.Event.Metadata) ] = {
-    for {
-      solidityEvent <- interpretor.interpret( recorded.ethLogEntry )
-    }
-    yield {
-      ( solidityEvent, stub.Event.Metadata( recorded ) )
-    }
   }
 
   def onSubscribe( subscription : RxSubscription ) : Unit = init( subscription )
   def onComplete()                                 : Unit = broadcast( terminate = true )( _.complete() )
   def onError( t : Throwable )                     : Unit = broadcast( terminate = true )( _.break(t) )
-  def onNext( recorded : Client.Log.Recorded )     : Unit = {
+  def onNext( recorded : FROM )                    : Unit = {
     try {
       val pair = ftransform( recorded ).get
       broadcast( terminate = false )( _.enqueue( List( pair ), false ) )
@@ -67,8 +58,8 @@ final class StubEventTransformer( abi : Abi, subscriptionUpdateDelay : Duration 
     }
   }
 
-  def subscribe( s : RxSubscriber[_ >: ( SolidityEvent, stub.Event.Metadata ) ] ) = {
-    val subscription = new SimpleSubscription[(SolidityEvent, stub.Event.Metadata)]( this, s, subscriptionUpdateDelay )
+  def subscribe( s : RxSubscriber[_ >: TO] ) = {
+    val subscription = new SimpleSubscription[TO]( this, s, subscriptionUpdateDelay )
     addSubscription( subscription )
     s.onSubscribe( subscription )
   }

@@ -151,18 +151,19 @@ object Generator {
     }
   }
 
+
   /*
   private def writeEventsPublisher( anonEventName : String, abi : Abi, iw : IndexedWriter ) : Unit = {
     iw.println( "val eventsPublisher = new ConfirmedLogPublisher( address, eventConfirmations )" )
+    iw.println( "val transformer = new StubEventTransformer( ContractAbi )" )
     iw.println()
     iw.println( "// MT: Protected by this' lock" )
     iw.println( "var subscription : Subscription = null" )
-    // iw.println( "
     iw.println()
-    iw.println( "final object Subscriber extends Subscriber[Client.Log.Recorded] {" )
+    iw.println( "final object Subscriber extends Subscriber[ ( SolidityEvent, GenericEvent.Metadata ) ] {" )
     iw.upIndent()
     iw.println( "def onSubscribe( s : Subscription ) : Unit = this.synchronized { this.subscription = s }" )
-    iw.println( "def onNext( blockNum : BigInt )     : Unit = ???" )
+    iw.println( "def onNext( pair : ( SolidityEvent, GenericEvent.Metadata ) ) : Unit = ???" )
     iw.println( "def onError( t : Throwable )        : Unit = ???" )
     iw.println( "def onComplete()                    : Unit = ???" )
     iw.downIndent()
