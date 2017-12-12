@@ -10,13 +10,16 @@ import com.mchange.sc.v2.lang.borrow
 
 import com.mchange.v2.io.IndentedWriter
 
+import play.api.libs.json.Json
+
+
 object Generator {
 
   private val StubImports = immutable.Seq(
     "scala.collection._",
     "scala.concurrent._",
     "scala.concurrent.duration.Duration",
-    "com.mchange.sc.v2.concurrent.Poller",
+    "com.mchange.sc.v2.concurrent.{Poller,Scheduler}",
     "com.mchange.sc.v1.consuela._",
     "com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash,EthLogEntry}",
     "com.mchange.sc.v1.consuela.ethereum.ethabi",
@@ -24,10 +27,13 @@ object Generator {
     "com.mchange.sc.v1.consuela.ethereum.stub._",
     "com.mchange.sc.v1.consuela.ethereum.stub.{Event => GenericEvent}",
     "com.mchange.sc.v1.consuela.ethereum.jsonrpc",
-    "com.mchange.sc.v1.consuela.ethereum.jsonrpc.Abi"
+    "com.mchange.sc.v1.consuela.ethereum.jsonrpc.Abi",
+    "play.api.libs.json.Json"
   )
 
   private val AnonymousEventName = "Anonymous"
+
+  private val DefaultEventConfirmations = 12
 
   private def fillArgs( inputs : immutable.Seq[Abi.Function.Parameter] ) : immutable.Seq[Abi.Function.Parameter] = {
     inputs.zip( Stream.from(1) ).map { case ( param, index ) =>
@@ -59,17 +65,26 @@ object Generator {
 
       iw.println( s"final object $className {" )
       iw.upIndent()
+      generateContractAbiVarAndFunctions( abi, iw )
       iw.println( "sealed trait Event extends GenericEvent" )
       iw.println()
       writeAllEventDefinitions( AnonymousEventName, className, abi, iw )
       iw.downIndent()
       iw.println(  "}" )
-      iw.println( s"final case class $className( val contractAddress : EthAddress )( implicit icontext : jsonrpc.Invoker.Context, cfactory : jsonrpc.Client.Factory, poller : Poller, econtext : ExecutionContext ) {" )
+      iw.println( s"final case class $className( val contractAddress : EthAddress, val eventConfirmations : Int = ${DefaultEventConfirmations} )( implicit " )
+      iw.upIndent()
+      iw.println(  "icontext  : jsonrpc.Invoker.Context," )
+      iw.println(  "cfactory  : jsonrpc.Client.Factory = jsonrpc.Client.Factory.Default,"  )
+      iw.println(  "poller    : Poller = Poller.Default," )
+      iw.println(  "scheduler : Scheduler = Scheduler.Default," )
+      iw.println(  "econtext  : ExecutionContext = ExecutionContext.global" )
+      iw.downIndent()
+      iw.println(  ") {" )
       iw.upIndent()
       iw.println( s"final object transaction {" )
       iw.upIndent()
       abi.functions.foreach { fcn =>
-        writeFunction( fillInputs(fcn), false, async, iw )
+        writeFunction( className, fillInputs(fcn), false, async, iw )
         iw.println()
       }
       iw.downIndent()
@@ -77,7 +92,7 @@ object Generator {
       iw.println( s"final object constant {" )
       iw.upIndent()
       abi.functions.filter( _.constant ).foreach { fcn =>
-        writeFunction( fillInputs(fcn), true, async, iw )
+        writeFunction( className, fillInputs(fcn), true, async, iw )
         iw.println()
       }
       iw.downIndent()
@@ -101,6 +116,19 @@ object Generator {
     s"${param.name} : ${helper.scalaTypeName}"
   }
 
+  private def generateContractAbiVarAndFunctions( abi : Abi, iw : IndentedWriter ) : Unit = {
+    iw.println( s"val ContractAbi : Abi = Json.parse( \042\042\042${Json.stringify(Json.toJson(abi))}\042\042\042 ).as[Abi]" )
+    abi.functions.zip( Stream.from(0) ).foreach { case ( fcn, index ) =>
+      iw.println( s"val ${functionValName(fcn)} = ContractAbi.functions(${index})" )
+    }
+  }
+
+  private def functionValName( f : Abi.Function ) : String = {
+    val base = s"Function_${f.name}"
+    val typesPart = f.inputs.map( _.`type` ).mkString("_")
+    if ( typesPart.isEmpty ) base else s"${base}_${typesPart}"
+  }
+
   /*
    * If there is just one anonymous event type defined, we know its type signature,
    * so we can define it as a typed event.
@@ -122,6 +150,25 @@ object Generator {
       }
     }
   }
+
+  /*
+  private def writeEventsPublisher( anonEventName : String, abi : Abi, iw : IndexedWriter ) : Unit = {
+    iw.println( "val eventsPublisher = new ConfirmedLogPublisher( address, eventConfirmations )" )
+    iw.println()
+    iw.println( "// MT: Protected by this' lock" )
+    iw.println( "var subscription : Subscription = null" )
+    // iw.println( "
+    iw.println()
+    iw.println( "final object Subscriber extends Subscriber[Client.Log.Recorded] {" )
+    iw.upIndent()
+    iw.println( "def onSubscribe( s : Subscription ) : Unit = this.synchronized { this.subscription = s }" )
+    iw.println( "def onNext( blockNum : BigInt )     : Unit = ???" )
+    iw.println( "def onError( t : Throwable )        : Unit = ???" )
+    iw.println( "def onComplete()                    : Unit = ???" )
+    iw.downIndent()
+    iw.println( "}")
+  }
+  */ 
 
   private def writeUntypedAnonymousEventDefinition (
     anonEventName : String,
@@ -208,23 +255,11 @@ object Generator {
     iw.println()
   }
 
-  private def writeFunction( fcn : Abi.Function, constantSection : Boolean, async : Boolean, iw : IndentedWriter ) : Unit = {
+  private def writeFunction( className : String, fcn : Abi.Function, constantSection : Boolean, async : Boolean, iw : IndentedWriter ) : Unit = {
     def toRepLambda( param : Abi.Function.Parameter ) : String = {
       val tpe = param.`type`
       val helper = forceHelper( tpe )
       helper.inConversionGen( param.name )
-    }
-    def abiFunctionCtor = {
-      def paramctor( param : Abi.Function.Parameter ) = s"""Abi.Function.Parameter( "${param.name}", s"${param.`type`}" )"""
-      def paramctors( seq : immutable.Seq[Abi.Function.Parameter] ) = seq.map( paramctor ).mkString( ", " )
-      s"""|Abi.Function( 
-          |  name = "${fcn.name}",
-          |  inputs = immutable.Seq( ${paramctors(fcn.inputs)} ),
-          |  outputs = immutable.Seq( ${paramctors(fcn.outputs)} ),
-          |  constant = ${fcn.constant},
-          |  payable = ${fcn.payable},
-          |  stateMutability = "${fcn.stateMutability}" 
-          |)""".stripMargin
     }
 
     iw.println( functionSignature( fcn, constantSection, async ) + " = {" )
@@ -234,7 +269,7 @@ object Generator {
       iw.println("val optionalPaymentInWei : Option[sol.UInt256] = None")
       iw.println()
     }
-    iw.println( s"""val fcn = ${abiFunctionCtor}""" )
+    iw.println( s"""val fcn = ${className}.${functionValName(fcn)}""" )
     iw.println( s"""val reps = immutable.Seq[Any]( ${fcn.inputs.map( toRepLambda ).mkString(", ")} )""" )
     iw.println( s"""val callData = ethabi.callDataForAbiFunctionFromEncoderRepresentations( reps, fcn ).get""" )
 
