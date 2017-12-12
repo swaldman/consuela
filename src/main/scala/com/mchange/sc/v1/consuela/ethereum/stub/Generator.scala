@@ -20,15 +20,19 @@ object Generator {
     "scala.concurrent._",
     "scala.concurrent.duration.Duration",
     "com.mchange.sc.v2.concurrent.{Poller,Scheduler}",
+    "com.mchange.sc.v2.failable._",
     "com.mchange.sc.v1.consuela._",
     "com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash,EthLogEntry}",
     "com.mchange.sc.v1.consuela.ethereum.ethabi",
     "com.mchange.sc.v1.consuela.ethereum.ethabi.SolidityEvent",
+    "com.mchange.sc.v1.consuela.ethereum.stub",
     "com.mchange.sc.v1.consuela.ethereum.stub._",
     "com.mchange.sc.v1.consuela.ethereum.stub.{Event => GenericEvent}",
     "com.mchange.sc.v1.consuela.ethereum.jsonrpc",
-    "com.mchange.sc.v1.consuela.ethereum.jsonrpc.Abi",
-    "play.api.libs.json.Json"
+    "com.mchange.sc.v1.consuela.ethereum.jsonrpc.{Abi,Client}",
+    "com.mchange.sc.v1.consuela.ethereum.rxblocks._",
+    "play.api.libs.json.Json",
+    "org.reactivestreams._"
   )
 
   private val AnonymousEventName = "Anonymous"
@@ -66,9 +70,7 @@ object Generator {
       iw.println( s"final object $className {" )
       iw.upIndent()
       generateContractAbiVarAndFunctions( abi, iw )
-      iw.println( "sealed trait Event extends GenericEvent" )
-      iw.println()
-      writeAllEventDefinitions( AnonymousEventName, className, abi, iw )
+      generateTopLevelEventAndFactory( className, abi, iw )
       iw.downIndent()
       iw.println(  "}" )
       iw.println( s"final case class $className( val contractAddress : EthAddress, val eventConfirmations : Int = ${DefaultEventConfirmations} )( implicit " )
@@ -79,7 +81,7 @@ object Generator {
       iw.println(  "scheduler : Scheduler = Scheduler.Default," )
       iw.println(  "econtext  : ExecutionContext = ExecutionContext.global" )
       iw.downIndent()
-      iw.println(  ") {" )
+      iw.println(  s") extends Publisher[${className}.Event] {" )
       iw.upIndent()
       iw.println( s"final object transaction {" )
       iw.upIndent()
@@ -97,6 +99,8 @@ object Generator {
       }
       iw.downIndent()
       iw.println( "}" )
+      iw.println()
+      writeEventsPublisher( className, abi, iw )
       iw.downIndent()
       iw.println( "}" )
     }
@@ -114,6 +118,64 @@ object Generator {
     val tpe = param.`type`
     val helper = forceHelper( tpe )
     s"${param.name} : ${helper.scalaTypeName}"
+  }
+
+  private def generateTopLevelEventAndFactory( className : String, abi : Abi, iw : IndentedWriter ) : Unit = {
+    val hasAnonymous = abi.events.exists( _.anonymous )
+
+    iw.println( "final object Event {" )
+    iw.upIndent()
+    writeAllEventDefinitions( className, abi, iw )
+    iw.println()
+    iw.println( "def apply( solidityEvent : SolidityEvent, metadata : GenericEvent.Metadata ) : Event = {" )
+    iw.upIndent()
+    if ( hasAnonymous ) {
+      generateNamedAnonymousEventSwitch( abi, iw )
+    }
+    else {
+      iw.println( "val named = solidityEvent.asInstanceOf[SolidityEvent.Named]" )
+      generateNamedEventSwitch( abi, iw )
+    }
+    iw.downIndent()
+    iw.println( "}" )
+    iw.println()
+    generateEventProcessorClass(className, iw)
+    iw.downIndent()
+    iw.println( "}" )
+    iw.println( "sealed trait Event extends GenericEvent" )
+    iw.println()
+  }
+
+  private def generateNamedAnonymousEventSwitch( abi : Abi, iw : IndentedWriter ) : Unit = {
+    iw.println( "solidityEvent match {" )
+    iw.upIndent()
+    iw.println( "case named : SolidityEvent.Named => {" )
+    iw.upIndent()
+    generateNamedEventSwitch( abi, iw )
+    iw.downIndent()
+    iw.println( "}" )
+    iw.println( s"case anonymous : SolidityEvent.Anonymous => Event.${AnonymousEventName}( anonymous, metadata )" )
+    iw.downIndent()
+    iw.println( "}" )
+  }
+
+  // TODO: Properly match overloaded events
+  private def generateNamedEventSwitch( abi : Abi, iw : IndentedWriter ) : Unit = {
+    iw.println( "named.name match {" )
+    iw.upIndent()
+    abi.events.filter( evt => !evt.anonymous ).foreach { evt =>
+      iw.println( s"case \042${evt.name}\042 => Event.${evt.name}( named, metadata )" )
+    }
+    iw.downIndent()
+    iw.println( "}" )
+  }
+
+  private def generateEventProcessorClass( className : String, iw : IndentedWriter ) : Unit = {
+    iw.println( s"class Processor()(implicit scheduler : Scheduler, executionContext : ExecutionContext) extends SimpleProcessor[(SolidityEvent, GenericEvent.Metadata ), ${className}.Event]()(scheduler, executionContext) {" )
+    iw.upIndent()
+    iw.println( s"def ftransform( pair : (SolidityEvent, stub.Event.Metadata) ) : Failable[${className}.Event] = succeed( ${className}.Event.apply( pair._1, pair._2 ) )" )
+    iw.downIndent()
+    iw.println( "}" )
   }
 
   private def generateContractAbiVarAndFunctions( abi : Abi, iw : IndentedWriter ) : Unit = {
@@ -137,48 +199,37 @@ object Generator {
    * which anonymous event we are encountering, so we defined a generic event wrapping
    * the raw log entry
    */ 
-  private def writeAllEventDefinitions( anonEventName : String, stubClassName : String, abi : Abi, iw : IndentedWriter ) : Unit = {
+  private def writeAllEventDefinitions( stubClassName : String, abi : Abi, iw : IndentedWriter ) : Unit = {
     val ( named, anonymous ) = abi.events.partition( _.anonymous == false )
     named foreach { event =>
       val resolvedEventName = abiEventToResolvedName( event, abi )
       writeTypedEventDefinition( event, resolvedEventName, stubClassName, iw )
     }
     anonymous.length match {
-      case 1 => writeTypedAnonymousEventDefinition( anonymous(0), anonEventName, stubClassName, iw )
+      case 1 => writeTypedAnonymousEventDefinition( anonymous(0), stubClassName, iw )
       case _ => anonymous foreach { event =>
-        writeUntypedAnonymousEventDefinition( anonEventName, stubClassName, iw )
+        writeUntypedAnonymousEventDefinition( stubClassName, iw )
       }
     }
   }
 
 
-  /*
-  private def writeEventsPublisher( anonEventName : String, abi : Abi, iw : IndexedWriter ) : Unit = {
-    iw.println( "val eventsPublisher = new ConfirmedLogPublisher( address, eventConfirmations )" )
-    iw.println( "val transformer = new StubEventTransformer( ContractAbi )" )
+  private def writeEventsPublisher( className : String, abi : Abi, iw : IndentedWriter ) : Unit = {
+    iw.println(  "private val eventsPublisher = new ConfirmedLogPublisher( icontext.jsonRpcUrl, Client.Log.Filter.Query( addresses = List(contractAddress) ), eventConfirmations )" )
+    iw.println( s"private val baseProcessor   = new StubEventProcessor( ${className}.ContractAbi )" )
+    iw.println( s"private val eventProcessor  = new ${className}.Event.Processor()" )
     iw.println()
-    iw.println( "// MT: Protected by this' lock" )
-    iw.println( "var subscription : Subscription = null" )
+    iw.println( s"def subscribe( subscriber : Subscriber[_ >: ${className}.Event] ) = eventProcessor.subscribe( subscriber )")
     iw.println()
-    iw.println( "final object Subscriber extends Subscriber[ ( SolidityEvent, GenericEvent.Metadata ) ] {" )
-    iw.upIndent()
-    iw.println( "def onSubscribe( s : Subscription ) : Unit = this.synchronized { this.subscription = s }" )
-    iw.println( "def onNext( pair : ( SolidityEvent, GenericEvent.Metadata ) ) : Unit = ???" )
-    iw.println( "def onError( t : Throwable )        : Unit = ???" )
-    iw.println( "def onComplete()                    : Unit = ???" )
-    iw.downIndent()
-    iw.println( "}")
   }
-  */ 
 
   private def writeUntypedAnonymousEventDefinition (
-    anonEventName : String,
     stubClassName : String,
     iw            : IndentedWriter
   ) : Unit = {
-    iw.println( s"final object ${ anonEventName } {" )
+    iw.println( s"final object ${ AnonymousEventName } {" )
     iw.upIndent()
-    iw.println( "def apply( solidityEvent : SolidityEvent.Anonymous, metadata : GenericEvent.Metadata ) : ${ anonEventName } = {" )
+    iw.println( "def apply( solidityEvent : SolidityEvent.Anonymous, metadata : GenericEvent.Metadata ) : ${ AnonymousEventName } = {" )
     iw.upIndent()
     iw.println( "this.apply (" )
     iw.upIndent()
@@ -190,7 +241,7 @@ object Generator {
     iw.println( "}" )
     iw.downIndent()
     iw.println(  "}" )
-    iw.println( s"final case class ${anonEventName} (" )
+    iw.println( s"final case class ${AnonymousEventName} (" )
     iw.upIndent()
     iw.println( "metadata : GenericEvent.Metadata," )
     iw.println( "logEntry : EthLogEntry" )
@@ -201,11 +252,10 @@ object Generator {
 
   private def writeTypedAnonymousEventDefinition (
     event         : Abi.Event,
-    anonEventName : String,
     stubClassName : String,
     iw            : IndentedWriter
   ) : Unit = {
-    writeTypedEventDefinition( event, anonEventName, stubClassName, iw ) 
+    writeTypedEventDefinition( event, AnonymousEventName, stubClassName, iw ) 
   }
 
   private def writeTypedEventDefinition (

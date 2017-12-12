@@ -16,14 +16,14 @@ import com.mchange.sc.v1.log.MLevel._
 
 import org.reactivestreams.{Publisher => RxPublisher, Subscriber => RxSubscriber, Subscription => RxSubscription, Processor => RxProcessor}
 
-object SimpleTransformer {
+object SimpleProcessor {
   implicit lazy val logger = mlogger( this )
 }
-abstract class SimpleTransformer[FROM,TO]( subscriptionUpdateDelay : Duration = 3.seconds )( implicit
+abstract class SimpleProcessor[FROM,TO]( subscriptionUpdateDelay : Duration = 3.seconds )( implicit
   scheduler : Scheduler,
   executionContext : ExecutionContext
 ) extends RxProcessor[FROM,TO] with SimpleSubscription.Parent[TO] {
-  import SimpleTransformer.logger
+  import SimpleProcessor.logger
 
   def ftransform( recorded : FROM ) : Failable[TO]
 

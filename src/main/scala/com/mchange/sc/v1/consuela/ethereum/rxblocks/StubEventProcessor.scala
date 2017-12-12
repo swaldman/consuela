@@ -12,10 +12,10 @@ import com.mchange.sc.v2.concurrent.Scheduler
 
 import com.mchange.sc.v2.failable._
 
-final class StubEventTransformer( abi : Abi, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
+final class StubEventProcessor( abi : Abi, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
   scheduler : Scheduler,
   executionContext : ExecutionContext
-) extends SimpleTransformer[Client.Log.Recorded,(SolidityEvent, stub.Event.Metadata)]( subscriptionUpdateDelay )( scheduler, executionContext ) {
+) extends SimpleProcessor[Client.Log.Recorded,(SolidityEvent, stub.Event.Metadata)]( subscriptionUpdateDelay )( scheduler, executionContext ) {
 
   val interpretor = SolidityEvent.Interpretor( abi )
 
