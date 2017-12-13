@@ -43,12 +43,12 @@ package object ethabi {
   }
 
   final object SolidityEvent {
+    def computeIdentifierTopic( event : Abi.Event ) : EthLogEntry.Topic = {
+      val eventSignature = event.name + "(" + event.inputs.map( param => canonicalizeTypeName( param.`type` ) ).mkString(",") + ")"
+      Topic( EthHash.hash( eventSignature.getBytes( Codec.UTF8.charSet ) ).bytes )
+    }
     case class Interpretor( abi : Abi ) {
       private lazy val identifiers: immutable.Map[EthLogEntry.Topic,Abi.Event] = {
-        def computeIdentifierTopic( event : Abi.Event ) : EthLogEntry.Topic = {
-          val eventSignature = event.name + "(" + event.inputs.map( param => canonicalizeTypeName( param.`type` ) ).mkString(",") + ")"
-          Topic( EthHash.hash( eventSignature.getBytes( Codec.UTF8.charSet ) ).bytes )
-        }
         abi.events.map( event => ( computeIdentifierTopic( event ), event ) ).toMap
       }
    
@@ -73,6 +73,8 @@ package object ethabi {
     final case class Named( inputs : immutable.Seq[DecodedValue], logEntry : EthLogEntry, abiEvent : Abi.Event ) extends SolidityEvent {
       def name = abiEvent.name
       def address = logEntry.address
+
+      def signatureTopic : EthLogEntry.Topic = logEntry.topics(0)
     }
 
     final case class Anonymous( logEntry : EthLogEntry ) extends SolidityEvent {

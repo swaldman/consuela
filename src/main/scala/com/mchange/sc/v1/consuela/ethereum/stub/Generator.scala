@@ -1,5 +1,8 @@
 package com.mchange.sc.v1.consuela.ethereum.stub
 
+import com.mchange.sc.v1.consuela._
+import com.mchange.sc.v1.consuela.ethereum.EthLogEntry
+import com.mchange.sc.v1.consuela.ethereum.ethabi.SolidityEvent
 import com.mchange.sc.v1.consuela.ethereum.jsonrpc.Abi
 
 import scala.collection._
@@ -120,6 +123,25 @@ object Generator {
     s"${param.name} : ${helper.scalaTypeName}"
   }
 
+  /*
+  private def generateOverloadedEventsMap( iw : IndentedWriter ) : Unit = {
+    iw.println( "val overloadedEvents : immutable.Map[String,immutable.Map[EthLogEntry.Topic,String]] = {" )
+    iw.upIndent()
+
+    iw.println( "def topicNamePair( event : Abi.Event ) : immutable.Map[EthLogEntry.Topic, String] = {" )
+    iw.upIndent()
+    iw.println( "( SolidityEvent.computeIdentifierTopic( event ), abiEventToResolvedName( event, ContractAbi ) )" )
+    iw.downIndent()
+    iw.println( "}" )
+
+    iw.println( "val namesToOverloads = ContractAbi.events.groupBy( _.name ).filter( _._2.length > 1 )" )
+    iw.println( "namesToOverloads.mapValues( _.map( topicNamePair ).toMap" )
+    iw.downIndent()
+    iw.println( "}" )
+    iw.println()
+  }
+  */ 
+
   private def generateTopLevelEventAndFactory( className : String, abi : Abi, iw : IndentedWriter ) : Unit = {
     val hasAnonymous = abi.events.exists( _.anonymous )
 
@@ -161,10 +183,26 @@ object Generator {
 
   // TODO: Properly match overloaded events
   private def generateNamedEventSwitch( abi : Abi, iw : IndentedWriter ) : Unit = {
+    val overloadedEvents : immutable.Map[String,immutable.Map[EthLogEntry.Topic,String]] = {
+      def topicNamePair( event : Abi.Event ) : ( EthLogEntry.Topic, String ) = {
+        ( SolidityEvent.computeIdentifierTopic( event ), abiEventToResolvedName( event, abi ) )
+      }
+      val namesToOverloads = abi.events.groupBy( _.name ).filter( _._2.length > 1 )
+      namesToOverloads.mapValues( _.map( topicNamePair ).toMap )
+    }
     iw.println( "named.name match {" )
     iw.upIndent()
     abi.events.filter( evt => !evt.anonymous ).foreach { evt =>
-      iw.println( s"case \042${evt.name}\042 => Event.${evt.name}( named, metadata )" )
+      overloadedEvents.get( evt.name ) match {
+        case Some( map ) => {
+          map.foreach { case ( topic, resolvedName ) =>
+            iw.println( s"""case \042${evt.name}\042 if (named.signatureTopic == EthLogEntry.Topic("${topic.widen.hex}".decodeHex) => Event.${resolvedName}( named, metadata )""" )
+          }
+        }
+        case None => {
+          iw.println( s"case \042${evt.name}\042 => Event.${evt.name}( named, metadata )" )
+        }
+      }
     }
     iw.downIndent()
     iw.println( "}" )
