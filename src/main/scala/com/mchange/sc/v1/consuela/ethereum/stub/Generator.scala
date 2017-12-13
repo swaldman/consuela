@@ -71,7 +71,7 @@ object Generator {
       namesToOverloads.mapValues( _.map( topicResolvedNameEvent ).toMap )
     }
 
-    borrow( new IndentedWriter( sw ) ) { iw =>
+    borrow( new IndentedWriter( sw, "  " ) ) { iw => // two-space indent, Scala-style
       iw.println( s"package ${fullyQualifiedPackageName}" )
       iw.println()
       StubImports.foreach { imported =>
