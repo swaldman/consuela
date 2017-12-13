@@ -38,6 +38,8 @@ object Generator {
     "org.reactivestreams._"
   )
 
+  private type OverloadedEventsMap = immutable.Map[String,immutable.Map[EthLogEntry.Topic,(String, Abi.Event)]]
+
   private val AnonymousEventName = "Anonymous"
 
   private val DefaultEventConfirmations = 12
@@ -61,6 +63,14 @@ object Generator {
 
     val sw = new StringWriter()
 
+    val overloadedEvents : OverloadedEventsMap = {
+      def topicResolvedNameEvent( event : Abi.Event ) : ( EthLogEntry.Topic, (String, Abi.Event) ) = {
+        ( SolidityEvent.computeIdentifierTopic( event ), (abiEventToResolvedName( event, abi ), event) )
+      }
+      val namesToOverloads = abi.events.filterNot( _.anonymous ).groupBy( _.name ).filter( _._2.length > 1 )
+      namesToOverloads.mapValues( _.map( topicResolvedNameEvent ).toMap )
+    }
+
     borrow( new IndentedWriter( sw ) ) { iw =>
       iw.println( s"package ${fullyQualifiedPackageName}" )
       iw.println()
@@ -69,11 +79,10 @@ object Generator {
       }
       iw.println()
 
-
       iw.println( s"final object $className {" )
       iw.upIndent()
-      generateContractAbiVarAndFunctions( abi, iw )
-      generateTopLevelEventAndFactory( className, abi, iw )
+      generateContractAbiVarFunctionsOverloadedEvents( overloadedEvents, abi, iw )
+      generateTopLevelEventAndFactory( className, overloadedEvents, abi, iw )
       iw.downIndent()
       iw.println(  "}" )
       iw.println( s"final case class $className( val contractAddress : EthAddress, val eventConfirmations : Int = ${DefaultEventConfirmations} )( implicit " )
@@ -123,26 +132,7 @@ object Generator {
     s"${param.name} : ${helper.scalaTypeName}"
   }
 
-  /*
-  private def generateOverloadedEventsMap( iw : IndentedWriter ) : Unit = {
-    iw.println( "val overloadedEvents : immutable.Map[String,immutable.Map[EthLogEntry.Topic,String]] = {" )
-    iw.upIndent()
-
-    iw.println( "def topicNamePair( event : Abi.Event ) : immutable.Map[EthLogEntry.Topic, String] = {" )
-    iw.upIndent()
-    iw.println( "( SolidityEvent.computeIdentifierTopic( event ), abiEventToResolvedName( event, ContractAbi ) )" )
-    iw.downIndent()
-    iw.println( "}" )
-
-    iw.println( "val namesToOverloads = ContractAbi.events.groupBy( _.name ).filter( _._2.length > 1 )" )
-    iw.println( "namesToOverloads.mapValues( _.map( topicNamePair ).toMap" )
-    iw.downIndent()
-    iw.println( "}" )
-    iw.println()
-  }
-  */ 
-
-  private def generateTopLevelEventAndFactory( className : String, abi : Abi, iw : IndentedWriter ) : Unit = {
+  private def generateTopLevelEventAndFactory( className : String, overloadedEvents : OverloadedEventsMap, abi : Abi, iw : IndentedWriter ) : Unit = {
     val hasAnonymous = abi.events.exists( _.anonymous )
 
     iw.println( "final object Event {" )
@@ -152,11 +142,11 @@ object Generator {
     iw.println( "def apply( solidityEvent : SolidityEvent, metadata : GenericEvent.Metadata ) : Event = {" )
     iw.upIndent()
     if ( hasAnonymous ) {
-      generateNamedAnonymousEventSwitch( abi, iw )
+      generateNamedAnonymousEventSwitch( overloadedEvents, abi, iw )
     }
     else {
       iw.println( "val named = solidityEvent.asInstanceOf[SolidityEvent.Named]" )
-      generateNamedEventSwitch( abi, iw )
+      generateNamedEventSwitch( overloadedEvents, abi, iw )
     }
     iw.downIndent()
     iw.println( "}" )
@@ -168,12 +158,12 @@ object Generator {
     iw.println()
   }
 
-  private def generateNamedAnonymousEventSwitch( abi : Abi, iw : IndentedWriter ) : Unit = {
+  private def generateNamedAnonymousEventSwitch( overloadedEvents : OverloadedEventsMap, abi : Abi, iw : IndentedWriter ) : Unit = {
     iw.println( "solidityEvent match {" )
     iw.upIndent()
     iw.println( "case named : SolidityEvent.Named => {" )
     iw.upIndent()
-    generateNamedEventSwitch( abi, iw )
+    generateNamedEventSwitch(  overloadedEvents, abi, iw )
     iw.downIndent()
     iw.println( "}" )
     iw.println( s"case anonymous : SolidityEvent.Anonymous => Event.${AnonymousEventName}( anonymous, metadata )" )
@@ -181,29 +171,21 @@ object Generator {
     iw.println( "}" )
   }
 
-  // TODO: Properly match overloaded events
-  private def generateNamedEventSwitch( abi : Abi, iw : IndentedWriter ) : Unit = {
-    val overloadedEvents : immutable.Map[String,immutable.Map[EthLogEntry.Topic,String]] = {
-      def topicNamePair( event : Abi.Event ) : ( EthLogEntry.Topic, String ) = {
-        ( SolidityEvent.computeIdentifierTopic( event ), abiEventToResolvedName( event, abi ) )
-      }
-      val namesToOverloads = abi.events.groupBy( _.name ).filter( _._2.length > 1 )
-      namesToOverloads.mapValues( _.map( topicNamePair ).toMap )
-    }
+  private def generateNamedEventSwitch( overloadedEvents : OverloadedEventsMap, abi : Abi, iw : IndentedWriter ) : Unit = {
     iw.println( "named.name match {" )
     iw.upIndent()
-    abi.events.filter( evt => !evt.anonymous ).foreach { evt =>
-      overloadedEvents.get( evt.name ) match {
-        case Some( map ) => {
-          map.foreach { case ( topic, resolvedName ) =>
-            iw.println( s"""case \042${evt.name}\042 if (named.signatureTopic == EthLogEntry.Topic("${topic.widen.hex}".decodeHex) => Event.${resolvedName}( named, metadata )""" )
-          }
-        }
-        case None => {
-          iw.println( s"case \042${evt.name}\042 => Event.${evt.name}( named, metadata )" )
-        }
+
+    val namedEvents = abi.events.filter( evt => !evt.anonymous )
+    val notOverloaded = namedEvents.filterNot( e => overloadedEvents.keySet( e.name ) )
+    notOverloaded.foreach { event =>
+      iw.println( s"case \042${event.name}\042 => Event.${event.name}( named, metadata )" )
+    }
+    overloadedEvents.foreach { case ( name, innerMap ) =>
+      innerMap.foreach { case ( topic, ( resolvedName, event ) ) =>
+        iw.println( s"""case \042${name}\042 if (named.signatureTopic == ${overloadedEventSignatureTopicValName(event)}) => Event.${resolvedName}( named, metadata )""" )
       }
     }
+
     iw.downIndent()
     iw.println( "}" )
   }
@@ -216,16 +198,29 @@ object Generator {
     iw.println( "}" )
   }
 
-  private def generateContractAbiVarAndFunctions( abi : Abi, iw : IndentedWriter ) : Unit = {
+  private def generateContractAbiVarFunctionsOverloadedEvents( overloadedEvents : OverloadedEventsMap, abi : Abi, iw : IndentedWriter ) : Unit = {
     iw.println( s"val ContractAbi : Abi = Json.parse( \042\042\042${Json.stringify(Json.toJson(abi))}\042\042\042 ).as[Abi]" )
     abi.functions.zip( Stream.from(0) ).foreach { case ( fcn, index ) =>
       iw.println( s"val ${functionValName(fcn)} = ContractAbi.functions(${index})" )
+    }
+    for {
+      name                             <- overloadedEvents.keySet.toSeq
+      ( topic, (resolvedName, event) ) <- overloadedEvents.get( name ).fold( Nil : Seq[Tuple2[EthLogEntry.Topic,(String,Abi.Event)]] )( _.toSeq )
+      
+    } {
+      iw.println( s"""val ${overloadedEventSignatureTopicValName(event)} = EthLogEntry.Topic("${topic.widen.hex}".decodeHex)""" )
     }
   }
 
   private def functionValName( f : Abi.Function ) : String = {
     val base = s"Function_${f.name}"
     val typesPart = f.inputs.map( _.`type` ).mkString("_")
+    if ( typesPart.isEmpty ) base else s"${base}_${typesPart}"
+  }
+
+  private def overloadedEventSignatureTopicValName( e : Abi.Event ) : String = {
+    val base = s"OverloadedEventSignatureTopic_${e.name}"
+    val typesPart = e.inputs.map( _.`type` ).mkString("_")
     if ( typesPart.isEmpty ) base else s"${base}_${typesPart}"
   }
 
