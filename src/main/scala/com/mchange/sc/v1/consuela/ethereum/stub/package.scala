@@ -9,8 +9,6 @@ import com.mchange.sc.v1.consuela.ethereum.jsonrpc.Abi
 
 package object stub {
 
-  lazy val Zero = sol.UInt256(0) // if not lazy, we have weirdness because the types aren't initialized
-
   class StubException( message : String, t : Throwable = null ) extends EthereumException( message, t )
 
   final object ScalaParameterHelper {
@@ -44,17 +42,6 @@ package object stub {
     }
     else {
       throw new StubException( s"Huh? Searching for an event in an ABI without events! event: ${event}, abi: ${abi}, abi.events.length ${abi.events.length}" )
-    }
-  }
-
-  def anyIntegralToBigInt( a : Any ) : BigInt = {
-    a match {
-      case b  : Byte   => BigInt( b )
-      case s  : Short  => BigInt( s )
-      case i  : Int    => BigInt( i )
-      case l  : Long   => BigInt( l )
-      case bi : BigInt => bi
-      case _           => throw new StubException( s"${a} is not an integral type, cannot be converted to BigInt." )
     }
   }
 

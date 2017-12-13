@@ -29,8 +29,8 @@ object Generator {
     "com.mchange.sc.v1.consuela.ethereum.ethabi",
     "com.mchange.sc.v1.consuela.ethereum.ethabi.SolidityEvent",
     "com.mchange.sc.v1.consuela.ethereum.stub",
-    "com.mchange.sc.v1.consuela.ethereum.stub._",
-    "com.mchange.sc.v1.consuela.ethereum.stub.{Event => GenericEvent}",
+    "com.mchange.sc.v1.consuela.ethereum.stub.sol",
+    "com.mchange.sc.v1.consuela.ethereum.stub.Utilities._",
     "com.mchange.sc.v1.consuela.ethereum.jsonrpc",
     "com.mchange.sc.v1.consuela.ethereum.jsonrpc.{Abi,Client}",
     "com.mchange.sc.v1.consuela.ethereum.rxblocks._",
@@ -139,7 +139,7 @@ object Generator {
     iw.upIndent()
     writeAllEventDefinitions( className, abi, iw )
     iw.println()
-    iw.println( "def apply( solidityEvent : SolidityEvent, metadata : GenericEvent.Metadata ) : Event = {" )
+    iw.println( "def apply( solidityEvent : SolidityEvent, metadata : stub.Event.Metadata ) : Event = {" )
     iw.upIndent()
     if ( hasAnonymous ) {
       generateNamedAnonymousEventSwitch( overloadedEvents, abi, iw )
@@ -154,7 +154,7 @@ object Generator {
     generateEventProcessorClass(className, iw)
     iw.downIndent()
     iw.println( "}" )
-    iw.println( "sealed trait Event extends GenericEvent" )
+    iw.println( "sealed trait Event extends stub.Event" )
     iw.println()
   }
 
@@ -191,7 +191,7 @@ object Generator {
   }
 
   private def generateEventProcessorClass( className : String, iw : IndentedWriter ) : Unit = {
-    iw.println( s"class Processor()(implicit scheduler : Scheduler, executionContext : ExecutionContext) extends SimpleProcessor[(SolidityEvent, GenericEvent.Metadata ), ${className}.Event]()(scheduler, executionContext) {" )
+    iw.println( s"class Processor()(implicit scheduler : Scheduler, executionContext : ExecutionContext) extends SimpleProcessor[(SolidityEvent, stub.Event.Metadata ), ${className}.Event]()(scheduler, executionContext) {" )
     iw.upIndent()
     iw.println( s"def ftransform( pair : (SolidityEvent, stub.Event.Metadata) ) : Failable[${className}.Event] = succeed( ${className}.Event.apply( pair._1, pair._2 ) )" )
     iw.downIndent()
@@ -271,7 +271,7 @@ object Generator {
   ) : Unit = {
     iw.println( s"final object ${ AnonymousEventName } {" )
     iw.upIndent()
-    iw.println( "def apply( solidityEvent : SolidityEvent.Anonymous, metadata : GenericEvent.Metadata ) : ${ AnonymousEventName } = {" )
+    iw.println( "def apply( solidityEvent : SolidityEvent.Anonymous, metadata : stub.Event.Metadata ) : ${ AnonymousEventName } = {" )
     iw.upIndent()
     iw.println( "this.apply (" )
     iw.upIndent()
@@ -285,7 +285,7 @@ object Generator {
     iw.println(  "}" )
     iw.println( s"final case class ${AnonymousEventName} (" )
     iw.upIndent()
-    iw.println( "metadata : GenericEvent.Metadata," )
+    iw.println( "metadata : stub.Event.Metadata," )
     iw.println( "logEntry : EthLogEntry" )
     iw.downIndent()
     iw.println( s") extends ${stubClassName}.Event" )
@@ -323,7 +323,7 @@ object Generator {
     }
     iw.println( s"final object ${ resolvedEventName } {" )
     iw.upIndent()
-    iw.println( s"def apply( solidityEvent : SolidityEvent.${solidityEventType}, metadata : GenericEvent.Metadata ) : ${ resolvedEventName } = {" )
+    iw.println( s"def apply( solidityEvent : SolidityEvent.${solidityEventType}, metadata : stub.Event.Metadata ) : ${ resolvedEventName } = {" )
     iw.upIndent()
     iw.println( "this.apply (" )
     iw.upIndent()
@@ -341,7 +341,7 @@ object Generator {
     iw.println( s"final case class ${ resolvedEventName } (" )
     iw.upIndent()
     event.inputs.map( scalaSignatureParam ).map( _ + "," ).foreach( iw.println )
-    iw.println( "metadata : GenericEvent.Metadata," )
+    iw.println( "metadata : stub.Event.Metadata," )
     iw.println( "logEntry : EthLogEntry" )
     iw.downIndent()
     iw.println( s") extends ${stubClassName}.Event" )
@@ -396,7 +396,7 @@ object Generator {
       }
     } else {
       iw.println( s"""val futHash = jsonrpc.Invoker.transaction.sendMessage( sender.findSigner(), contractAddress, optionalPaymentInWei.getOrElse( Zero ), callData )""" )
-      iw.println( s"""val futTransactionInfo = futHash.flatMap( hash => jsonrpc.Invoker.futureTransactionReceipt( hash ).map( mbctr => TransactionInfo.Message.fromJsonrpcReceipt( hash, mbctr ) ) )""" )
+      iw.println( s"""val futTransactionInfo = futHash.flatMap( hash => jsonrpc.Invoker.futureTransactionReceipt( hash ).map( mbctr => stub.TransactionInfo.Message.fromJsonrpcReceipt( hash, mbctr ) ) )""" )
       if ( async ) {
         iw.println( "futTransactionInfo" )
       } else {
@@ -420,12 +420,12 @@ object Generator {
 
     val params = fcn.inputs.map( scalaSignatureParam ) ++ ( if ( fcn.payable ) immutable.Seq( paymentArg ) else immutable.Seq.empty[String] )
     
-    val prereturn = s"""def ${fcn.name}( ${params.mkString(", ")} )( implicit sender : Sender )"""
+    val prereturn = s"""def ${fcn.name}( ${params.mkString(", ")} )( implicit sender : stub.Sender )"""
 
     val post = {
       val raw = {
         if (!constantSection) {
-          "TransactionInfo.Message"
+          "stub.TransactionInfo.Message"
         } else {
           fcn.outputs.length match {
             case 0 => {
