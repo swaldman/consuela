@@ -248,9 +248,18 @@ object Generator {
 
 
   private def writeEventsPublisher( className : String, abi : Abi, iw : IndentedWriter ) : Unit = {
-    iw.println(  "private val eventsPublisher = new ConfirmedLogPublisher( icontext.jsonRpcUrl, Client.Log.Filter.Query( addresses = List(contractAddress) ), eventConfirmations )" )
-    iw.println( s"private val baseProcessor   = new StubEventProcessor( ${className}.ContractAbi )" )
-    iw.println( s"private val eventProcessor  = new ${className}.Event.Processor()" )
+
+    iw.println( "private lazy val eventProcessor = {" )
+    iw.upIndent()
+    iw.println(  "val eventsPublisher = new ConfirmedLogPublisher( icontext.jsonRpcUrl, Client.Log.Filter.Query( addresses = List(contractAddress) ), eventConfirmations )" )
+    iw.println( s"val baseProcessor   = new StubEventProcessor( ${className}.ContractAbi )" )
+    iw.println( s"val finalProcessor  = new ${className}.Event.Processor()" )
+    iw.println(  "eventsPublisher.subscribe( baseProcessor )" )
+    iw.println(  "baseProcessor.subscribe( finalProcessor )" )
+    iw.println(  "finalProcessor" )
+    iw.downIndent()
+    iw.println( "}" )
+
     iw.println()
     iw.println( s"def subscribe( subscriber : Subscriber[_ >: ${className}.Event] ) = eventProcessor.subscribe( subscriber )")
     iw.println()
