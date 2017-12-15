@@ -71,9 +71,8 @@ fork in (Test, run) := true
 
 javaOptions := Seq("-d64", "-Xms4g",  "-Xmx4g", "-verbose:gc", "-XX:+UnlockCommercialFeatures", "-XX:+FlightRecorder" )
 
-pomExtra <<= name {
-  (projectName : String ) => (
-    <url>https://github.com/swaldman/{projectName}</url>
+pomExtra := {
+    <url>https://github.com/swaldman/{name.value}</url>
     <licenses>
       <license>
         <name>GNU Lesser General Public License, Version 2.1</name>
@@ -87,8 +86,8 @@ pomExtra <<= name {
       </license>
     </licenses>
     <scm>
-      <url>git@github.com:swaldman/{projectName}.git</url>
-      <connection>scm:git:git@github.com:swaldman/{projectName}</connection>
+      <url>git@github.com:swaldman/{name.value}.git</url>
+      <connection>scm:git:git@github.com:swaldman/{name.value}</connection>
     </scm>
     <developers>
       <developer>
@@ -97,7 +96,6 @@ pomExtra <<= name {
         <email>swaldman@mchange.com</email>
       </developer>
     </developers>
-  )
 }
 
 
