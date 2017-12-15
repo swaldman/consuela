@@ -23,6 +23,7 @@ object Generator {
     "scala.concurrent._",
     "scala.concurrent.duration.Duration",
     "com.mchange.sc.v2.concurrent.{Poller,Scheduler}",
+    "com.mchange.sc.v2.net.URLSource",
     "com.mchange.sc.v2.failable._",
     "com.mchange.sc.v1.consuela._",
     "com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash,EthLogEntry}",
@@ -51,9 +52,13 @@ object Generator {
   }
   private def fillInputs( fcn : Abi.Function ) = fcn.copy( inputs = fillArgs( fcn.inputs ) )
 
-  def continuePrintMainConstructorArgs( withVal : Boolean, iw : IndentedWriter ) : Unit = {
+  // "continuePrint means expected to add to a print-ed, rather than println-ed
+  // partial line, and print-s, rather than println-s its own final line
+
+  def continuePrintMainConstructorArgs( withVal : Boolean, withEventConfirmations : Boolean, iw : IndentedWriter ) : Unit = {
     val mbv = if (withVal) "val " else ""
-    iw.println( "( ${mbv}contractAddress : EthAddress, ${mbv}eventConfirmations : Int = ${DefaultEventConfirmations} )( implicit" )
+    val mbec = if ( withEventConfirmations) s", ${mbv}eventConfirmations : Int" else ""
+    iw.println( s"( ${mbv}contractAddress : EthAddress${mbec} )( implicit" )
     iw.upIndent()
     iw.println( "icontext  : jsonrpc.Invoker.Context," )
     iw.println( "cfactory  : jsonrpc.Client.Factory = jsonrpc.Client.Factory.Default,"  )
@@ -64,8 +69,9 @@ object Generator {
     iw.print( ")" )
   }
 
-  def continuePrintAuxConstructorArgs( iw : IndentedWriter ) : Unit = {
-    iw.println( s"[T : URLSource, U : EthAddress.Source]( jsonRpcUrl : T, contractAddress  : U, eventConfirmations : Int = ${DefaultEventConfirmations} )( implicit" ) 
+  def continuePrintAuxConstructorArgs( withEventConfirmations : Boolean, iw : IndentedWriter ) : Unit = {
+    val mbec = if ( withEventConfirmations) ", eventConfirmations : Int" else ""
+    iw.println( s"[T : URLSource, U : EthAddress.Source]( jsonRpcUrl : T, contractAddress : U${mbec} )( implicit" ) 
     iw.upIndent()
     iw.println( "cfactory  : jsonrpc.Client.Factory = jsonrpc.Client.Factory.Default,"  )
     iw.println( "poller    : Poller = Poller.Default," )
@@ -73,6 +79,52 @@ object Generator {
     iw.println( "econtext  : ExecutionContext = ExecutionContext.global" )
     iw.downIndent()
     iw.print( ")" )
+  }
+
+  def generateFactoryMethods( className : String, iw : IndentedWriter ) : Unit = {
+    iw.print( "def apply" )
+    continuePrintMainConstructorArgs( false, true, iw )
+    iw.println( s" : ${className} = {" )
+    iw.upIndent()
+    iw.println( s"new ${className}( contractAddress, eventConfirmations )( icontext, cfactory, poller, scheduler, econtext )" )
+    iw.downIndent()
+    iw.println( "}" )
+    iw.println()
+    iw.print( "def apply" )
+    continuePrintMainConstructorArgs( false, false, iw )
+    iw.println( s" : ${className} = {" )
+    iw.upIndent()
+    iw.println( s"this.apply( contractAddress, ${DefaultEventConfirmations} )" ) // we leave the implicits implicit, so we don't have to worry about compiler-generated evidence params
+    iw.downIndent()
+    iw.println( "}" )
+    iw.println()
+    iw.print( "def apply" )
+    continuePrintAuxConstructorArgs( true, iw )
+    iw.println( s" : ${className} = {" )
+    iw.upIndent()
+    iw.println( s"new ${className}(" )
+    iw.upIndent()
+    iw.println( "implicitly[EthAddress.Source[U]].toEthAddress( contractAddress )," )
+    iw.println( "eventConfirmations" )
+    iw.downIndent()
+    iw.println( ") (" )
+    iw.upIndent()
+    iw.println( "jsonrpc.Invoker.Context( implicitly[URLSource[T]].toURL( jsonRpcUrl ).toExternalForm() )," )
+    iw.println( "cfactory,"  )
+    iw.println( "poller,"    )
+    iw.println( "scheduler," )
+    iw.println( "econtext"   )
+    iw.downIndent()
+    iw.println( ")" )
+    iw.downIndent()
+    iw.println( "}" )
+    iw.print( "def apply" )
+    continuePrintAuxConstructorArgs( false, iw )
+    iw.println( s" : ${className} = {" )
+    iw.upIndent()
+    iw.println( s"this.apply( jsonRpcUrl, contractAddress, ${DefaultEventConfirmations} )" ) // we leave the implicits implicit, so we don't have to worry about compiler-generated evidence params
+    iw.downIndent()
+    iw.println( "}" )
   }
 
   /**
@@ -108,48 +160,13 @@ object Generator {
       generateContractAbiVarFunctionsOverloadedEvents( overloadedEvents, abi, iw )
       generateTopLevelEventAndFactory( className, overloadedEvents, abi, iw )
       iw.println()
-      iw.print( "def apply(" )
-      continuePrintMainConstructorArgs( false, iw )
-      iw.println( " : ${className} = {" )
-      iw.upIndent()
-      iw.println( s"new ${className}( contractAddress, eventConfirmations )( icontext, cfactory, poller, scheduler, econtext )" )
-      iw.downIndent()
-      iw.println( "}" )
-      iw.println()
-      iw.print( "def apply(" )
-      continuePrintAuxConstructorArgs( iw )
-      iw.println( " : ${className} = {" )
-      iw.upIndent()
-      iw.println( s"new ${className}( jsonRpcUrl, contractAddress )( cfactory, poller, scheduler, econtext )" )
-      iw.downIndent()
-      iw.println( "}" )
+      generateFactoryMethods( className, iw )
       iw.downIndent()
       iw.println(  "}" )
       iw.print( s"final class $className" )
-      continuePrintMainConstructorArgs( true, iw )
+      continuePrintMainConstructorArgs( true, true, iw )
       iw.print(  s" extends Publisher[${className}.Event] {" )
       iw.upIndent()
-      iw.println()
-      iw.println( "def this" )
-      continuePrintAuxConstructorArgs( iw )
-      iw.println( " {" )
-      iw.upIndent()
-      iw.println( "this(" )
-      iw.upIndent()
-      iw.println( "implicitly[EthAddress.Source[U]].toEthAddress( contractAddress )," )
-      iw.println( "eventConfirations" )
-      iw.downIndent()
-      iw.println( ") (" )
-      iw.upIndent()
-      iw.println( "jsonrpc.Invoker.Context( implicitly[URLSource[T]].toURL( jsonRpcUrl ) )," )
-      iw.println( "cfactory,"  )
-      iw.println( "poller,"    )
-      iw.println( "scheduler," )
-      iw.println( "econtext"   )
-      iw.downIndent()
-      iw.println( ")" )
-      iw.downIndent()
-      iw.println( "}" )
       iw.println( s"final object transaction {" )
       iw.upIndent()
       abi.functions.foreach { fcn =>
