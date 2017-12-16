@@ -1,8 +1,9 @@
 package com.mchange.sc.v1.consuela.ethereum
 
 import scala.collection._
+import scala.concurrent.duration._
 import scala.math.Ordering
-import com.mchange.sc.v1.consuela.ethereum.jsonrpc.Abi
+import com.mchange.sc.v1.consuela.ethereum.jsonrpc.{Abi,Invoker}
 
 // TODO: Fixed rational types are not yet implemented
 //       (Are they implemenetd in solidity?)
@@ -10,6 +11,20 @@ import com.mchange.sc.v1.consuela.ethereum.jsonrpc.Abi
 package object stub {
 
   class StubException( message : String, t : Throwable = null ) extends EthereumException( message, t )
+
+  val  MarkupOrOverride = Invoker.MarkupOrOverride
+  type MarkupOrOverride = Invoker.MarkupOrOverride
+
+  val  Markup = Invoker.Markup
+  type Markup = Invoker.Markup
+
+  val  Override = Invoker.Override
+  type Override = Invoker.Override
+
+  val DefaultEventConfirmations = 12
+  val DefaultGasLimitMarkup     = Markup(0.2)
+  val DefaultPollPeriod         = 3.seconds
+  val DefaultPollTimeout        = Duration.Inf
 
   final object ScalaParameterHelper {
     def apply( scalaTypeName : String ) : ScalaParameterHelper = this.apply( scalaTypeName, identity, name => s"${name}.asInstanceOf[${scalaTypeName}]" )

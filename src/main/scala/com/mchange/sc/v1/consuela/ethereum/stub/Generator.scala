@@ -43,8 +43,6 @@ object Generator {
 
   private val AnonymousEventName = "Anonymous"
 
-  private val DefaultEventConfirmations = 12
-
   private def fillArgs( inputs : immutable.Seq[Abi.Function.Parameter] ) : immutable.Seq[Abi.Function.Parameter] = {
     inputs.zip( Stream.from(1) ).map { case ( param, index ) =>
       if ( param.name.length > 0 ) param else Abi.Function.Parameter( s"arg$index", param.`type` )
@@ -52,55 +50,39 @@ object Generator {
   }
   private def fillInputs( fcn : Abi.Function ) = fcn.copy( inputs = fillArgs( fcn.inputs ) )
 
-  // "continuePrint means expected to add to a print-ed, rather than println-ed
-  // partial line, and print-s, rather than println-s its own final line
-
-  def continuePrintMainConstructorArgs( withVal : Boolean, withEventConfirmations : Boolean, iw : IndentedWriter ) : Unit = {
-    val mbv = if (withVal) "val " else ""
-    val mbec = if ( withEventConfirmations) s", ${mbv}eventConfirmations : Int" else ""
-    iw.println( s"( ${mbv}contractAddress : EthAddress${mbec} )( implicit" )
-    iw.upIndent()
-    iw.println( "icontext  : jsonrpc.Invoker.Context," )
-    iw.println( "cfactory  : jsonrpc.Client.Factory = jsonrpc.Client.Factory.Default,"  )
-    iw.println( "poller    : Poller = Poller.Default," )
-    iw.println( "scheduler : Scheduler = Scheduler.Default," )
-    iw.println( "econtext  : ExecutionContext = ExecutionContext.global" )
-    iw.downIndent()
-    iw.print( ")" )
-  }
-
-  def continuePrintAuxConstructorArgs( withEventConfirmations : Boolean, iw : IndentedWriter ) : Unit = {
-    val mbec = if ( withEventConfirmations) ", eventConfirmations : Int" else ""
-    iw.println( s"[T : URLSource, U : EthAddress.Source]( jsonRpcUrl : T, contractAddress : U${mbec} )( implicit" ) 
-    iw.upIndent()
-    iw.println( "cfactory  : jsonrpc.Client.Factory = jsonrpc.Client.Factory.Default,"  )
-    iw.println( "poller    : Poller = Poller.Default," )
-    iw.println( "scheduler : Scheduler = Scheduler.Default," )
-    iw.println( "econtext  : ExecutionContext = ExecutionContext.global" )
-    iw.downIndent()
-    iw.print( ")" )
-  }
-
   def generateFactoryMethods( className : String, iw : IndentedWriter ) : Unit = {
-    iw.print( "def apply" )
-    continuePrintMainConstructorArgs( false, true, iw )
-    iw.println( s" : ${className} = {" )
+    iw.println( "def apply[U : EthAddress.Source]( contractAddress : U, eventConfirmations : Int = stub.DefaultEventConfirmations ) ( implicit" )
     iw.upIndent()
-    iw.println( s"new ${className}( contractAddress, eventConfirmations )( icontext, cfactory, poller, scheduler, econtext )" )
+    iw.println( "icontext  : jsonrpc.Invoker.Context,"  )
+    iw.println( "cfactory  : jsonrpc.Client.Factory = jsonrpc.Client.Factory.Default,"  )
+    iw.println( "poller    : Poller = Poller.Default," )
+    iw.println( "scheduler : Scheduler = Scheduler.Default," )
+    iw.println( "econtext  : ExecutionContext = ExecutionContext.global" )
+    iw.downIndent()
+    iw.println( s") : ${className} = {" )
+    iw.upIndent()
+    iw.println( s"new ${className}( implicitly[EthAddress.Source[U]].toEthAddress( contractAddress ), eventConfirmations )( icontext, cfactory, poller, scheduler, econtext )" )
     iw.downIndent()
     iw.println( "}" )
     iw.println()
-    iw.print( "def apply" )
-    continuePrintMainConstructorArgs( false, false, iw )
-    iw.println( s" : ${className} = {" )
+    iw.print( "def build[T : URLSource, U : EthAddress.Source] (" )
     iw.upIndent()
-    iw.println( s"this.apply( contractAddress, ${DefaultEventConfirmations} )" ) // we leave the implicits implicit, so we don't have to worry about compiler-generated evidence params
+    iw.println( "jsonRpcUrl : T,")
+    iw.println( "contractAddress : U," )
+    iw.println( "eventConfirmations : Int = stub.DefaultEventConfirmations," )
+    iw.println( "gasPriceTweak : stub.MarkupOrOverride = stub.MarkupOrOverride.None," )
+    iw.println( "gasLimitTweak : stub.MarkupOrOverride = stub.DefaultGasLimitMarkup," )
+    iw.println( "pollPeriod : Duration = stub.DefaultPollPeriod," )
+    iw.println( "pollTimeout : Duration = stub.DefaultPollTimeout" )
     iw.downIndent()
-    iw.println( "}" )
-    iw.println()
-    iw.print( "def apply" )
-    continuePrintAuxConstructorArgs( true, iw )
-    iw.println( s" : ${className} = {" )
+    iw.println( ")( implicit" )
+    iw.upIndent()
+    iw.println( "cfactory  : jsonrpc.Client.Factory = jsonrpc.Client.Factory.Default,"  )
+    iw.println( "poller    : Poller = Poller.Default," )
+    iw.println( "scheduler : Scheduler = Scheduler.Default," )
+    iw.println( "econtext  : ExecutionContext = ExecutionContext.global" )
+    iw.downIndent()
+    iw.println( s") : ${className} = {" )
     iw.upIndent()
     iw.println( s"new ${className}(" )
     iw.upIndent()
@@ -109,20 +91,13 @@ object Generator {
     iw.downIndent()
     iw.println( ") (" )
     iw.upIndent()
-    iw.println( "jsonrpc.Invoker.Context( implicitly[URLSource[T]].toURL( jsonRpcUrl ).toExternalForm() )," )
+    iw.println( "jsonrpc.Invoker.Context( implicitly[URLSource[T]].toURL( jsonRpcUrl ).toExternalForm(), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout )," )
     iw.println( "cfactory,"  )
     iw.println( "poller,"    )
     iw.println( "scheduler," )
     iw.println( "econtext"   )
     iw.downIndent()
     iw.println( ")" )
-    iw.downIndent()
-    iw.println( "}" )
-    iw.print( "def apply" )
-    continuePrintAuxConstructorArgs( false, iw )
-    iw.println( s" : ${className} = {" )
-    iw.upIndent()
-    iw.println( s"this.apply( jsonRpcUrl, contractAddress, ${DefaultEventConfirmations} )" ) // we leave the implicits implicit, so we don't have to worry about compiler-generated evidence params
     iw.downIndent()
     iw.println( "}" )
   }
@@ -163,10 +138,22 @@ object Generator {
       generateFactoryMethods( className, iw )
       iw.downIndent()
       iw.println(  "}" )
-      iw.print( s"final class $className" )
-      continuePrintMainConstructorArgs( true, true, iw )
-      iw.print(  s" extends Publisher[${className}.Event] {" )
+      iw.println( s"final class $className( val contractAddress : EthAddress, val eventConfirmations : Int = stub.DefaultEventConfirmations )( implicit" )
       iw.upIndent()
+      iw.println( "icontext  : jsonrpc.Invoker.Context," )
+      iw.println( "cfactory  : jsonrpc.Client.Factory = jsonrpc.Client.Factory.Default,"  )
+      iw.println( "poller    : Poller = Poller.Default," )
+      iw.println( "scheduler : Scheduler = Scheduler.Default," )
+      iw.println( "econtext  : ExecutionContext = ExecutionContext.global" )
+      iw.downIndent()
+      iw.println( s") extends Publisher[${className}.Event] {" )
+      iw.upIndent()
+      iw.println()
+      iw.println( "val gasPriceTweak : stub.MarkupOrOverride = icontext.gasPriceTweak" )
+      iw.println( "val gasLimitTweak : stub.MarkupOrOverride = icontext.gasLimitTweak" )
+      iw.println( "val pollPeriod : Duration = icontext.pollPeriod" )
+      iw.println( "val pollTimeout : Duration = icontext.pollTimeout" )
+      iw.println()
       iw.println( s"final object transaction {" )
       iw.upIndent()
       abi.functions.foreach { fcn =>
