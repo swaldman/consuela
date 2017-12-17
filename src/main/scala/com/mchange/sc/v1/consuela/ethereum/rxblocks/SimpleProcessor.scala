@@ -28,33 +28,95 @@ abstract class SimpleProcessor[FROM,TO]( subscriptionUpdateDelay : Duration = 3.
   def ftransform( recorded : FROM ) : Failable[TO]
 
   // MT: protected by this' lock
-  private var recordedSubscription : RxSubscription = null
+  private var sourceSubscription : RxSubscription = null
   private val subscriptions : mutable.HashSet[SimpleSubscription[TO]] = mutable.HashSet.empty[SimpleSubscription[TO]]
+  private var requested : Long = 0
+  private var requestUpdaterScheduled : Scheduler.Scheduled[Unit] = null
+
+  //MT: call only from methods holding this' lock
+  private def ensureRequestUpdaterState() = {
+    if ( subscriptions.isEmpty ) {
+      if ( requestUpdaterScheduled != null ) {
+        requestUpdaterScheduled.attemptCancel()
+        requestUpdaterScheduled = null
+      }
+    }
+    else {
+      if ( requestUpdaterScheduled == null ) {
+        // println( s"Starting ${this}.updateRequests cycle" )
+        requestUpdaterScheduled = scheduler.scheduleAtFixedRate( () => updateRequests(), 0.seconds, subscriptionUpdateDelay ) // this line starts the processor requesting
+      }
+    }
+  }
 
   private def addSubscription( s : SimpleSubscription[TO] ) : Unit = this.synchronized {
     subscriptions += s
+    ensureRequestUpdaterState()
   }
   private [rxblocks] def removeSubscription( s : SimpleSubscription[TO] ) : Unit = this.synchronized {
     subscriptions -= s
+    ensureRequestUpdaterState()
   }
   private def init( rs : RxSubscription ) : Unit = this.synchronized {
-    recordedSubscription = rs
+    sourceSubscription = rs
   }
-  private def broadcast( terminate : Boolean )( f : (SimpleSubscription[TO]) => Unit ) : Unit = this.synchronized {
+  private def broadcast( terminate : Boolean, decrement : Long = 0 )( f : (SimpleSubscription[TO]) => Unit ) : Unit = this.synchronized {
     subscriptions.foreach( f )
-    if ( terminate ) recordedSubscription = null
+    requested -= decrement
+    if ( terminate && sourceSubscription != null ) {
+      sourceSubscription.cancel()
+      sourceSubscription = null
+    }
+  }
+
+  private def updateRequests() : Unit = this.synchronized {
+    try {
+      // println( s"${this}.updateRequest() [beginning]" )
+      val needed = subscriptions.map( _.requestedCount ).max
+      val increment = needed - this.requested
+      if ( increment > 0 ) {
+        if ( Long.MaxValue - increment >= requested ) {
+          request( increment )
+        }
+        else {
+          request( Long.MaxValue - requested )
+        }
+      }
+      // println( s"${this}.updateRequest() [needed=$needed; increment=$increment]" )
+    }
+    catch {
+      case t : Throwable => {
+        t.printStackTrace()
+        throw t
+      }
+    }
+  }
+
+  // MT: Must be called only from methods holding this' lock
+  private def request( n : Long ) : Unit = {
+    if ( sourceSubscription != null ) {
+      if ( n == Long.MaxValue ) {
+        sourceSubscription.request( Long.MaxValue )
+      }
+      else {
+        sourceSubscription.request( n )
+        this.requested += n
+      }
+    }
   }
 
   def onSubscribe( subscription : RxSubscription ) : Unit = init( subscription )
-  def onComplete()                                 : Unit = broadcast( terminate = true )( _.complete() )
-  def onError( t : Throwable )                     : Unit = broadcast( terminate = true )( _.break(t) )
+  def onComplete()                                 : Unit = broadcast( terminate = true )( _.complete() ) // cancels our subscribers
+  def onError( t : Throwable )                     : Unit = broadcast( terminate = true )( _.break(t) ) // cancels our subscribers
   def onNext( recorded : FROM )                    : Unit = {
     try {
       val pair = ftransform( recorded ).get
-      broadcast( terminate = false )( _.enqueue( List( pair ), false ) )
+      broadcast( terminate = false, decrement = 1L )( _.enqueue( List( pair ), false ) )
     }
     catch {
-      case t : Throwable => broadcast( terminate = true )( _.break(t) )
+      case t : Throwable => {
+        broadcast( terminate = true )( _.break(t) ) // cancels our subscribers
+      }
     }
   }
 
