@@ -42,6 +42,15 @@ package object ethabi {
     }
   }
 
+  def solidityTypeIsDynamicLength( solidityTypeName : String ) : Failable[Boolean] = {
+    for {
+      encoder <- Encoder.encoderForSolidityType( solidityTypeName ).toFailable( s"Solidity type '${solidityTypeName}' unknown." )
+    }
+    yield {
+      encoder.encodesDynamicType
+    }
+  }
+
   final object SolidityEvent {
     def computeIdentifierTopic( event : Abi.Event ) : EthLogEntry.Topic = {
       val eventSignature = event.name + "(" + event.inputs.map( param => canonicalizeTypeName( param.`type` ) ).mkString(",") + ")"
