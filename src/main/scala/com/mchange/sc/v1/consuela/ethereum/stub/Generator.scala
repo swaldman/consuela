@@ -50,18 +50,27 @@ object Generator {
   }
   private def fillInputs( fcn : Abi.Function ) = fcn.copy( inputs = fillArgs( fcn.inputs ) )
 
-  def generateFactoryMethods( className : String, iw : IndentedWriter ) : Unit = {
-    iw.println( "def apply[U : EthAddress.Source]( contractAddress : U, eventConfirmations : Int = stub.DefaultEventConfirmations ) ( implicit" )
+  private def eventsNoEvents[T]( abi : Abi )( ifEvents : =>T, ifNoEvents : =>T ) = {
+    if (abi.events.nonEmpty) ifEvents else ifNoEvents
+  }
+  private def ifEvents( abi : Abi )( action : =>Unit ) : Unit = eventsNoEvents(abi)( action, () )
+
+  def generateFactoryMethods( className : String, abi : Abi, iw : IndentedWriter ) : Unit = {
+    val mbEventConfirmations = eventsNoEvents(abi)( ", eventConfirmations : Int = stub.DefaultEventConfirmations", "" )
+    iw.println( s"def apply[U : EthAddress.Source]( contractAddress : U${mbEventConfirmations} ) ( implicit" )
     iw.upIndent()
     iw.println( "icontext  : jsonrpc.Invoker.Context,"  )
     iw.println( "cfactory  : jsonrpc.Client.Factory = jsonrpc.Client.Factory.Default,"  )
     iw.println( "poller    : Poller = Poller.Default," )
-    iw.println( "scheduler : Scheduler = Scheduler.Default," )
+    ifEvents(abi) {
+      iw.println( "scheduler : Scheduler = Scheduler.Default," )
+    }
     iw.println( "econtext  : ExecutionContext = ExecutionContext.global" )
     iw.downIndent()
     iw.println( s") : ${className} = {" )
     iw.upIndent()
-    iw.println( s"new ${className}( implicitly[EthAddress.Source[U]].toEthAddress( contractAddress ), eventConfirmations )( icontext, cfactory, poller, scheduler, econtext )" )
+    val mbEventConfirmationCtorArg = eventsNoEvents(abi)( ", eventConfirmations", "" )
+    iw.println( s"new ${className}( implicitly[EthAddress.Source[U]].toEthAddress( contractAddress )${mbEventConfirmationCtorArg} )" )
     iw.downIndent()
     iw.println( "}" )
     iw.println()
@@ -69,7 +78,9 @@ object Generator {
     iw.upIndent()
     iw.println( "jsonRpcUrl : T,")
     iw.println( "contractAddress : U," )
-    iw.println( "eventConfirmations : Int = stub.DefaultEventConfirmations," )
+    ifEvents(abi) {
+      iw.println( "eventConfirmations : Int = stub.DefaultEventConfirmations," )
+    }
     iw.println( "gasPriceTweak : stub.MarkupOrOverride = stub.MarkupOrOverride.None," )
     iw.println( "gasLimitTweak : stub.MarkupOrOverride = stub.DefaultGasLimitMarkup," )
     iw.println( "pollPeriod : Duration = stub.DefaultPollPeriod," )
@@ -79,7 +90,9 @@ object Generator {
     iw.upIndent()
     iw.println( "cfactory  : jsonrpc.Client.Factory = jsonrpc.Client.Factory.Default,"  )
     iw.println( "poller    : Poller = Poller.Default," )
-    iw.println( "scheduler : Scheduler = Scheduler.Default," )
+    ifEvents(abi) {
+      iw.println( "scheduler : Scheduler = Scheduler.Default," )
+    }
     iw.println( "econtext  : ExecutionContext = ExecutionContext.global" )
     iw.downIndent()
     iw.println( s") : ${className} = {" )
@@ -87,14 +100,18 @@ object Generator {
     iw.println( s"new ${className}(" )
     iw.upIndent()
     iw.println( "implicitly[EthAddress.Source[U]].toEthAddress( contractAddress )," )
-    iw.println( "eventConfirmations" )
+    ifEvents(abi) {
+      iw.println( "eventConfirmations" )
+    }
     iw.downIndent()
     iw.println( ") (" )
     iw.upIndent()
     iw.println( "jsonrpc.Invoker.Context( implicitly[URLSource[T]].toURL( jsonRpcUrl ).toExternalForm(), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout )," )
     iw.println( "cfactory,"  )
     iw.println( "poller,"    )
-    iw.println( "scheduler," )
+    ifEvents(abi) {
+      iw.println( "scheduler," )
+    }
     iw.println( "econtext"   )
     iw.downIndent()
     iw.println( ")" )
@@ -114,6 +131,7 @@ object Generator {
 
     val sw = new StringWriter()
 
+    // this will naturally be empty if there are no events
     val overloadedEvents : OverloadedEventsMap = {
       def topicResolvedNameEvent( event : Abi.Event ) : ( EthLogEntry.Topic, (String, Abi.Event) ) = {
         ( SolidityEvent.computeIdentifierTopic( event ), (abiEventToResolvedName( event, abi ), event) )
@@ -132,21 +150,28 @@ object Generator {
 
       iw.println( s"final object $className {" )
       iw.upIndent()
-      generateContractAbiVarFunctionsOverloadedEvents( overloadedEvents, abi, iw )
-      generateTopLevelEventAndFactory( className, overloadedEvents, abi, iw )
+      generateContractAbiAndFunctionsVals( abi, iw )
+      ifEvents( abi ) {
+        generateEventTopicVals( overloadedEvents, abi, iw )
+        generateTopLevelEventAndFactory( className, overloadedEvents, abi, iw )
+      }
       iw.println()
-      generateFactoryMethods( className, iw )
+      generateFactoryMethods( className, abi, iw )
       iw.downIndent()
       iw.println(  "}" )
-      iw.println( s"final class $className( val contractAddress : EthAddress, val eventConfirmations : Int = stub.DefaultEventConfirmations )( implicit" )
+      val mbEventConfirmations = eventsNoEvents( abi )( ", val eventConfirmations : Int = stub.DefaultEventConfirmations", "" )
+      val mbExtends = eventsNoEvents( abi )( s"extends Publisher[${className}.Event]", "" )
+      iw.println( s"final class $className( val contractAddress : EthAddress${mbEventConfirmations} )( implicit" )
       iw.upIndent()
       iw.println( "icontext  : jsonrpc.Invoker.Context," )
       iw.println( "cfactory  : jsonrpc.Client.Factory = jsonrpc.Client.Factory.Default,"  )
       iw.println( "poller    : Poller = Poller.Default," )
-      iw.println( "scheduler : Scheduler = Scheduler.Default," )
+      ifEvents( abi ) {
+        iw.println( "scheduler : Scheduler = Scheduler.Default," )
+      }
       iw.println( "econtext  : ExecutionContext = ExecutionContext.global" )
       iw.downIndent()
-      iw.println( s") extends Publisher[${className}.Event] {" )
+      iw.println( s")${mbExtends} {" )
       iw.upIndent()
       iw.println()
       iw.println( "val gasPriceTweak : stub.MarkupOrOverride = icontext.gasPriceTweak" )
@@ -171,7 +196,9 @@ object Generator {
       iw.downIndent()
       iw.println( "}" )
       iw.println()
-      writeEventsPublisher( className, abi, iw )
+      ifEvents(abi) {
+        writeEventsPublisher( className, abi, iw )
+      }
       iw.downIndent()
       iw.println( "}" )
     }
@@ -191,6 +218,47 @@ object Generator {
     s"${param.name} : ${helper.scalaTypeName}"
   }
 
+  /*
+  private def generateNamedEventSpecializedPublisher( resolvedName : String, event : Abi.Event, iw : IndentedWriter ) : Unit = {
+    val indexedInputs = event.inputs.filter( _.indexed )
+    val indexedCount  = indexedInputs.length
+    def indexedParam( Abi.Event.Parameter ) : String = {
+      val tpe = param.`type`
+      val helper = forceHelper( tpe )
+      s"${param.name} : Seq[${helper.scalaTypeName}] = Nil"
+    }
+    def paramEncoder( param : Abi.Event.Parameter ) : String => String = {
+      val tpe = param.`type`
+      val helper = forceHelper( tpe )
+      def encodedValueProducer       : String => String = value => s"""ethabi.Encoder.encoderForSolidityType( ${tpe} ).encodeUntyped( helper.inConversionGen( ${value} ) ).get"""
+      def hashedEncodedValueProducer : String => String = value => s"""EthHash.hash( ${encodedValueProducer(value)} ).bytes"""
+      if ( ethabi.solidityTypeIsDynamicLength( tpe ) ) {
+        hashedEncodedValueProducer
+      }
+      else {
+        encodedValueProducer
+      }
+    }
+    def paramEncoderSeq( param : Abi.Event.Parameter ) : String => String = {
+      val each = paramEncoder( param )( "value" )
+      seqParam => s"${seqParam}.map( value => ${each} )"
+    }
+    val params = "address : Seq[T] = Nil" +: indexedInputs.map( indexedParam ) :+ "numConfirmations = stub.DefaultEventConfirmations"
+
+    iw.println( "final object Publisher {" )
+    iw.upIndent()
+    iw.println( s"""def apply[T : EthAddress.Source]( ${params.mkString(", ")} ) : Publisher[${rawName}] = {""" )
+    iw.upIndent()
+    iw.println(  "val addresses = address.map( implicitly[EthAddress.Source[T]].toEthAddress )" )
+    iw.println( s"val signatureRestriction = ${anyEventSignatureTopicValName( event )}" )
+    //iw.println( s"Client.Log.Filter.Query( addresses = ${address} 
+    iw.downIndent()
+    iw.println(  """}""" )
+    iw.downIndent()
+    iw.println( "}" )
+  }
+  */ 
+    
   private def generateTopLevelEventAndFactory( className : String, overloadedEvents : OverloadedEventsMap, abi : Abi, iw : IndentedWriter ) : Unit = {
     val hasAnonymous = abi.events.exists( _.anonymous )
 
@@ -256,18 +324,25 @@ object Generator {
     iw.downIndent()
     iw.println( "}" )
   }
-
-  private def generateContractAbiVarFunctionsOverloadedEvents( overloadedEvents : OverloadedEventsMap, abi : Abi, iw : IndentedWriter ) : Unit = {
-    iw.println( s"val ContractAbi : Abi = Json.parse( \042\042\042${Json.stringify(Json.toJson(abi))}\042\042\042 ).as[Abi]" )
+  
+    private def generateContractAbiAndFunctionsVals( abi : Abi, iw : IndentedWriter ) : Unit = {
+      iw.println( s"val ContractAbi : Abi = Json.parse( \042\042\042${Json.stringify(Json.toJson(abi))}\042\042\042 ).as[Abi]" )
     abi.functions.zip( Stream.from(0) ).foreach { case ( fcn, index ) =>
       iw.println( s"val ${functionValName(fcn)} = ContractAbi.functions(${index})" )
     }
+  }
+
+
+  private def generateEventTopicVals( overloadedEvents : OverloadedEventsMap, abi : Abi, iw : IndentedWriter ) : Unit = {
     for {
       name                             <- overloadedEvents.keySet.toSeq
       ( topic, (resolvedName, event) ) <- overloadedEvents.get( name ).fold( Nil : Seq[Tuple2[EthLogEntry.Topic,(String,Abi.Event)]] )( _.toSeq )
       
     } {
       iw.println( s"""val ${overloadedEventSignatureTopicValName(event)} = EthLogEntry.Topic("${topic.widen.hex}".decodeHex)""" )
+    }
+    abi.events.filterNot( event => overloadedEvents.keySet( event.name ) ).foreach { event =>
+      iw.println( s"""val ${nonOverloadedEventSignatureTopicValName( event )} = EthLogEntry.Topic("${SolidityEvent.computeIdentifierTopic( event ).widen.hex}".decodeHex)""" )
     }
   }
 
@@ -283,6 +358,22 @@ object Generator {
     if ( typesPart.isEmpty ) base else s"${base}_${typesPart}"
   }
 
+
+  private def nonOverloadedEventSignatureTopicValName( e : Abi.Event ) : String = {
+    val base = s"EventSignatureTopic_${e.name}"
+    val typesPart = e.inputs.map( _.`type` ).mkString("_")
+    if ( typesPart.isEmpty ) base else s"${base}_${typesPart}"
+  }
+
+  private def anyEventSignatureTopicValName( overloadedEvents : OverloadedEventsMap, e : Abi.Event ) : String = {
+    if ( overloadedEvents.keySet( e.name ) ) {
+      overloadedEventSignatureTopicValName( e )
+    }
+    else {
+      nonOverloadedEventSignatureTopicValName( e )
+    }
+  }
+  
   /*
    * If there is just one anonymous event type defined, we know its type signature,
    * so we can define it as a typed event.
