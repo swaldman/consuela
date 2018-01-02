@@ -31,7 +31,7 @@ object Denominations {
   final object Ether extends Denomination( Multiplier.BigDecimal.Ether ) {
     val unitName : String = "ether"
   }
-  val All = Wei :: GWei :: Szabo :: Finney :: Either :: Nil
+  val All : List[Denomination] = Wei :: GWei :: Szabo :: Finney :: Ether :: Nil
 
   final object Multiplier {
     final object Long extends Multiplier[scala.Long] {
