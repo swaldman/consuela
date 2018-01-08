@@ -8,11 +8,9 @@ import com.mchange.sc.v1.consuela._
 
 import scala.annotation.tailrec
 
-import scala.io.Codec
-
 import scala.collection._
 
-import EthLogEntry.Topic
+import scala.io.Codec
 
 import com.mchange.sc.v1.log.MLevel._
 
@@ -51,58 +49,8 @@ package object ethabi {
     }
   }
 
-  final object SolidityEvent {
-    def computeIdentifierTopic( event : Abi.Event ) : EthLogEntry.Topic = {
-      val eventSignature = event.name + "(" + event.inputs.map( param => canonicalizeTypeName( param.`type` ) ).mkString(",") + ")"
-      Topic( EthHash.hash( eventSignature.getBytes( Codec.UTF8.charSet ) ).bytes )
-    }
-    case class Interpretor( abi : Abi ) {
-      private lazy val identifiers: immutable.Map[EthLogEntry.Topic,Abi.Event] = {
-        abi.events.map( event => ( computeIdentifierTopic( event ), event ) ).toMap
-      }
-   
-      // def decodeOutValues( params : immutableSeq[Abi.Parameters], f_encoders : Failable[immutable.Seq[Encoder[_]]] )( returnData : immutable.Seq[Byte] ) : Failable[immutable.Seq[DecodedValue]] = ???
-      // case class DecodedValue( parameter : Abi.Parameter, value : Any, stringRep : String )
 
-      def interpret( log : EthLogEntry ) : Failable[SolidityEvent] = {
-        if ( log.topics.nonEmpty ) {
-          identifiers.get( log.topics(0) ) match {
-            case None             => succeed( Anonymous( log ) )
-            case Some( abiEvent ) => interpretLogEntryAsEvent( log, abiEvent ) map { allParams =>
-              Named( allParams, log, abiEvent )
-            }
-          }
-        }
-        else {
-          succeed( Anonymous( log ) )
-        }
-      }
-    }
-
-    final case class Named( inputs : immutable.Seq[DecodedValue], logEntry : EthLogEntry, abiEvent : Abi.Event ) extends SolidityEvent {
-      def name = abiEvent.name
-      def address = logEntry.address
-
-      def signatureTopic : EthLogEntry.Topic = logEntry.topics(0)
-    }
-
-    final case class Anonymous( logEntry : EthLogEntry ) extends SolidityEvent {
-      def address = logEntry.address
-      def interpretAs( abiEvent : Abi.Event ) : Failable[immutable.Seq[DecodedValue]] = {
-        if ( abiEvent.anonymous ) {
-          interpretLogEntryAsEvent( logEntry, abiEvent )
-        }
-        else {
-          fail( "Cannot interpret SolidityEvent.Anonymous '${this}' as named event '${abiEvent}'" )
-        }
-      }
-    }
-  }
-  trait SolidityEvent {
-    def address  : EthAddress
-  }
-
-  private def decodeIndexed( params : immutable.Seq[Abi.Parameter], encoders : immutable.Seq[Encoder[_]], topics : immutable.Seq[EthLogEntry.Topic] ) : Failable[immutable.Seq[DecodedValue]] = {
+  private def decodeIndexed( params : immutable.Seq[Abi.Parameter], encoders : immutable.Seq[Encoder[_]], topics : immutable.Seq[EthLogEntry.Topic] ) : Failable[immutable.Seq[Decoded.Value]] = {
     Failable.sequence {
       params.zip(encoders).zip( topics ).map { case ( ( param, encoder ), topic ) =>
         for {
@@ -113,7 +61,7 @@ package object ethabi {
           if (extra.nonEmpty ) {
             WARNING.log( s"An event topic is shorter than expected. [param -> $param, topic -> $topic, extra -> ${extra.hex}" )
           }
-          DecodedValue( param, decoded, formatted )
+          Decoded.Value( param, decoded, formatted )
         }
       }
     }
@@ -135,7 +83,7 @@ package object ethabi {
     }
   }
 
-  def interpretLogEntryAsEvent( logEntry : EthLogEntry, abiEvent : Abi.Event ) : Failable[immutable.Seq[DecodedValue]] = {
+  def interpretLogEntryAsEvent( logEntry : EthLogEntry, abiEvent : Abi.Event ) : Failable[immutable.Seq[Decoded.Value]] = {
     val (indexed, nonIndexed ) = indexedNonindexed( abiEvent )
     for {
       dts        <- decodableTopics( logEntry : EthLogEntry, abiEvent : Abi.Event )
@@ -244,16 +192,14 @@ package object ethabi {
     }
   }
 
-  case class DecodedValue( parameter : Abi.Parameter, value : Any, stringRep : String )
-
-  def decodeReturnValuesForFunction( returnData : immutable.Seq[Byte], abiFunction : Abi.Function ) : Failable[immutable.Seq[DecodedValue]] = {
+  def decodeReturnValuesForFunction( returnData : immutable.Seq[Byte], abiFunction : Abi.Function ) : Failable[immutable.Seq[Decoded.Value]] = {
     decodeOutValues( abiFunction.outputs, outputEncodersForAbiFunction( abiFunction ) )( returnData )
   }
-  def decodeOutValues( params : immutable.Seq[Abi.Parameter], f_encoders : Failable[immutable.Seq[Encoder[_]]] )( returnData : immutable.Seq[Byte] ) : Failable[immutable.Seq[DecodedValue]] = {
+  def decodeOutValues( params : immutable.Seq[Abi.Parameter], f_encoders : Failable[immutable.Seq[Encoder[_]]] )( returnData : immutable.Seq[Byte] ) : Failable[immutable.Seq[Decoded.Value]] = {
     f_encoders.flatMap { encoders =>
 
       @tailrec
-      def readValues( nextHeaderOffset : Int, remainingEncoders : Seq[Encoder[_]], remainingParams : Seq[Abi.Parameter], reverseAccum : List[DecodedValue] ) : immutable.Seq[DecodedValue] = {
+      def readValues( nextHeaderOffset : Int, remainingEncoders : Seq[Encoder[_]], remainingParams : Seq[Abi.Parameter], reverseAccum : List[Decoded.Value] ) : immutable.Seq[Decoded.Value] = {
         // println( s"nextHeaderOffset : $nextHeaderOffset, remainingEncoders : $remainingEncoders, remainingParams : $remainingParams, reverseAccum : $reverseAccum" )
         if ( remainingEncoders.isEmpty ) {
           reverseAccum.reverse
@@ -274,7 +220,7 @@ package object ethabi {
             }
           }
           val nextStringRep = nextEncoder.formatUntyped( nextValue ).get
-          readValues( nextNextHeaderOffset, remainingEncoders.tail, remainingParams.tail, DecodedValue( nextParam, nextValue, nextStringRep ) :: reverseAccum )
+          readValues( nextNextHeaderOffset, remainingEncoders.tail, remainingParams.tail, Decoded.Value( nextParam, nextValue, nextStringRep ) :: reverseAccum )
         }
       }
 
