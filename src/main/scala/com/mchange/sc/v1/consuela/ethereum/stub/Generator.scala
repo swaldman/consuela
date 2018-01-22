@@ -1,8 +1,8 @@
 package com.mchange.sc.v1.consuela.ethereum.stub
 
 import com.mchange.sc.v1.consuela._
-import com.mchange.sc.v1.consuela.ethereum.EthLogEntry
-import com.mchange.sc.v1.consuela.ethereum.ethabi.{solidityTypeIsDynamicLength,SolidityEvent}
+import com.mchange.sc.v1.consuela.ethereum.{ethabi,EthLogEntry}
+import com.mchange.sc.v1.consuela.ethereum.ethabi.SolidityEvent
 import com.mchange.sc.v1.consuela.ethereum.jsonrpc.Abi
 
 import scala.collection._
@@ -223,59 +223,103 @@ object Generator {
     s"${param.name} : ${helper.scalaTypeName}"
   }
 
-  private def isHashEncoded( param : Abi.Event.Parameter ) : Boolean = param.indexed && solidityTypeIsDynamicLength( param.`type` ).xwarn( s"No encoder found for solidity type '${param.`type`}'" ).get
+  private def isDynamicLength( solidityType : String ) : Boolean = ethabi.solidityTypeIsDynamicLength( solidityType ).xwarn( s"No encoder found for solidity type '${ solidityType }'" ).get
+
+  private def isHashEncoded( param : Abi.Event.Parameter ) : Boolean = param.indexed && isDynamicLength( param.`type` )
 
   private def eventScalaSignatureParam( param : Abi.Event.Parameter ) : String = {
     if ( isHashEncoded( param ) ) s"${param.name} : EthHash" else scalaSignatureParam( param )
   }
 
-  /*
-  private def generateNamedEventSpecializedPublisher( resolvedName : String, event : Abi.Event, iw : IndentedWriter ) : Unit = {
+
+  private def generateNamedEventSpecializedPublisher( resolvedName : String, overloadedEvents : OverloadedEventsMap, event : Abi.Event, iw : IndentedWriter ) : Unit = {
     val indexedInputs = event.inputs.filter( _.indexed )
     val indexedCount  = indexedInputs.length
-    def indexedParam( Abi.Event.Parameter ) : String = {
+
+    assert( event.anonymous, "Anonymous event passed to the generator of a named event." )
+
+    if ( indexedCount > 3 ) {
+      throw new StubException( s"Bad event in ABI, named events may not have more than three indexed parameters (after the hash of the event signature)! ${event}" )
+    }
+
+    def indexedParam( param : Abi.Event.Parameter ) : String = {
       val tpe = param.`type`
       val helper = forceHelper( tpe )
       s"${param.name} : Seq[${helper.scalaTypeName}] = Nil"
     }
-    def paramEncoder( param : Abi.Event.Parameter ) : String => String = {
+    def indexedParamElementEncoder( param : Abi.Event.Parameter ) : String => String = {
       val tpe = param.`type`
       val helper = forceHelper( tpe )
       def encodedValueProducer       : String => String = value => s"""ethabi.Encoder.encoderForSolidityType( ${tpe} ).encodeUntyped( helper.inConversionGen( ${value} ) ).get"""
       def hashedEncodedValueProducer : String => String = value => s"""EthHash.hash( ${encodedValueProducer(value)} ).bytes"""
-      if ( ethabi.solidityTypeIsDynamicLength( tpe ) ) {
+      if ( isDynamicLength( tpe ) ) {
         hashedEncodedValueProducer
       }
       else {
         encodedValueProducer
       }
     }
-    def paramEncoderSeq( param : Abi.Event.Parameter ) : String => String = {
-      val each = paramEncoder( param )( "value" )
+    def indexedParamEncoder( param : Abi.Event.Parameter ) : String => String = {
+      val each = indexedParamElementEncoder( param )( "value" )
       seqParam => s"${seqParam}.map( value => ${each} )"
     }
     val params = "address : Seq[T] = Nil" +: indexedInputs.map( indexedParam ) :+ "numConfirmations = stub.DefaultEventConfirmations"
 
+
     iw.println( "final object Publisher {" )
     iw.upIndent()
-    iw.println( s"""def apply[T : EthAddress.Source]( ${params.mkString(", ")} ) : Publisher[${rawName}] = {""" )
+
+    iw.println( s"class Processor()(implicit scheduler : Scheduler, executionContext : ExecutionContext) extends SimpleProcessor[(SolidityEvent, stub.Event.Metadata ), Event.${resolvedName}]()(scheduler, executionContext) {" )
     iw.upIndent()
-    iw.println(  "val addresses = address.map( implicitly[EthAddress.Source[T]].toEthAddress )" )
-    iw.println( s"val signatureRestriction = ${anyEventSignatureTopicValName( event )}" )
-    //iw.println( s"Client.Log.Filter.Query( addresses = ${address} 
+
+    iw.println( s"override def ftransform( pair : (SolidityEvent, stub.Event.Metadata) ) : Failable[Event.${resolvedName}] = succeed( Event.${resolvedName}.apply( pair._1, pair._2 ) )" )
+
     iw.downIndent()
-    iw.println(  """}""" )
+    iw.println( "}" )
+
+    iw.println( s"""def apply[T : EthAddress.Source]( ${params.mkString(", ")} )(implicit scheduler : Scheduler, executionContext : ExecutionContext) : Publisher[Event.${resolvedName}] = {""" )
+    iw.upIndent()
+
+    iw.println(  "val addresses = address.map( implicitly[EthAddress.Source[T]].toEthAddress )" )
+    iw.println( s"val signatureRestriction = ${anyEventSignatureTopicValName( overloadedEvents, event )}" )
+    val queryInputs = {
+      val indexedInputsNumbered = indexedInputs.zip( Stream.from(2) )
+      val userRestrictions = indexedInputsNumbered.map { case ( param, num ) => s"restriction_${num} = ${indexedParamEncoder( param )}" }
+      "addresses = addresses" :+ "restriction_1 = signatureRestriction" ++ userRestrictions
+    }
+    iw.println( s"val query = Client.Log.Filter.Query(" )
+    iw.upIndent()
+
+    queryInputs.init.foreach( qi => iw.println( qi + "," ) )
+    iw.println( queryInputs.last )
+
+    iw.downIndent()
+    iw.println( s")" )
+
+    iw.downIndent()
+    iw.println( "val eventProcessor = {" )
+    iw.upIndent()
+    
+    iw.println(  "val eventsPublisher = new ConfirmedLogPublisher( icontext.jsonRpcUrl, query, numConfirmations )" )
+    iw.println(  "val baseProcessor   = new StubEventProcessor( ContractAbi )" )
+    iw.println( s"val finalProcessor  = new Event.${resolvedName}.Publisher.Processor()" )
+    iw.println(  "eventsPublisher.subscribe( baseProcessor )" )
+    iw.println(  "baseProcessor.subscribe( finalProcessor )" )
+    iw.println(  "finalProcessor" )
+
+    iw.downIndent()
+    iw.println( "}" )
+
     iw.downIndent()
     iw.println( "}" )
   }
-  */ 
     
   private def generateTopLevelEventAndFactory( className : String, overloadedEvents : OverloadedEventsMap, abi : Abi, iw : IndentedWriter ) : Unit = {
     val hasAnonymous = abi.events.exists( _.anonymous )
 
     iw.println( "final object Event {" )
     iw.upIndent()
-    writeAllEventDefinitions( className, abi, iw )
+    writeAllEventDefinitions( className, overloadedEvents, abi, iw )
     iw.println()
     iw.println( "def apply( solidityEvent : SolidityEvent, metadata : stub.Event.Metadata ) : Event = {" )
     iw.upIndent()
@@ -393,14 +437,14 @@ object Generator {
    * which anonymous event we are encountering, so we defined a generic event wrapping
    * the raw log entry
    */ 
-  private def writeAllEventDefinitions( stubClassName : String, abi : Abi, iw : IndentedWriter ) : Unit = {
+  private def writeAllEventDefinitions( stubClassName : String, overloadedEvents : OverloadedEventsMap, abi : Abi, iw : IndentedWriter ) : Unit = {
     val ( named, anonymous ) = abi.events.partition( _.anonymous == false )
     named foreach { event =>
       val resolvedEventName = abiEventToResolvedName( event, abi )
-      writeTypedEventDefinition( event, resolvedEventName, stubClassName, iw )
+      writeTypedEventDefinition( event, overloadedEvents, resolvedEventName, stubClassName, iw )
     }
     anonymous.length match {
-      case 1 => writeTypedAnonymousEventDefinition( anonymous(0), stubClassName, iw )
+      case 1 => writeTypedAnonymousEventDefinition( anonymous(0), overloadedEvents, stubClassName, iw )
       case _ => anonymous foreach { event =>
         writeUntypedAnonymousEventDefinition( stubClassName, iw )
       }
@@ -454,15 +498,17 @@ object Generator {
   }
 
   private def writeTypedAnonymousEventDefinition (
-    event         : Abi.Event,
-    stubClassName : String,
-    iw            : IndentedWriter
+    event            : Abi.Event,
+    overloadedEvents : OverloadedEventsMap,
+    stubClassName    : String,
+    iw               : IndentedWriter
   ) : Unit = {
-    writeTypedEventDefinition( event, AnonymousEventName, stubClassName, iw ) 
+    writeTypedEventDefinition( event, overloadedEvents, AnonymousEventName, stubClassName, iw ) 
   }
 
   private def writeTypedEventDefinition (
     event             : Abi.Event,
+    overloadedEvents  : OverloadedEventsMap,
     resolvedEventName : String, // usually just event.name, but not for overloaded or typed anonymous events
     stubClassName     : String,
     iw                : IndentedWriter ) : Unit = {
@@ -491,6 +537,12 @@ object Generator {
     iw.upIndent()
     iw.println( s"def apply( solidityEvent : SolidityEvent.${solidityEventType}, metadata : stub.Event.Metadata ) : ${ resolvedEventName } = {" )
     iw.upIndent()
+
+    if (!event.anonymous) {
+      iw.println( "val abiEvent = solidityEvent.event" )
+      iw.println( "val solidityEventSignatureTopic = SolidityEvent.computeIdentifierTopic( abiEvent )" )
+      iw.println( s"""require( solidityEventSignatureTopic == ${anyEventSignatureTopicValName( overloadedEvents, event )}, s"${resolvedEventName} represents the following ABI event: '${event}' SolidityEvent '$${solidityEvent}' represents an ABI event that does not match." )""" )
+    }
     iw.println( "this.apply (" )
     iw.upIndent()
     extractedParamValues.foreach { epv =>
@@ -502,6 +554,9 @@ object Generator {
     iw.println( ")" )
     iw.downIndent()
     iw.println( "}" )
+    if ( !event.anonymous ) {
+      generateNamedEventSpecializedPublisher( resolvedEventName, overloadedEvents, event, iw  )
+    }
     iw.downIndent()
     iw.println(  "}" )
     iw.println( s"final case class ${ resolvedEventName } (" )
