@@ -49,54 +49,6 @@ package object ethabi {
     }
   }
 
-
-  private def decodeIndexed( params : immutable.Seq[Abi.Parameter], encoders : immutable.Seq[Encoder[_]], topics : immutable.Seq[EthLogEntry.Topic] ) : Failable[immutable.Seq[Decoded.Value]] = {
-    Failable.sequence {
-      params.zip(encoders).zip( topics ).map { case ( ( param, encoder ), topic ) =>
-        for {
-          ( decoded, extra ) <- encoder.decode( topic.widen )
-          formatted <- encoder.formatUntyped( decoded )
-        }
-        yield {
-          if (extra.nonEmpty ) {
-            WARNING.log( s"An event topic is shorter than expected. [param -> $param, topic -> $topic, extra -> ${extra.hex}" )
-          }
-          Decoded.Value( param, decoded, formatted )
-        }
-      }
-    }
-  }
-
-  private def indexedNonindexed( event : Abi.Event ) : ( immutable.Seq[Abi.Event.Parameter], immutable.Seq[Abi.Event.Parameter] ) = event.inputs.partition( _.indexed )
-
-  private def decodableTopics( logEntry : EthLogEntry, abiEvent : Abi.Event ) : Failable[immutable.Seq[EthLogEntry.Topic]] = {
-    if ( abiEvent.anonymous ) {
-      succeed( logEntry.topics )
-    }
-    else if ( logEntry.topics.isEmpty ) {
-      fail (
-        s"A nonanonymous event should contain at least one topic, the event signature. The provided logEntry contains none. [logEntry -> ${logEntry}, abiEvent -> ${abiEvent}]"
-      )
-    }
-    else {
-      succeed( logEntry.topics.tail )
-    }
-  }
-
-  def interpretLogEntryAsEvent( logEntry : EthLogEntry, abiEvent : Abi.Event ) : Failable[immutable.Seq[Decoded.Value]] = {
-    val (indexed, nonIndexed ) = indexedNonindexed( abiEvent )
-    for {
-      dts        <- decodableTopics( logEntry : EthLogEntry, abiEvent : Abi.Event )
-      iencoders  <- encodersForAbiParameters( indexed )
-      ivalues    <- decodeIndexed( indexed, iencoders, dts )
-      nivalues   <- decodeOutValues( nonIndexed, encodersForAbiParameters( nonIndexed ) )( logEntry.data )
-    }
-    yield {
-      val pmap = (ivalues ++ nivalues).map( dv => ( dv.parameter, dv ) ).toMap
-      abiEvent.inputs.map( pmap )
-    }
-  }
-
   def callDataForAbiFunctionFromEncoderRepresentations( reps : Seq[Any], abiFunction : Abi.Function ) : Failable[immutable.Seq[Byte]] = {
     def headTail( enc : Encoder[_], rep : Any ) : Failable[Tuple2[Option[immutable.Seq[Byte]],immutable.Seq[Byte]]] = {
       enc.encodeUntyped( rep ).map( encoded =>
@@ -272,7 +224,7 @@ package object ethabi {
   private def identifierForSignature( signature : String ) : immutable.Seq[Byte] = {
     EthHash.hash( signature.getBytes( Codec.UTF8.charSet ) ).bytes.take( IdentifierLength )
   }
-  private def encodersForAbiParameters( params : Seq[Abi.Parameter] ) : Failable[immutable.Seq[Encoder[_]]] = {
+  private [ethabi] def encodersForAbiParameters( params : Seq[Abi.Parameter] ) : Failable[immutable.Seq[Encoder[_]]] = {
     val mbEncodersTypes = params.map( param => Tuple2(Encoder.encoderForSolidityType( param.`type` ), param.`type` ) )
     val reverseEncoders = mbEncodersTypes.foldLeft( succeed( Nil : List[Encoder[_]] ) ) { ( accum, tup ) =>
       tup match {

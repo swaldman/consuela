@@ -325,8 +325,8 @@ object Generator {
     iw.println( "}" )
   }
   
-    private def generateContractAbiAndFunctionsVals( abi : Abi, iw : IndentedWriter ) : Unit = {
-      iw.println( s"val ContractAbi : Abi = Json.parse( \042\042\042${Json.stringify(Json.toJson(abi))}\042\042\042 ).as[Abi]" )
+  private def generateContractAbiAndFunctionsVals( abi : Abi, iw : IndentedWriter ) : Unit = {
+    iw.println( s"val ContractAbi : Abi = Json.parse( \042\042\042${Json.stringify(Json.toJson(abi))}\042\042\042 ).as[Abi]" )
     abi.functions.zip( Stream.from(0) ).foreach { case ( fcn, index ) =>
       iw.println( s"val ${functionValName(fcn)} = ContractAbi.functions(${index})" )
     }
