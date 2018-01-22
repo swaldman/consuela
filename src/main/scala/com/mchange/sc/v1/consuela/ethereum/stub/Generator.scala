@@ -2,7 +2,7 @@ package com.mchange.sc.v1.consuela.ethereum.stub
 
 import com.mchange.sc.v1.consuela._
 import com.mchange.sc.v1.consuela.ethereum.EthLogEntry
-import com.mchange.sc.v1.consuela.ethereum.ethabi.SolidityEvent
+import com.mchange.sc.v1.consuela.ethereum.ethabi.{solidityTypeIsDynamicLength,SolidityEvent}
 import com.mchange.sc.v1.consuela.ethereum.jsonrpc.Abi
 
 import scala.collection._
@@ -13,10 +13,15 @@ import com.mchange.sc.v2.lang.borrow
 
 import com.mchange.v2.io.IndentedWriter
 
+import com.mchange.sc.v1.log.MLevel._
+
+
 import play.api.libs.json.Json
 
 
 object Generator {
+
+  private implicit lazy val logger = mlogger( this )
 
   private val StubImports = immutable.Seq(
     "scala.collection._",
@@ -218,6 +223,12 @@ object Generator {
     s"${param.name} : ${helper.scalaTypeName}"
   }
 
+  private def isHashEncoded( param : Abi.Event.Parameter ) : Boolean = param.indexed && solidityTypeIsDynamicLength( param.`type` ).xwarn( s"No encoder found for solidity type '${param.`type`}'" ).get
+
+  private def eventScalaSignatureParam( param : Abi.Event.Parameter ) : String = {
+    if ( isHashEncoded( param ) ) s"${param.name} : EthHash" else scalaSignatureParam( param )
+  }
+
   /*
   private def generateNamedEventSpecializedPublisher( resolvedName : String, event : Abi.Event, iw : IndentedWriter ) : Unit = {
     val indexedInputs = event.inputs.filter( _.indexed )
@@ -320,7 +331,7 @@ object Generator {
   private def generateEventProcessorClass( className : String, iw : IndentedWriter ) : Unit = {
     iw.println( s"class Processor()(implicit scheduler : Scheduler, executionContext : ExecutionContext) extends SimpleProcessor[(SolidityEvent, stub.Event.Metadata ), ${className}.Event]()(scheduler, executionContext) {" )
     iw.upIndent()
-    iw.println( s"def ftransform( pair : (SolidityEvent, stub.Event.Metadata) ) : Failable[${className}.Event] = succeed( ${className}.Event.apply( pair._1, pair._2 ) )" )
+    iw.println( s"override def ftransform( pair : (SolidityEvent, stub.Event.Metadata) ) : Failable[${className}.Event] = succeed( ${className}.Event.apply( pair._1, pair._2 ) )" )
     iw.downIndent()
     iw.println( "}" )
   }
@@ -458,9 +469,14 @@ object Generator {
     val helpers = event.inputs.map( input => forceHelper( input.`type` ) )
     val extractedParamValues = {
       for {
-        i <- 0 until helpers.length
+        (input, i) <- event.inputs.zip( Stream.from(0) )
       } yield {
-        helpers(i).outConversionGen( s"(solidityEvent.inputs( ${i} ).value)" )
+        if ( isHashEncoded( input ) ) {
+          s"(solidityEvent.inputs( ${i} ).as[Decoded.Hash].hash)"
+        }
+        else {
+          forceHelper( input.`type` ).outConversionGen( s"(solidityEvent.inputs( ${i} ).as[Decoded.Value].value)" )
+        }
       }
     }
     val solidityEventType = {
@@ -490,7 +506,7 @@ object Generator {
     iw.println(  "}" )
     iw.println( s"final case class ${ resolvedEventName } (" )
     iw.upIndent()
-    event.inputs.map( scalaSignatureParam ).map( _ + "," ).foreach( iw.println )
+    event.inputs.map( eventScalaSignatureParam ).map( _ + "," ).foreach( iw.println )
     iw.println( "metadata : stub.Event.Metadata," )
     iw.println( "logEntry : EthLogEntry" )
     iw.downIndent()
