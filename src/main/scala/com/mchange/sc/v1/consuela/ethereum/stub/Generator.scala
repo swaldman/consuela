@@ -33,7 +33,7 @@ object Generator {
     "com.mchange.sc.v1.consuela._",
     "com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash,EthLogEntry}",
     "com.mchange.sc.v1.consuela.ethereum.ethabi",
-    "com.mchange.sc.v1.consuela.ethereum.ethabi.SolidityEvent",
+    "com.mchange.sc.v1.consuela.ethereum.ethabi.{Decoded,SolidityEvent}",
     "com.mchange.sc.v1.consuela.ethereum.stub",
     "com.mchange.sc.v1.consuela.ethereum.stub.sol",
     "com.mchange.sc.v1.consuela.ethereum.stub.Utilities._",
@@ -236,7 +236,7 @@ object Generator {
     val indexedInputs = event.inputs.filter( _.indexed )
     val indexedCount  = indexedInputs.length
 
-    assert( event.anonymous, "Anonymous event passed to the generator of a named event." )
+    assert( !event.anonymous, "Anonymous event passed to the generator of a named event." )
 
     if ( indexedCount > 3 ) {
       throw new StubException( s"Bad event in ABI, named events may not have more than three indexed parameters (after the hash of the event signature)! ${event}" )
@@ -250,20 +250,21 @@ object Generator {
     def indexedParamElementEncoder( param : Abi.Event.Parameter ) : String => String = {
       val tpe = param.`type`
       val helper = forceHelper( tpe )
-      def encodedValueProducer       : String => String = value => s"""ethabi.Encoder.encoderForSolidityType( ${tpe} ).encodeUntyped( helper.inConversionGen( ${value} ) ).get"""
-      def hashedEncodedValueProducer : String => String = value => s"""EthHash.hash( ${encodedValueProducer(value)} ).bytes"""
+      def unwrappedEncodedValueProducer : String => String = value => s"""ethabi.Encoder.encoderForSolidityType( "${tpe}" ).get.encodeUntyped( ${ helper.inConversionGen( value ) } ).get"""
+      def wrappedEncodedValueProducer : String => String = value => s"""EthLogEntry.Topic( ${unwrappedEncodedValueProducer(value)} )"""
+      def hashedEncodedValueProducer : String => String = value => s"""EthLogEntry.Topic( EthHash.hash( ${unwrappedEncodedValueProducer(value)} ).bytes )"""
       if ( isDynamicLength( tpe ) ) {
         hashedEncodedValueProducer
       }
       else {
-        encodedValueProducer
+        wrappedEncodedValueProducer
       }
     }
     def indexedParamEncoder( param : Abi.Event.Parameter ) : String => String = {
       val each = indexedParamElementEncoder( param )( "value" )
       seqParam => s"${seqParam}.map( value => ${each} )"
     }
-    val params = "address : Seq[T] = Nil" +: indexedInputs.map( indexedParam ) :+ "numConfirmations = stub.DefaultEventConfirmations"
+    val params = "address : Seq[T] = Nil" +: indexedInputs.map( indexedParam ) :+ "numConfirmations : Int = stub.DefaultEventConfirmations"
 
 
     iw.println( "final object Publisher {" )
@@ -272,21 +273,23 @@ object Generator {
     iw.println( s"class Processor()(implicit scheduler : Scheduler, executionContext : ExecutionContext) extends SimpleProcessor[(SolidityEvent, stub.Event.Metadata ), Event.${resolvedName}]()(scheduler, executionContext) {" )
     iw.upIndent()
 
-    iw.println( s"override def ftransform( pair : (SolidityEvent, stub.Event.Metadata) ) : Failable[Event.${resolvedName}] = succeed( Event.${resolvedName}.apply( pair._1, pair._2 ) )" )
+    iw.println( s"override def ftransform( pair : (SolidityEvent, stub.Event.Metadata) ) : Failable[Event.${resolvedName}] = succeed( Event.${resolvedName}.apply( pair._1.asInstanceOf[SolidityEvent.Named], pair._2 ) )" )
 
     iw.downIndent()
     iw.println( "}" )
 
-    iw.println( s"""def apply[T : EthAddress.Source]( ${params.mkString(", ")} )(implicit scheduler : Scheduler, executionContext : ExecutionContext) : Publisher[Event.${resolvedName}] = {""" )
+    iw.println( s"""def apply[T : EthAddress.Source]( ${params.mkString(", ")} )(implicit icontext : jsonrpc.Invoker.Context, scheduler : Scheduler, executionContext : ExecutionContext) : Publisher[Event.${resolvedName}] = {""" )
     iw.upIndent()
 
     iw.println(  "val addresses = address.map( implicitly[EthAddress.Source[T]].toEthAddress )" )
-    iw.println( s"val signatureRestriction = ${anyEventSignatureTopicValName( overloadedEvents, event )}" )
-    val queryInputs = {
+    iw.println( s"val signatureRestriction = Client.Log.Filter.TopicRestriction.Exact( ${anyEventSignatureTopicValName( overloadedEvents, event )} )" )
+
+    val queryInputs : immutable.Seq[String]= {
       val indexedInputsNumbered = indexedInputs.zip( Stream.from(2) )
-      val userRestrictions = indexedInputsNumbered.map { case ( param, num ) => s"restriction_${num} = ${indexedParamEncoder( param )}" }
-      "addresses = addresses" :+ "restriction_1 = signatureRestriction" ++ userRestrictions
+      val userRestrictions : immutable.Seq[String] = indexedInputsNumbered.map { case ( param, num ) => s"restriction_${num} = Client.Log.Filter.TopicRestriction.AnyOf( ${indexedParamEncoder( param )( param.name )} : _* )" }
+      Vector( "addresses = addresses", "restriction_1 = signatureRestriction" ) ++ userRestrictions
     }
+
     iw.println( s"val query = Client.Log.Filter.Query(" )
     iw.upIndent()
 
@@ -296,10 +299,6 @@ object Generator {
     iw.downIndent()
     iw.println( s")" )
 
-    iw.downIndent()
-    iw.println( "val eventProcessor = {" )
-    iw.upIndent()
-    
     iw.println(  "val eventsPublisher = new ConfirmedLogPublisher( icontext.jsonRpcUrl, query, numConfirmations )" )
     iw.println(  "val baseProcessor   = new StubEventProcessor( ContractAbi )" )
     iw.println( s"val finalProcessor  = new Event.${resolvedName}.Publisher.Processor()" )
@@ -518,10 +517,10 @@ object Generator {
         (input, i) <- event.inputs.zip( Stream.from(0) )
       } yield {
         if ( isHashEncoded( input ) ) {
-          s"(solidityEvent.inputs( ${i} ).as[Decoded.Hash].hash)"
+          s"(solidityEvent.inputs( ${i} ).asInstanceOf[Decoded.Hash].hash)"
         }
         else {
-          forceHelper( input.`type` ).outConversionGen( s"(solidityEvent.inputs( ${i} ).as[Decoded.Value].value)" )
+          forceHelper( input.`type` ).outConversionGen( s"(solidityEvent.inputs( ${i} ).asInstanceOf[Decoded.Value].value)" )
         }
       }
     }
@@ -539,7 +538,7 @@ object Generator {
     iw.upIndent()
 
     if (!event.anonymous) {
-      iw.println( "val abiEvent = solidityEvent.event" )
+      iw.println( "val abiEvent = solidityEvent.abiEvent" )
       iw.println( "val solidityEventSignatureTopic = SolidityEvent.computeIdentifierTopic( abiEvent )" )
       iw.println( s"""require( solidityEventSignatureTopic == ${anyEventSignatureTopicValName( overloadedEvents, event )}, s"${resolvedEventName} represents the following ABI event: '${event}' SolidityEvent '$${solidityEvent}' represents an ABI event that does not match." )""" )
     }
