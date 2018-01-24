@@ -21,6 +21,8 @@ import play.api.libs.json.Json
 
 object Generator {
 
+  final case class Generated( className : String, sourceCode : String )
+
   private implicit lazy val logger = mlogger( this )
 
   private val StubImports = immutable.Seq(
@@ -124,17 +126,22 @@ object Generator {
     iw.println( "}" )
   }
 
-  /**
-    * @return ( <generated class name>, <generated source file text> )
-    */ 
-  def generateContractStub( baseClassName : String, abi : Abi, async : Boolean, fullyQualifiedPackageName : String ) : (String, String) = {
-    def asyncClassName = {
+  private def abstractStubCompanionClassName( baseClassName : String ) = {
       val alwaysCapitalized = baseClassName(0).toString.toUpperCase + baseClassName.substring(1)
-      s"Async${alwaysCapitalized}"
-    }
-    val className = if ( async ) asyncClassName else baseClassName
+      s"Abstract${alwaysCapitalized}Companion"
+  }
 
-    val sw = new StringWriter()
+  def generateStubClasses( baseClassName : String, abi : Abi, fullyQualifiedPackageName : String ) : immutable.Set[Generated] = {
+    immutable.Set(
+      generateAbstractStubCompanion( baseClassName, abi, fullyQualifiedPackageName ),
+      generateContractStub( baseClassName, abi, true, fullyQualifiedPackageName ),
+      generateContractStub( baseClassName, abi, false, fullyQualifiedPackageName )
+    )
+  }
+
+  private def generateAbstractStubCompanion( baseClassName : String, abi : Abi, fullyQualifiedPackageName : String ) : Generated = {
+
+    val className = abstractStubCompanionClassName( baseClassName )
 
     // this will naturally be empty if there are no events
     val overloadedEvents : OverloadedEventsMap = {
@@ -145,6 +152,8 @@ object Generator {
       namesToOverloads.mapValues( _.map( topicResolvedNameEvent ).toMap )
     }
 
+    val sw = new StringWriter()
+
     borrow( new IndentedWriter( sw, "  " ) ) { iw => // two-space indent, Scala-style
       iw.println( s"package ${fullyQualifiedPackageName}" )
       iw.println()
@@ -153,14 +162,41 @@ object Generator {
       }
       iw.println()
 
-      iw.println( s"final object $className {" )
+      iw.println( s"abstract class ${className} {" )
       iw.upIndent()
+
       generateContractAbiAndFunctionsVals( abi, iw )
       ifEvents( abi ) {
         generateEventTopicVals( overloadedEvents, abi, iw )
         generateTopLevelEventAndFactory( className, overloadedEvents, abi, iw )
       }
+
+      iw.downIndent()
+      iw.println(  "}" )
+    }
+
+    Generated( className, sw.toString )
+  }
+
+  private def generateContractStub( baseClassName : String, abi : Abi, async : Boolean, fullyQualifiedPackageName : String ) : Generated = {
+    def asyncClassName = {
+      val alwaysCapitalized = baseClassName(0).toString.toUpperCase + baseClassName.substring(1)
+      s"Async${alwaysCapitalized}"
+    }
+    val className = if ( async ) asyncClassName else baseClassName
+
+    val sw = new StringWriter()
+
+    borrow( new IndentedWriter( sw, "  " ) ) { iw => // two-space indent, Scala-style
+      iw.println( s"package ${fullyQualifiedPackageName}" )
       iw.println()
+      StubImports.foreach { imported =>
+        iw.println( s"import $imported" )
+      }
+      iw.println()
+
+      iw.println( s"final object ${className} extends ${ abstractStubCompanionClassName( baseClassName ) } {" )
+      iw.upIndent()
       generateFactoryMethods( className, abi, iw )
       iw.downIndent()
       iw.println(  "}" )
@@ -208,7 +244,7 @@ object Generator {
       iw.println( "}" )
     }
 
-    (className, sw.toString)
+    Generated(className, sw.toString)
   }
 
   private def forceHelper( solidityTypeName : String ) : ScalaParameterHelper = {
@@ -316,12 +352,12 @@ object Generator {
     iw.println( "}" )
   }
     
-  private def generateTopLevelEventAndFactory( className : String, overloadedEvents : OverloadedEventsMap, abi : Abi, iw : IndentedWriter ) : Unit = {
+  private def generateTopLevelEventAndFactory( abstractCompanionClassName : String, overloadedEvents : OverloadedEventsMap, abi : Abi, iw : IndentedWriter ) : Unit = {
     val hasAnonymous = abi.events.exists( _.anonymous )
 
     iw.println( "final object Event {" )
     iw.upIndent()
-    writeAllEventDefinitions( className, overloadedEvents, abi, iw )
+    writeAllEventDefinitions( abstractCompanionClassName, overloadedEvents, abi, iw )
     iw.println()
     iw.println( "def apply( solidityEvent : SolidityEvent, metadata : stub.Event.Metadata ) : Event = {" )
     iw.upIndent()
@@ -335,7 +371,7 @@ object Generator {
     iw.downIndent()
     iw.println( "}" )
     iw.println()
-    generateEventProcessorClass(className, iw)
+    generateEventProcessorClass( abstractCompanionClassName, iw )
     iw.downIndent()
     iw.println( "}" )
     iw.println( "sealed trait Event extends stub.Event" )
@@ -374,10 +410,12 @@ object Generator {
     iw.println( "}" )
   }
 
-  private def generateEventProcessorClass( className : String, iw : IndentedWriter ) : Unit = {
-    iw.println( s"class Processor()(implicit scheduler : Scheduler, executionContext : ExecutionContext) extends SimpleProcessor[(SolidityEvent, stub.Event.Metadata ), ${className}.Event]()(scheduler, executionContext) {" )
+  private def generateEventProcessorClass( abstractCompanionClassName : String, iw : IndentedWriter ) : Unit = {
+    iw.println(
+      s"class Processor()(implicit scheduler : Scheduler, executionContext : ExecutionContext) extends SimpleProcessor[(SolidityEvent, stub.Event.Metadata ), ${abstractCompanionClassName}.this.Event]()(scheduler, executionContext) {"
+    )
     iw.upIndent()
-    iw.println( s"override def ftransform( pair : (SolidityEvent, stub.Event.Metadata) ) : Failable[${className}.Event] = succeed( ${className}.Event.apply( pair._1, pair._2 ) )" )
+    iw.println( s"override def ftransform( pair : (SolidityEvent, stub.Event.Metadata) ) : Failable[${abstractCompanionClassName}.this.Event] = succeed( ${abstractCompanionClassName}.this.Event.apply( pair._1, pair._2 ) )" )
     iw.downIndent()
     iw.println( "}" )
   }
@@ -439,16 +477,16 @@ object Generator {
    * which anonymous event we are encountering, so we defined a generic event wrapping
    * the raw log entry
    */ 
-  private def writeAllEventDefinitions( stubClassName : String, overloadedEvents : OverloadedEventsMap, abi : Abi, iw : IndentedWriter ) : Unit = {
+  private def writeAllEventDefinitions( abstractCompanionClassName : String, overloadedEvents : OverloadedEventsMap, abi : Abi, iw : IndentedWriter ) : Unit = {
     val ( named, anonymous ) = abi.events.partition( _.anonymous == false )
     named foreach { event =>
       val resolvedEventName = abiEventToResolvedName( event, abi )
-      writeTypedEventDefinition( event, overloadedEvents, resolvedEventName, stubClassName, iw )
+      writeTypedEventDefinition( abstractCompanionClassName, event, overloadedEvents, resolvedEventName, iw )
     }
     anonymous.length match {
-      case 1 => writeTypedAnonymousEventDefinition( anonymous(0), overloadedEvents, stubClassName, iw )
+      case 1 => writeTypedAnonymousEventDefinition( abstractCompanionClassName, anonymous(0), overloadedEvents, iw )
       case _ => anonymous foreach { event =>
-        writeUntypedAnonymousEventDefinition( stubClassName, iw )
+        writeUntypedAnonymousEventDefinition( abstractCompanionClassName, iw )
       }
     }
   }
@@ -472,10 +510,7 @@ object Generator {
     iw.println()
   }
 
-  private def writeUntypedAnonymousEventDefinition (
-    stubClassName : String,
-    iw            : IndentedWriter
-  ) : Unit = {
+  private def writeUntypedAnonymousEventDefinition ( abstractCompanionClassName : String, iw : IndentedWriter ) : Unit = {
     iw.println( s"final object ${ AnonymousEventName } {" )
     iw.upIndent()
     iw.println( "def apply( solidityEvent : SolidityEvent.Anonymous, metadata : stub.Event.Metadata ) : ${ AnonymousEventName } = {" )
@@ -495,25 +530,26 @@ object Generator {
     iw.println( "metadata : stub.Event.Metadata," )
     iw.println( "logEntry : EthLogEntry" )
     iw.downIndent()
-    iw.println( s") extends ${stubClassName}.Event" )
+    iw.println( s") extends ${abstractCompanionClassName}.this.Event" )
     iw.println()
   }
 
   private def writeTypedAnonymousEventDefinition (
-    event            : Abi.Event,
-    overloadedEvents : OverloadedEventsMap,
-    stubClassName    : String,
-    iw               : IndentedWriter
+    abstractCompanionClassName : String,
+    event                      : Abi.Event,
+    overloadedEvents           : OverloadedEventsMap,
+    iw                         : IndentedWriter
   ) : Unit = {
-    writeTypedEventDefinition( event, overloadedEvents, AnonymousEventName, stubClassName, iw ) 
+    writeTypedEventDefinition( abstractCompanionClassName, event, overloadedEvents, AnonymousEventName, iw ) 
   }
 
   private def writeTypedEventDefinition (
-    event             : Abi.Event,
-    overloadedEvents  : OverloadedEventsMap,
-    resolvedEventName : String, // usually just event.name, but not for overloaded or typed anonymous events
-    stubClassName     : String,
-    iw                : IndentedWriter ) : Unit = {
+    abstractCompanionClassName : String,
+    event                      : Abi.Event,
+    overloadedEvents           : OverloadedEventsMap,
+    resolvedEventName          : String, // usually just event.name, but not for overloaded or typed anonymous events
+    iw                         : IndentedWriter
+  ) : Unit = {
     val helpers = event.inputs.map( input => forceHelper( input.`type` ) )
     val extractedParamValues = {
       for {
@@ -567,7 +603,7 @@ object Generator {
     iw.println( "metadata : stub.Event.Metadata," )
     iw.println( "logEntry : EthLogEntry" )
     iw.downIndent()
-    iw.println( s") extends ${stubClassName}.Event" )
+    iw.println( s") extends ${abstractCompanionClassName}.this.Event" )
     iw.println()
   }
 
