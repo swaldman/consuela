@@ -286,7 +286,10 @@ object Generator {
 
     val queryInputs : immutable.Seq[String]= {
       val indexedInputsNumbered = indexedInputs.zip( Stream.from(2) )
-      val userRestrictions : immutable.Seq[String] = indexedInputsNumbered.map { case ( param, num ) => s"restriction_${num} = Client.Log.Filter.TopicRestriction.AnyOf( ${indexedParamEncoder( param )( param.name )} : _* )" }
+      val userRestrictions : immutable.Seq[String] = indexedInputsNumbered.map { case ( param, num ) =>
+        val topicSeq = indexedParamEncoder( param )( param.name )
+        s"restriction_${num} = stub.topicRestriction( ${topicSeq} )"
+      }
       Vector( "addresses = addresses", "restriction_1 = signatureRestriction" ) ++ userRestrictions
     }
 
