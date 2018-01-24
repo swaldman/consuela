@@ -288,7 +288,7 @@ object Generator {
       val indexedInputsNumbered = indexedInputs.zip( Stream.from(2) )
       val userRestrictions : immutable.Seq[String] = indexedInputsNumbered.map { case ( param, num ) =>
         val topicSeq = indexedParamEncoder( param )( param.name )
-        s"restriction_${num} = stub.topicRestriction( ${topicSeq} )"
+        s"restriction_${num} = topicRestriction( ${topicSeq} )"
       }
       Vector( "addresses = addresses", "restriction_1 = signatureRestriction" ) ++ userRestrictions
     }

@@ -4,7 +4,6 @@ import scala.collection._
 import scala.concurrent.duration._
 import scala.math.Ordering
 import com.mchange.sc.v1.consuela.ethereum.jsonrpc.{Abi,Client,Invoker}
-import Client.Log.Filter.TopicRestriction
 
 // TODO: Fixed rational types are not yet implemented
 //       (Are they implemenetd in solidity?)
@@ -26,10 +25,6 @@ package object stub {
   val DefaultGasLimitMarkup     = Markup(0.2)
   val DefaultPollPeriod         = 3.seconds
   val DefaultPollTimeout        = Duration.Inf
-
-  def topicRestriction( topicSeq : Seq[EthLogEntry.Topic] ) : TopicRestriction = {
-    if ( topicSeq.isEmpty ) TopicRestriction.Any else TopicRestriction.AnyOf( topicSeq : _* )
-  }
 
   final object ScalaParameterHelper {
     def apply( scalaTypeName : String ) : ScalaParameterHelper = this.apply( scalaTypeName, identity, name => s"${name}.asInstanceOf[${scalaTypeName}]" )
