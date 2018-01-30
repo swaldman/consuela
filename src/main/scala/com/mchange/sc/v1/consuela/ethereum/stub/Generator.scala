@@ -305,7 +305,7 @@ object Generator {
       val each = indexedParamElementEncoder( param )( "value" )
       seqParam => s"${seqParam}.map( value => ${each} )"
     }
-    val params = "address : Seq[T] = Nil" +: indexedInputs.map( indexedParam ) :+ "numConfirmations : Int = stub.DefaultEventConfirmations"
+    val params = "address : Seq[T] = (Nil : List[String])" +: indexedInputs.map( indexedParam ) :+ "eventConfirmations : Int = stub.DefaultEventConfirmations"
 
 
     iw.println( "final object Publisher {" )
@@ -319,7 +319,42 @@ object Generator {
     iw.downIndent()
     iw.println( "}" )
 
-    iw.println( s"""def apply[T : EthAddress.Source]( ${params.mkString(", ")} )(implicit icontext : jsonrpc.Invoker.Context, scheduler : Scheduler, executionContext : ExecutionContext) : Publisher[Event.${resolvedName}] = {""" )
+    iw.println()
+
+    iw.println( "def build[T : EthAddress.Source, U : URLSource](" )
+    iw.upIndent()
+    iw.println( "jsonRpcUrl : U," )
+    params.foreach { param =>
+      iw.println( s"${param}," )
+    }
+    iw.println( "gasPriceTweak : stub.MarkupOrOverride = stub.MarkupOrOverride.None," )
+    iw.println( "gasLimitTweak : stub.MarkupOrOverride = stub.DefaultGasLimitMarkup," )
+    iw.println( "pollPeriod : Duration = stub.DefaultPollPeriod," )
+    iw.println( "pollTimeout : Duration = stub.DefaultPollTimeout" )
+    iw.downIndent()
+    iw.println( ")( implicit" )
+    iw.upIndent()
+    iw.println( "cfactory         : Client.Factory   = Client.Factory.Default," )
+    iw.println( "scheduler        : Scheduler        = Scheduler.Default," )
+    iw.println( "executionContext : ExecutionContext = ExecutionContext.global" )
+    iw.downIndent()
+    iw.println( s""") : Publisher[Event.${resolvedName}] = {""" )
+    iw.upIndent()
+    iw.println( "implicit val icontext = jsonrpc.Invoker.Context( implicitly[URLSource[U]].toURL( jsonRpcUrl ).toExternalForm(), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout )" )
+    iw.println( s"""this.apply( address, ${indexedInputs.map( _.name ).mkString(", ")}, eventConfirmations )""" )
+    iw.downIndent()
+    iw.println( "}" )
+
+    iw.println()
+
+    iw.println( s"""def apply[T : EthAddress.Source]( ${params.mkString(", ")} )(implicit""" )
+    iw.upIndent()
+    iw.println( "icontext         : jsonrpc.Invoker.Context," )
+    iw.println( "cfactory         : Client.Factory   = Client.Factory.Default," )
+    iw.println( "scheduler        : Scheduler        = Scheduler.Default," )
+    iw.println( "executionContext : ExecutionContext = ExecutionContext.global" )
+    iw.downIndent()
+    iw.println( s""") : Publisher[Event.${resolvedName}] = {""" )
     iw.upIndent()
 
     iw.println(  "val addresses = address.map( implicitly[EthAddress.Source[T]].toEthAddress )" )
@@ -343,7 +378,7 @@ object Generator {
     iw.downIndent()
     iw.println( s")" )
 
-    iw.println(  "val eventsPublisher = new ConfirmedLogPublisher( icontext.jsonRpcUrl, query, numConfirmations )" )
+    iw.println(  "val eventsPublisher = new ConfirmedLogPublisher( icontext.jsonRpcUrl, query, eventConfirmations )" )
     iw.println(  "val baseProcessor   = new StubEventProcessor( ContractAbi )" )
     iw.println( s"val finalProcessor  = new Event.${resolvedName}.Publisher.Processor()" )
     iw.println(  "eventsPublisher.subscribe( baseProcessor )" )
