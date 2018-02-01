@@ -56,7 +56,7 @@ final object SolidityEvent {
   def interpretLogEntryAsEvent( logEntry : EthLogEntry, abiEvent : Abi.Event ) : Failable[immutable.Seq[Decoded]] = {
     val ( indexed, nonIndexed ) = indexedNonindexed( abiEvent )
     for {
-      dts        <- decodableTopics( logEntry : EthLogEntry, abiEvent : Abi.Event )
+      dts        <- decodableTopics( logEntry, abiEvent )
       iencoders  <- encodersForAbiParameters( indexed )
       ivalues    <- decodeIndexed( indexed, iencoders, dts )
       nivalues   <- decodeOutValues( nonIndexed, encodersForAbiParameters( nonIndexed ) )( logEntry.data )
