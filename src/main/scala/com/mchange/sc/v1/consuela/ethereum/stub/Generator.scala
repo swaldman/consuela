@@ -341,7 +341,8 @@ object Generator {
     iw.println( s""") : Publisher[Event.${resolvedName}] = {""" )
     iw.upIndent()
     iw.println( "implicit val icontext = jsonrpc.Invoker.Context( implicitly[URLSource[U]].toURL( jsonRpcUrl ).toExternalForm(), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout )" )
-    iw.println( s"""this.apply( address, ${indexedInputs.map( _.name ).mkString(", ")}, eventConfirmations )""" )
+    val applyArgs = "address" +: indexedInputs.map( _.name ) :+ "eventConfirmations"
+    iw.println( s"""this.apply( ${applyArgs.mkString(", ")} )""" )
     iw.downIndent()
     iw.println( "}" )
 
