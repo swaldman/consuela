@@ -106,9 +106,9 @@ object Generator {
     iw.upIndent()
     iw.println( s"new ${className}(" )
     iw.upIndent()
-    iw.println( "implicitly[EthAddress.Source[U]].toEthAddress( contractAddress )," )
+    iw.println( "implicitly[EthAddress.Source[U]].toEthAddress( contractAddress )" )
     ifEvents(abi) {
-      iw.println( "eventConfirmations" )
+      iw.println( ", eventConfirmations" )
     }
     iw.downIndent()
     iw.println( ") (" )
@@ -199,9 +199,11 @@ object Generator {
 
       iw.println( s"final object ${className} {" )
       iw.upIndent()
-      iw.println( s"val  Event = ${stubUtilitiesClass}.Event" )
-      iw.println( s"type Event = ${stubUtilitiesClass}.Event" )
-      iw.println()
+      ifEvents( abi ) {
+        iw.println( s"val  Event = ${stubUtilitiesClass}.Event" )
+        iw.println( s"type Event = ${stubUtilitiesClass}.Event" )
+        iw.println()
+      }
       generateFactoryMethods( className, abi, iw )
       iw.downIndent()
       iw.println(  "}" )
@@ -482,22 +484,33 @@ object Generator {
     }
   }
 
+  private val SolidityArrayRegex = """^(.+?)\[(\d*)\](.*)$""".r
+
+  private def sanitizeSolidityType( solidityTypeName : String ) : String = {
+    solidityTypeName match {
+      case SolidityArrayRegex( prefix, len, suffix ) => sanitizeSolidityType( prefix + "$array" + len + "$" + suffix )
+      case _ => solidityTypeName
+    }
+  }
+
+  private def sanitizedType( param : Abi.Parameter ) : String = sanitizeSolidityType( param.`type` )
+
   private def functionValName( f : Abi.Function ) : String = {
     val base = s"Function_${f.name}"
-    val typesPart = f.inputs.map( _.`type` ).mkString("_")
+    val typesPart = f.inputs.map( sanitizedType ).mkString("_")
     if ( typesPart.isEmpty ) base else s"${base}_${typesPart}"
   }
 
   private def overloadedEventSignatureTopicValName( e : Abi.Event ) : String = {
     val base = s"OverloadedEventSignatureTopic_${e.name}"
-    val typesPart = e.inputs.map( _.`type` ).mkString("_")
+    val typesPart = e.inputs.map( sanitizedType ).mkString("_")
     if ( typesPart.isEmpty ) base else s"${base}_${typesPart}"
   }
 
 
   private def nonOverloadedEventSignatureTopicValName( e : Abi.Event ) : String = {
     val base = s"EventSignatureTopic_${e.name}"
-    val typesPart = e.inputs.map( _.`type` ).mkString("_")
+    val typesPart = e.inputs.map( sanitizedType ).mkString("_")
     if ( typesPart.isEmpty ) base else s"${base}_${typesPart}"
   }
 
