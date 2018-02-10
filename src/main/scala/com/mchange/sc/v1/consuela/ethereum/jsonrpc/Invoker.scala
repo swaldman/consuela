@@ -13,6 +13,8 @@ import com.mchange.sc.v1.log.MLevel._
 
 import java.net.URL
 
+import com.mchange.sc.v2.net.URLSource
+
 import scala.annotation.tailrec
 
 import scala.collection._
@@ -54,7 +56,10 @@ object Invoker {
     def compute( default : BigInt ) : BigInt = value
   }
 
-  final case class Context( jsonRpcUrl : String, gasPriceTweak : MarkupOrOverride = Markup(0), gasLimitTweak : MarkupOrOverride = Markup(0.2), pollPeriod : Duration = 3.seconds, pollTimeout : Duration = Duration.Inf )
+  final case class Context[ T : URLSource]( jsonRpcUrl : T, gasPriceTweak : MarkupOrOverride = Markup(0), gasLimitTweak : MarkupOrOverride = Markup(0.2), pollPeriod : Duration = 3.seconds, pollTimeout : Duration = Duration.Inf ){
+    private val urlSource : URLSource[T] = implicitly[URLSource[T]]
+    def toURL( t : T ) = urlSource.toURL( t )
+  }
 
   final case class ComputedGas( gasPrice : BigInt, gasLimit : BigInt )
 
@@ -62,13 +67,13 @@ object Invoker {
 
   val AlwaysApprover : GasApprover = _ => Future.successful( () )
 
-  private def computedGas(
+  private def computedGas[T : URLSource](
     client     : Client,
     from       : EthAddress,
     to         : Option[EthAddress],
     valueInWei : Unsigned256,
     data       : immutable.Seq[Byte]
-  )(implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Future[ComputedGas] = {
+  )(implicit icontext : Invoker.Context[T], econtext : ExecutionContext ) : Future[ComputedGas] = {
 
     val fDefaultGasPrice = client.eth.gasPrice()
     val fDefaultGas      = client.eth.estimateGas( Some( from ), to, None, None, Some( valueInWei.widen ), Some ( data ) );
@@ -83,11 +88,11 @@ object Invoker {
     }
   }
 
-  def futureTransactionReceipt(
+  def futureTransactionReceipt[ T : URLSource](
     transactionHash : EthHash
-  )( implicit icontext : Invoker.Context, cfactory : Client.Factory, poller : Poller, econtext : ExecutionContext ) : Future[Option[Client.TransactionReceipt]] = {
+  )( implicit icontext : Invoker.Context[T], cfactory : Client.Factory, poller : Poller, econtext : ExecutionContext ) : Future[Option[Client.TransactionReceipt]] = {
 
-    borrow( cfactory( new URL( icontext.jsonRpcUrl ) ) ) { client =>
+    borrow( cfactory( icontext.toURL( icontext.jsonRpcUrl ) ) ) { client =>
 
       def repoll = client.eth.getTransactionReceipt( transactionHash )
 
@@ -119,34 +124,34 @@ object Invoker {
     }
   }
 
-  def awaitTransactionReceipt( transactionHash : EthHash )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Option[Client.TransactionReceipt] = {
+  def awaitTransactionReceipt[T : URLSource]( transactionHash : EthHash )( implicit icontext : Invoker.Context[T], econtext : ExecutionContext ) : Option[Client.TransactionReceipt] = {
     Await.result( futureTransactionReceipt( transactionHash ), Duration.Inf ) // the timeout is enforced within futureTransactionReceipt( ... ), not here
   }
 
-  def requireTransactionReceipt( transactionHash : EthHash )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Client.TransactionReceipt = {
+  def requireTransactionReceipt[T : URLSource]( transactionHash : EthHash )( implicit icontext : Invoker.Context[T], econtext : ExecutionContext ) : Client.TransactionReceipt = {
     awaitTransactionReceipt( transactionHash ).getOrElse( throw new TimeoutException( transactionHash, icontext.pollTimeout ) )
   }
 
 
   final object transaction {
 
-    def sendWei(
+    def sendWei[ T : URLSource ](
       senderSigner  : EthSigner,
       to            : EthAddress,
       valueInWei    : Unsigned256,
       gasApprover   : GasApprover = AlwaysApprover
-    )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
+    )(implicit icontext : Invoker.Context[T], cfactory : Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
       sendMessage( senderSigner, to, valueInWei, immutable.Seq.empty[Byte], gasApprover )
     }
 
-    def sendMessage(
+    def sendMessage[ T : URLSource ](
       senderSigner  : EthSigner,
       to            : EthAddress,
       valueInWei    : Unsigned256,
       data          : immutable.Seq[Byte],
       gasApprover   : GasApprover = AlwaysApprover
-    )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
-      borrow( cfactory( icontext.jsonRpcUrl ) ) { client =>
+    )(implicit icontext : Invoker.Context[T], cfactory : Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
+      borrow( cfactory( icontext.toURL( icontext.jsonRpcUrl ) ) ) { client =>
 
         val from = senderSigner.address
 
@@ -165,13 +170,13 @@ object Invoker {
         }
       }
     }
-    def createContract(
+    def createContract[ T : URLSource ](
       creatorSigner : EthSigner,
       valueInWei    : Unsigned256,
       init          : immutable.Seq[Byte],
       gasApprover   : GasApprover = AlwaysApprover
-    )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
-      borrow( cfactory( icontext.jsonRpcUrl ) ) { client =>
+    )(implicit icontext : Invoker.Context[T], cfactory : Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
+      borrow( cfactory( icontext.toURL( icontext.jsonRpcUrl ) ) ) { client =>
 
         val from = creatorSigner.address
 
@@ -193,13 +198,13 @@ object Invoker {
   }
 
   final object constant {
-    def sendMessage(
+    def sendMessage[ T : URLSource ](
       from       : EthAddress,
       to         : EthAddress,
       valueInWei : Unsigned256,
       data       : immutable.Seq[Byte]
-    )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext ) : Future[immutable.Seq[Byte]] = {
-      borrow( cfactory( icontext.jsonRpcUrl ) ) { client =>
+    )(implicit icontext : Invoker.Context[T], cfactory : Client.Factory, econtext : ExecutionContext ) : Future[immutable.Seq[Byte]] = {
+      borrow( cfactory( icontext.toURL( icontext.jsonRpcUrl ) ) ) { client =>
         val fComputedGas = computedGas( client, from, Some(to), valueInWei, data )
         for {
           cg <- fComputedGas

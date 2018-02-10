@@ -11,6 +11,7 @@ import com.mchange.sc.v1.consuela.ethereum.{EthAddress, EthHash, EthKeyPair, Eth
 
 import com.mchange.sc.v1.consuela.ethereum.specification.Types.Unsigned256
 
+import com.mchange.sc.v2.net.URLSource
 
 object Sender {
   final case class WalletV3( w : wallet.V3, passphraseFinder : () => String )( implicit provider : jce.Provider ) extends Sender {
@@ -40,10 +41,17 @@ trait Sender {
 
   def findSigner() : EthSigner
 
-  def sendWei( to : EthAddress, valueInWei : Unsigned256 )(implicit icontext : jsonrpc.Invoker.Context, cfactory : jsonrpc.Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
+  def sendWei[T : URLSource](
+    to : EthAddress,
+    valueInWei : Unsigned256
+  )(implicit icontext : jsonrpc.Invoker.Context[T], cfactory : jsonrpc.Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
     jsonrpc.Invoker.transaction.sendWei( this.findSigner(), to, valueInWei )
   }
-  def sendMessage( to : EthAddress, valueInWei : Unsigned256, data : immutable.Seq[Byte] )(implicit icontext : jsonrpc.Invoker.Context, cfactory : jsonrpc.Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
+  def sendMessage[T : URLSource](
+    to : EthAddress,
+    valueInWei : Unsigned256,
+    data : immutable.Seq[Byte]
+  )(implicit icontext : jsonrpc.Invoker.Context[T], cfactory : jsonrpc.Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
     jsonrpc.Invoker.transaction.sendMessage( this.findSigner(), to, valueInWei, data )
   }
 }
