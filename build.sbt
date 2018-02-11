@@ -38,7 +38,7 @@ libraryDependencies ++= Seq(
   "com.mchange"             %% "mlog-scala"                      % "0.3.10",
   "com.mchange"             %% "restricted-type"                 % restrictedTypeVersion,
   "com.mchange"             %% "yinyang"                         % "0.0.2",
-  "com.mchange"             %% "mchange-commons-scala"           % "0.4.4",
+  "com.mchange"             %% "mchange-commons-scala"           % "0.4.5-SNAPSHOT",
   "com.mchange"             %% "literal"                         % "0.0.2",
   "com.mchange"             %% "mchange-play-json-util"          % "0.0.2",
   "com.mchange"             %% "jsonrpc-client"                  % "0.0.2",

@@ -11,6 +11,8 @@ import com.mchange.sc.v2.concurrent.Poller
 
 import com.mchange.sc.v1.log.MLevel._
 
+import com.mchange.sc.v2.net.{URLSource,LoadBalancer}
+
 import java.net.URL
 
 import scala.annotation.tailrec
@@ -54,7 +56,27 @@ object Invoker {
     def compute( default : BigInt ) : BigInt = value
   }
 
-  final case class Context( jsonRpcUrl : String, gasPriceTweak : MarkupOrOverride = Markup(0), gasLimitTweak : MarkupOrOverride = Markup(0.2), pollPeriod : Duration = 3.seconds, pollTimeout : Duration = Duration.Inf )
+  object Context {
+    def fromUrl[ U : URLSource ](
+      jsonRpcUrl : U,
+      gasPriceTweak : MarkupOrOverride = Markup(0),
+      gasLimitTweak : MarkupOrOverride = Markup(0.2),
+      pollPeriod : Duration = 3.seconds,
+      pollTimeout : Duration = Duration.Inf
+    ) : Context = {
+      this.apply( LoadBalancer.Single( jsonRpcUrl ), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout )
+    }
+    def fromUrls[ U : URLSource ](
+      jsonRpcUrls : immutable.Iterable[U],
+      gasPriceTweak : MarkupOrOverride = Markup(0),
+      gasLimitTweak : MarkupOrOverride = Markup(0.2),
+      pollPeriod : Duration = 3.seconds,
+      pollTimeout : Duration = Duration.Inf
+    ) : Context = {
+      this.apply( LoadBalancer.Random( jsonRpcUrls ), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout )
+    }
+  }
+  final case class Context( jsonRpcUrls : LoadBalancer, gasPriceTweak : MarkupOrOverride = Markup(0), gasLimitTweak : MarkupOrOverride = Markup(0.2), pollPeriod : Duration = 3.seconds, pollTimeout : Duration = Duration.Inf )
 
   final case class ComputedGas( gasPrice : BigInt, gasLimit : BigInt )
 
@@ -87,7 +109,7 @@ object Invoker {
     transactionHash : EthHash
   )( implicit icontext : Invoker.Context, cfactory : Client.Factory, poller : Poller, econtext : ExecutionContext ) : Future[Option[Client.TransactionReceipt]] = {
 
-    borrow( cfactory( new URL( icontext.jsonRpcUrl ) ) ) { client =>
+    borrow( cfactory( icontext.jsonRpcUrls.nextURL ) ) { client =>
 
       def repoll = client.eth.getTransactionReceipt( transactionHash )
 
@@ -146,7 +168,7 @@ object Invoker {
       data          : immutable.Seq[Byte],
       gasApprover   : GasApprover = AlwaysApprover
     )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
-      borrow( cfactory( icontext.jsonRpcUrl ) ) { client =>
+      borrow( cfactory( icontext.jsonRpcUrls.nextURL ) ) { client =>
 
         val from = senderSigner.address
 
@@ -171,7 +193,7 @@ object Invoker {
       init          : immutable.Seq[Byte],
       gasApprover   : GasApprover = AlwaysApprover
     )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
-      borrow( cfactory( icontext.jsonRpcUrl ) ) { client =>
+      borrow( cfactory( icontext.jsonRpcUrls.nextURL ) ) { client =>
 
         val from = creatorSigner.address
 
@@ -199,7 +221,7 @@ object Invoker {
       valueInWei : Unsigned256,
       data       : immutable.Seq[Byte]
     )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext ) : Future[immutable.Seq[Byte]] = {
-      borrow( cfactory( icontext.jsonRpcUrl ) ) { client =>
+      borrow( cfactory( icontext.jsonRpcUrls.nextURL ) ) { client =>
         val fComputedGas = computedGas( client, from, Some(to), valueInWei, data )
         for {
           cg <- fComputedGas

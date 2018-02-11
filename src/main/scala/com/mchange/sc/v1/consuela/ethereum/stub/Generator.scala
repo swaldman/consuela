@@ -30,7 +30,7 @@ object Generator {
     "scala.concurrent._",
     "scala.concurrent.duration.Duration",
     "com.mchange.sc.v2.concurrent.{Poller,Scheduler}",
-    "com.mchange.sc.v2.net.URLSource",
+    "com.mchange.sc.v2.net.{LoadBalancer,URLSource}",
     "com.mchange.sc.v2.failable._",
     "com.mchange.sc.v1.consuela._",
     "com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash,EthLogEntry}",
@@ -80,11 +80,52 @@ object Generator {
     iw.println( s"new ${className}( implicitly[EthAddress.Source[U]].toEthAddress( contractAddress )${mbEventConfirmationCtorArg} )" )
     iw.downIndent()
     iw.println( "}" )
+
     iw.println()
-    iw.print( "def build[T : URLSource, U : EthAddress.Source] (" )
+    iw.print( "def build[T : EthAddress.Source, U : URLSource] (" )
     iw.upIndent()
-    iw.println( "jsonRpcUrl : T,")
-    iw.println( "contractAddress : U," )
+    iw.println( "jsonRpcUrl : U,")
+    iw.println( "contractAddress : T," )
+    ifEvents(abi) {
+      iw.println( "eventConfirmations : Int = stub.DefaultEventConfirmations," )
+    }
+    iw.println( "gasPriceTweak : stub.MarkupOrOverride = stub.MarkupOrOverride.None," )
+    iw.println( "gasLimitTweak : stub.MarkupOrOverride = stub.DefaultGasLimitMarkup," )
+    iw.println( "pollPeriod : Duration = stub.DefaultPollPeriod," )
+    iw.println( "pollTimeout : Duration = stub.DefaultPollTimeout" )
+    iw.downIndent()
+    iw.println( ")( implicit" )
+    iw.upIndent()
+    iw.println( "cfactory  : jsonrpc.Client.Factory = jsonrpc.Client.Factory.Default,"  )
+    iw.println( "poller    : Poller = Poller.Default," )
+    ifEvents(abi) {
+      iw.println( "scheduler : Scheduler = Scheduler.Default," )
+    }
+    iw.println( "econtext  : ExecutionContext = ExecutionContext.global" )
+    iw.downIndent()
+    iw.println( s") : ${className} = {" )
+    iw.upIndent()
+    iw.println( "this.buildLoadBalanced(" )
+    iw.upIndent()
+    iw.println( "LoadBalancer.Single( jsonRpcUrl )," )
+    iw.println( "contractAddress," )
+    ifEvents(abi) {
+      iw.println( "eventConfirmations," )
+    }
+    iw.println( "gasPriceTweak," )
+    iw.println( "gasLimitTweak," )
+    iw.println( "pollPeriod," )
+    iw.println( "pollTimeout" )
+    iw.downIndent()
+    iw.println( ")" )
+    iw.downIndent()
+    iw.println(  "}" )
+
+    iw.println()
+    iw.print( "def buildLoadBalanced[T : EthAddress.Source] (" )
+    iw.upIndent()
+    iw.println( "loadBalancer : LoadBalancer,")
+    iw.println( "contractAddress : T," )
     ifEvents(abi) {
       iw.println( "eventConfirmations : Int = stub.DefaultEventConfirmations," )
     }
@@ -106,14 +147,14 @@ object Generator {
     iw.upIndent()
     iw.println( s"new ${className}(" )
     iw.upIndent()
-    iw.println( "implicitly[EthAddress.Source[U]].toEthAddress( contractAddress )" )
+    iw.println( "implicitly[EthAddress.Source[T]].toEthAddress( contractAddress )" )
     ifEvents(abi) {
       iw.println( ", eventConfirmations" )
     }
     iw.downIndent()
     iw.println( ") (" )
     iw.upIndent()
-    iw.println( "jsonrpc.Invoker.Context( implicitly[URLSource[T]].toURL( jsonRpcUrl ).toExternalForm(), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout )," )
+    iw.println( "jsonrpc.Invoker.Context( loadBalancer, gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout )," )
     iw.println( "cfactory,"  )
     iw.println( "poller,"    )
     ifEvents(abi) {
@@ -342,7 +383,7 @@ object Generator {
     iw.downIndent()
     iw.println( s""") : Publisher[Event.${resolvedName}] = {""" )
     iw.upIndent()
-    iw.println( "implicit val icontext = jsonrpc.Invoker.Context( implicitly[URLSource[U]].toURL( jsonRpcUrl ).toExternalForm(), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout )" )
+    iw.println( "implicit val icontext = jsonrpc.Invoker.Context.fromUrl( implicitly[URLSource[U]].toURL( jsonRpcUrl ).toExternalForm(), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout )" )
     val applyArgs = "address" +: indexedInputs.map( _.name ) :+ "eventConfirmations"
     iw.println( s"""this.apply( ${applyArgs.mkString(", ")} )""" )
     iw.downIndent()
@@ -381,7 +422,7 @@ object Generator {
     iw.downIndent()
     iw.println( s")" )
 
-    iw.println(  "val eventsPublisher = new ConfirmedLogPublisher( icontext.jsonRpcUrl, query, eventConfirmations )" )
+    iw.println(  "val eventsPublisher = new ConfirmedLogPublisher( icontext.jsonRpcUrls.nextURL.toExternalForm(), query, eventConfirmations )" )
     iw.println(  "val baseProcessor   = new StubEventProcessor( ContractAbi )" )
     iw.println( s"val finalProcessor  = new Event.${resolvedName}.Publisher.Processor()" )
     iw.println(  "eventsPublisher.subscribe( baseProcessor )" )
@@ -550,7 +591,7 @@ object Generator {
 
     iw.println( "private lazy val eventProcessor = {" )
     iw.upIndent()
-    iw.println(  "val eventsPublisher = new ConfirmedLogPublisher( icontext.jsonRpcUrl, Client.Log.Filter.Query( addresses = List(contractAddress) ), eventConfirmations )" )
+    iw.println(  "val eventsPublisher = new ConfirmedLogPublisher( icontext.jsonRpcUrls.nextURL.toExternalForm(), Client.Log.Filter.Query( addresses = List(contractAddress) ), eventConfirmations )" )
     iw.println( s"val baseProcessor   = new StubEventProcessor( ${stubUtilitiesClassName}.ContractAbi )" )
     iw.println( s"val finalProcessor  = new ${className}.Event.Processor()" )
     iw.println(  "eventsPublisher.subscribe( baseProcessor )" )
