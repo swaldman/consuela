@@ -9,6 +9,9 @@ object EthSigner {
   implicit final object EthSignerIsSource extends EthSigner.Source[EthSigner] {
     def toEthSigner( signer : EthSigner ) = signer
   }
+  implicit final object EthPrivateKeyIsSource extends EthSigner.Source[EthPrivateKey] { // variance issues mean that the generic EthSigner version doesn't work.
+    def toEthSigner( signer : EthPrivateKey ) = signer
+  }
   implicit final object StringIsSource extends EthSigner.Source[String] {
     def toEthSigner( hex : String ) = EthPrivateKey( hex )
   }
