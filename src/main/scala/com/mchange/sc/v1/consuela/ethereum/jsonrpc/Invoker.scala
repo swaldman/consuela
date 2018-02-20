@@ -155,19 +155,17 @@ object Invoker {
     def sendWei(
       senderSigner  : EthSigner,
       to            : EthAddress,
-      valueInWei    : Unsigned256,
-      gasApprover   : GasApprover = AlwaysApprover
-    )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
-      sendMessage( senderSigner, to, valueInWei, immutable.Seq.empty[Byte], gasApprover )
+      valueInWei    : Unsigned256
+    )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext, gasApprover : GasApprover = AlwaysApprover ) : Future[EthHash] = {
+      sendMessage( senderSigner, to, valueInWei, immutable.Seq.empty[Byte])( icontext, cfactory, econtext, gasApprover )
     }
 
     def sendMessage(
       senderSigner  : EthSigner,
       to            : EthAddress,
       valueInWei    : Unsigned256,
-      data          : immutable.Seq[Byte],
-      gasApprover   : GasApprover = AlwaysApprover
-    )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
+      data          : immutable.Seq[Byte]
+    )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext, gasApprover : GasApprover = AlwaysApprover ) : Future[EthHash] = {
       borrow( cfactory( icontext.jsonRpcUrls.nextURL ) ) { client =>
 
         val from = senderSigner.address
@@ -190,9 +188,8 @@ object Invoker {
     def createContract(
       creatorSigner : EthSigner,
       valueInWei    : Unsigned256,
-      init          : immutable.Seq[Byte],
-      gasApprover   : GasApprover = AlwaysApprover
-    )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
+      init          : immutable.Seq[Byte]
+    )(implicit icontext : Invoker.Context, cfactory : Client.Factory, econtext : ExecutionContext, gasApprover : GasApprover = AlwaysApprover ) : Future[EthHash] = {
       borrow( cfactory( icontext.jsonRpcUrls.nextURL ) ) { client =>
 
         val from = creatorSigner.address
