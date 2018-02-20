@@ -346,7 +346,14 @@ object Client {
         doExchange( "eth_getFilterChanges", Seq( JsString(filter.identifier) ) )( _.result.as[immutable.Seq[RawLog]].map( Client.Log.apply ) )
       }
       def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext ) : Future[Option[Client.TransactionReceipt]] = {
-        doExchange( "eth_getTransactionReceipt", Seq( encodeBytes( transactionHash.bytes ) ) )( _.result.as[Option[Client.TransactionReceipt]] )
+        val raw = doExchange( "eth_getTransactionReceipt", Seq( encodeBytes( transactionHash.bytes ) ) )( _.result.as[Option[Client.TransactionReceipt]] )
+
+        // geth 1.8.0 returns an undocumented error response, rather than a null success, on an unknown or pending transaction hash
+        // we recover from this case. See https://github.com/ethereum/go-ethereum/issues/16092#issuecomment-366871447
+
+        raw recover { case e : JsonrpcException =>
+          if ( e.code == -32000 && e.message == "unknown transaction" ) None else throw e
+        }
       }
       def sendRawTransaction( bytes : Seq[Byte] )( implicit ec : ExecutionContext ) : Future[EthHash] = {
         doExchange( "eth_sendRawTransaction", Seq( encodeBytes( bytes ) ) )( success => EthHash.withBytes( decodeBytes( success.result.as[String] ) ) )
