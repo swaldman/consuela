@@ -21,10 +21,7 @@ package object stub {
   val  Override = Invoker.Override
   type Override = Invoker.Override
 
-  val DefaultEventConfirmations = 12
-  val DefaultGasLimitMarkup     = Markup(0.2)
-  val DefaultPollPeriod         = 3.seconds
-  val DefaultPollTimeout        = Duration.Inf
+  type GasApprover = Invoker.GasApprover
 
   final object ScalaParameterHelper {
     def apply( scalaTypeName : String ) : ScalaParameterHelper = this.apply( scalaTypeName, identity, name => s"${name}.asInstanceOf[${scalaTypeName}]" )

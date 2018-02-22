@@ -15,7 +15,6 @@ import com.mchange.v2.io.IndentedWriter
 
 import com.mchange.sc.v1.log.MLevel._
 
-
 import play.api.libs.json.Json
 
 
@@ -26,6 +25,7 @@ object Generator {
   private implicit lazy val logger = mlogger( this )
 
   private val StubImports = immutable.Seq(
+    "java.net.URL",
     "scala.collection._",
     "scala.concurrent._",
     "scala.concurrent.duration.Duration",
@@ -63,21 +63,13 @@ object Generator {
   private def ifEvents( abi : Abi )( action : =>Unit ) : Unit = eventsNoEvents(abi)( action, () )
 
   def generateFactoryMethods( className : String, abi : Abi, iw : IndentedWriter ) : Unit = {
-    val mbEventConfirmations = eventsNoEvents(abi)( ", eventConfirmations : Int = stub.DefaultEventConfirmations", "" )
-    iw.println( s"def apply[U : EthAddress.Source]( contractAddress : U${mbEventConfirmations} ) ( implicit" )
+    iw.println( s"def apply[U : EthAddress.Source]( contractAddress : U ) ( implicit" )
     iw.upIndent()
-    iw.println( "icontext  : jsonrpc.Invoker.Context,"  )
-    iw.println( "cfactory  : jsonrpc.Client.Factory = jsonrpc.Client.Factory.Default,"  )
-    iw.println( "poller    : Poller = Poller.Default," )
-    ifEvents(abi) {
-      iw.println( "scheduler : Scheduler = Scheduler.Default," )
-    }
-    iw.println( "econtext  : ExecutionContext = ExecutionContext.global" )
+    iw.println( "scontext  : stub.Context"  )
     iw.downIndent()
     iw.println( s") : ${className} = {" )
     iw.upIndent()
-    val mbEventConfirmationCtorArg = eventsNoEvents(abi)( ", eventConfirmations", "" )
-    iw.println( s"new ${className}( implicitly[EthAddress.Source[U]].toEthAddress( contractAddress )${mbEventConfirmationCtorArg} )" )
+    iw.println( s"new ${className}( implicitly[EthAddress.Source[U]].toEthAddress( contractAddress ) )( scontext )" )
     iw.downIndent()
     iw.println( "}" )
 
@@ -86,21 +78,18 @@ object Generator {
     iw.upIndent()
     iw.println( "jsonRpcUrl : U,")
     iw.println( "contractAddress : T," )
-    ifEvents(abi) {
-      iw.println( "eventConfirmations : Int = stub.DefaultEventConfirmations," )
-    }
-    iw.println( "gasPriceTweak : stub.MarkupOrOverride = stub.MarkupOrOverride.None," )
-    iw.println( "gasLimitTweak : stub.MarkupOrOverride = stub.DefaultGasLimitMarkup," )
-    iw.println( "pollPeriod : Duration = stub.DefaultPollPeriod," )
-    iw.println( "pollTimeout : Duration = stub.DefaultPollTimeout" )
+    iw.println( "gasPriceTweak : stub.MarkupOrOverride = stub.Context.Default.GasPriceTweak," )
+    iw.println( "gasLimitTweak : stub.MarkupOrOverride = stub.Context.Default.GasLimitTweak," )
+    iw.println( "pollPeriod : Duration = stub.Context.Default.PollPeriod," )
+    iw.println( "pollTimeout : Duration = stub.Context.Default.PollTimeout," )
+    iw.println( "gasApprover : stub.GasApprover = stub.Context.Default.GasApprover," )
+    iw.println( "eventConfirmations : Int = stub.Context.Default.EventConfirmations" )
     iw.downIndent()
     iw.println( ")( implicit" )
     iw.upIndent()
     iw.println( "cfactory  : jsonrpc.Client.Factory = jsonrpc.Client.Factory.Default,"  )
     iw.println( "poller    : Poller = Poller.Default," )
-    ifEvents(abi) {
-      iw.println( "scheduler : Scheduler = Scheduler.Default," )
-    }
+    iw.println( "scheduler : Scheduler = Scheduler.Default," )
     iw.println( "econtext  : ExecutionContext = ExecutionContext.global" )
     iw.downIndent()
     iw.println( s") : ${className} = {" )
@@ -109,15 +98,14 @@ object Generator {
     iw.upIndent()
     iw.println( "LoadBalancer.Single( jsonRpcUrl )," )
     iw.println( "contractAddress," )
-    ifEvents(abi) {
-      iw.println( "eventConfirmations," )
-    }
     iw.println( "gasPriceTweak," )
     iw.println( "gasLimitTweak," )
     iw.println( "pollPeriod," )
-    iw.println( "pollTimeout" )
+    iw.println( "pollTimeout," )
+    iw.println( "gasApprover," )
+    iw.println( "eventConfirmations" )
     iw.downIndent()
-    iw.println( ")" )
+    iw.println( ")( implicitly[EthAddress.Source[T]], cfactory, poller, scheduler, econtext )" )
     iw.downIndent()
     iw.println(  "}" )
 
@@ -126,43 +114,38 @@ object Generator {
     iw.upIndent()
     iw.println( "loadBalancer : LoadBalancer,")
     iw.println( "contractAddress : T," )
-    ifEvents(abi) {
-      iw.println( "eventConfirmations : Int = stub.DefaultEventConfirmations," )
-    }
-    iw.println( "gasPriceTweak : stub.MarkupOrOverride = stub.MarkupOrOverride.None," )
-    iw.println( "gasLimitTweak : stub.MarkupOrOverride = stub.DefaultGasLimitMarkup," )
-    iw.println( "pollPeriod : Duration = stub.DefaultPollPeriod," )
-    iw.println( "pollTimeout : Duration = stub.DefaultPollTimeout" )
+    iw.println( "gasPriceTweak : stub.MarkupOrOverride = stub.Context.Default.GasPriceTweak," )
+    iw.println( "gasLimitTweak : stub.MarkupOrOverride = stub.Context.Default.GasLimitTweak," )
+    iw.println( "pollPeriod : Duration = stub.Context.Default.PollPeriod," )
+    iw.println( "pollTimeout : Duration = stub.Context.Default.PollTimeout," )
+    iw.println( "gasApprover : stub.GasApprover = stub.Context.Default.GasApprover," )
+    iw.println( "eventConfirmations : Int = stub.Context.Default.EventConfirmations" )
     iw.downIndent()
     iw.println( ")( implicit" )
     iw.upIndent()
     iw.println( "cfactory  : jsonrpc.Client.Factory = jsonrpc.Client.Factory.Default,"  )
     iw.println( "poller    : Poller = Poller.Default," )
-    ifEvents(abi) {
-      iw.println( "scheduler : Scheduler = Scheduler.Default," )
-    }
+    iw.println( "scheduler : Scheduler = Scheduler.Default," )
     iw.println( "econtext  : ExecutionContext = ExecutionContext.global" )
     iw.downIndent()
     iw.println( s") : ${className} = {" )
     iw.upIndent()
-    iw.println( s"new ${className}(" )
+    iw.println( "val scontext = {")
     iw.upIndent()
-    iw.println( "implicitly[EthAddress.Source[T]].toEthAddress( contractAddress )" )
-    ifEvents(abi) {
-      iw.println( ", eventConfirmations" )
-    }
-    iw.downIndent()
-    iw.println( ") (" )
+    iw.println( "stub.Context.fromLoadBalancer(" )
     iw.upIndent()
-    iw.println( "jsonrpc.Invoker.Context( loadBalancer, gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout )," )
-    iw.println( "cfactory,"  )
-    iw.println( "poller,"    )
-    ifEvents(abi) {
-      iw.println( "scheduler," )
-    }
-    iw.println( "econtext"   )
+    iw.println( "loadBalancer = loadBalancer," )
+    iw.println( "gasPriceTweak = gasPriceTweak," )
+    iw.println( "gasLimitTweak = gasLimitTweak," )
+    iw.println( "pollPeriod = pollPeriod," )
+    iw.println( "pollTimeout = pollTimeout," )
+    iw.println( "gasApprover = gasApprover," )
+    iw.println( "eventConfirmations = eventConfirmations" )
     iw.downIndent()
-    iw.println( ")" )
+    iw.println( ")( cfactory, poller, scheduler )")
+    iw.downIndent()
+    iw.println( "}")
+    iw.print( s"new ${className}( implicitly[EthAddress.Source[T]].toEthAddress( contractAddress ) )( scontext )" )
     iw.downIndent()
     iw.println( "}" )
   }
@@ -248,25 +231,23 @@ object Generator {
       generateFactoryMethods( className, abi, iw )
       iw.downIndent()
       iw.println(  "}" )
-      val mbEventConfirmations = eventsNoEvents( abi )( ", val eventConfirmations : Int = stub.DefaultEventConfirmations", "" )
       val mbExtends = eventsNoEvents( abi )( s"extends Publisher[${className}.Event]", "" )
-      iw.println( s"final class $className( val contractAddress : EthAddress${mbEventConfirmations} )( implicit" )
-      iw.upIndent()
-      iw.println( "icontext  : jsonrpc.Invoker.Context," )
-      iw.println( "cfactory  : jsonrpc.Client.Factory = jsonrpc.Client.Factory.Default,"  )
-      iw.println( "poller    : Poller = Poller.Default," )
-      ifEvents( abi ) {
-        iw.println( "scheduler : Scheduler = Scheduler.Default," )
-      }
-      iw.println( "econtext  : ExecutionContext = ExecutionContext.global" )
-      iw.downIndent()
-      iw.println( s")${mbExtends} {" )
+      iw.println( s"final class $className( val contractAddress : EthAddress )( implicit scontext : stub.Context )${mbExtends} {" )
       iw.upIndent()
       iw.println()
-      iw.println( "val gasPriceTweak : stub.MarkupOrOverride = icontext.gasPriceTweak" )
-      iw.println( "val gasLimitTweak : stub.MarkupOrOverride = icontext.gasLimitTweak" )
-      iw.println( "val pollPeriod : Duration = icontext.pollPeriod" )
-      iw.println( "val pollTimeout : Duration = icontext.pollTimeout" )
+      iw.println( "val gasPriceTweak      : stub.MarkupOrOverride = scontext.icontext.gasPriceTweak" )
+      iw.println( "val gasLimitTweak      : stub.MarkupOrOverride = scontext.icontext.gasLimitTweak" )
+      iw.println( "val pollPeriod         : Duration              = scontext.icontext.pollPeriod" )
+      iw.println( "val pollTimeout        : Duration              = scontext.icontext.pollTimeout" )
+      iw.println( "val gasApprover        : stub.GasApprover      = scontext.icontext.gasApprover" )
+      iw.println( "val eventConfirmations : Int                   = scontext.eventConfirmations" )
+      iw.println()
+      iw.println( "// Conservatively ensure the desired implicit environment" ) // Conservatively ensure the desired implicit environment
+      iw.println( "implicit val cfactory  : Client.Factory           = scontext.icontext.cfactory" )
+      iw.println( "implicit val poller    : Poller                   = scontext.icontext.poller" )
+      iw.println( "implicit val econtext  : ExecutionContext         = scontext.icontext.econtext" )
+      iw.println( "implicit val scheduler : Scheduler                = scontext.scheduler" )
+      iw.println( "implicit val icontext  : jsonrpc.Invoker.Context  = scontext.icontext" )
       iw.println()
       iw.println( s"final object transaction {" )
       iw.upIndent()
@@ -348,8 +329,8 @@ object Generator {
       val each = indexedParamElementEncoder( param )( "value" )
       seqParam => s"${seqParam}.map( value => ${each} )"
     }
-    val params = "address : Seq[T] = (Nil : List[String])" +: indexedInputs.map( indexedParam ) :+ "eventConfirmations : Int = stub.DefaultEventConfirmations"
-
+    val nonStubContextParams = "address : Seq[T] = (Nil : List[String])" +: indexedInputs.map( indexedParam )
+    val allParams = "jsonRpcUrl : U" +: nonStubContextParams :+ "eventConfirmations : Int = stub.Context.Default.EventConfirmations"
 
     iw.println( "final object Publisher {" )
     iw.upIndent()
@@ -364,44 +345,19 @@ object Generator {
 
     iw.println()
 
-    iw.println( "def build[T : EthAddress.Source, U : URLSource](" )
+    iw.println( s"""def fromStubContext[T : EthAddress.Source]( ${nonStubContextParams.mkString(", ")} )( implicit scontext : stub.Context ) : Publisher[Event.${resolvedName}] = {""" )
     iw.upIndent()
-    iw.println( "jsonRpcUrl : U," )
-    params.foreach { param =>
-      iw.println( s"${param}," )
-    }
-    iw.println( "gasPriceTweak : stub.MarkupOrOverride = stub.MarkupOrOverride.None," )
-    iw.println( "gasLimitTweak : stub.MarkupOrOverride = stub.DefaultGasLimitMarkup," )
-    iw.println( "pollPeriod : Duration = stub.DefaultPollPeriod," )
-    iw.println( "pollTimeout : Duration = stub.DefaultPollTimeout" )
+    val fromUrlArgs = "scontext.icontext.loadBalancer.nextURL" +: "address" +: indexedInputs.map( _.name ) :+ "scontext.eventConfirmations"
+    iw.println( s"""this.fromUrl( ${fromUrlArgs.mkString(", ")} )( implicitly[EthAddress.Source[T]], implicitly[URLSource[URL]], scontext.scheduler, scontext.icontext.econtext )""" )
     iw.downIndent()
-    iw.println( ")( implicit" )
-    iw.upIndent()
-    iw.println( "cfactory         : Client.Factory   = Client.Factory.Default," )
-    iw.println( "scheduler        : Scheduler        = Scheduler.Default," )
-    iw.println( "executionContext : ExecutionContext = ExecutionContext.global" )
-    iw.downIndent()
-    iw.println( s""") : Publisher[Event.${resolvedName}] = {""" )
-    iw.upIndent()
-    iw.println( "implicit val icontext = jsonrpc.Invoker.Context.fromUrl( implicitly[URLSource[U]].toURL( jsonRpcUrl ).toExternalForm(), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout )" )
-    val applyArgs = "address" +: indexedInputs.map( _.name ) :+ "eventConfirmations"
-    iw.println( s"""this.apply( ${applyArgs.mkString(", ")} )""" )
-    iw.downIndent()
-    iw.println( "}" )
 
-    iw.println()
+    iw.println(  """}""" )
 
-    iw.println( s"""def apply[T : EthAddress.Source]( ${params.mkString(", ")} )(implicit""" )
-    iw.upIndent()
-    iw.println( "icontext         : jsonrpc.Invoker.Context," )
-    iw.println( "cfactory         : Client.Factory   = Client.Factory.Default," )
-    iw.println( "scheduler        : Scheduler        = Scheduler.Default," )
-    iw.println( "executionContext : ExecutionContext = ExecutionContext.global" )
-    iw.downIndent()
-    iw.println( s""") : Publisher[Event.${resolvedName}] = {""" )
+    iw.println( s"""def fromUrl[T : EthAddress.Source, U : URLSource]( ${allParams.mkString(", ")} )(implicit scheduler : Scheduler, executionContext : ExecutionContext) : Publisher[Event.${resolvedName}] = {""" )
     iw.upIndent()
 
     iw.println(  "val addresses = address.map( implicitly[EthAddress.Source[T]].toEthAddress )" )
+    iw.println(  "val url = URLSource.toURL( jsonRpcUrl ).toExternalForm()" )
     iw.println( s"val signatureRestriction = Client.Log.Filter.TopicRestriction.Exact( ${anyEventSignatureTopicValName( overloadedEvents, event )} )" )
 
     val queryInputs : immutable.Seq[String]= {
@@ -422,7 +378,7 @@ object Generator {
     iw.downIndent()
     iw.println( s")" )
 
-    iw.println(  "val eventsPublisher = new ConfirmedLogPublisher( icontext.jsonRpcUrls.nextURL.toExternalForm(), query, eventConfirmations )" )
+    iw.println(  "val eventsPublisher = new ConfirmedLogPublisher( url, query, eventConfirmations )" )
     iw.println(  "val baseProcessor   = new StubEventProcessor( ContractAbi )" )
     iw.println( s"val finalProcessor  = new Event.${resolvedName}.Publisher.Processor()" )
     iw.println(  "eventsPublisher.subscribe( baseProcessor )" )
@@ -591,7 +547,7 @@ object Generator {
 
     iw.println( "private lazy val eventProcessor = {" )
     iw.upIndent()
-    iw.println(  "val eventsPublisher = new ConfirmedLogPublisher( icontext.jsonRpcUrls.nextURL.toExternalForm(), Client.Log.Filter.Query( addresses = List(contractAddress) ), eventConfirmations )" )
+    iw.println(  "val eventsPublisher = new ConfirmedLogPublisher( icontext.loadBalancer.nextURL.toExternalForm(), Client.Log.Filter.Query( addresses = List(contractAddress) ), eventConfirmations )" )
     iw.println( s"val baseProcessor   = new StubEventProcessor( ${stubUtilitiesClassName}.ContractAbi )" )
     iw.println( s"val finalProcessor  = new ${className}.Event.Processor()" )
     iw.println(  "eventsPublisher.subscribe( baseProcessor )" )
