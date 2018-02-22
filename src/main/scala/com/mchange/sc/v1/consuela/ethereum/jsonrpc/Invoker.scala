@@ -62,61 +62,86 @@ object Invoker {
 
   val AlwaysApprover : GasApprover = _ => Future.successful( () )
 
+  final case class TransactionLogEntry( transactionHash : EthHash, transaction : EthTransaction.Signed, jsonRpcUrl : String )
+
+  final object TransactionLogger {
+    final case object None extends TransactionLogger {
+      def apply( entry : TransactionLogEntry, ec : ExecutionContext ) : Future[Unit] = throw new NotImplementedError( "TransactionLogger.None is a token; it should never actually be called." )
+    }
+    private [Invoker] def log( tlogger : TransactionLogger, transactionHash : EthHash, transaction : EthTransaction.Signed, jsonRpcUrl : String )( implicit ec : ExecutionContext ) : Future[Unit] = {
+      if ( tlogger != TransactionLogger.None ) {
+        val entry = new TransactionLogEntry( transactionHash, transaction, jsonRpcUrl )
+        tlogger( entry, ec ) recover { case t : Throwable =>
+          WARNING.log( s"Failed to log a transaction with specified TransactionLogger. Unlogger entry: ${entry}", t )
+        }
+      } else {
+        Future.successful( () )
+      }
+    }
+  }
+  type TransactionLogger = (TransactionLogEntry, ExecutionContext) => Future[Unit]
+
+
   object Context {
     // we define these in a trait so that e.g. stub.Context can easily steal them
     trait Default {
-      val GasPriceTweak   : MarkupOrOverride  = Markup(0)
-      val GasLimitTweak    : MarkupOrOverride = Markup(0.2)
-      val PollPeriod       : Duration         = 3.seconds
-      val PollTimeout      : Duration         = Duration.Inf
-      val GasApprover      : GasApprover      = AlwaysApprover
-      val ClientFactory    : Client.Factory   = Client.Factory.Default
-      val Poller           : Poller           = com.mchange.sc.v2.concurrent.Poller.Default
-      val ExecutionContext : ExecutionContext = scala.concurrent.ExecutionContext.global
+      val GasPriceTweak     : MarkupOrOverride  = Markup(0)
+      val GasLimitTweak     : MarkupOrOverride  = Markup(0.2)
+      val PollPeriod        : Duration          = 3.seconds
+      val PollTimeout       : Duration          = Duration.Inf
+      val GasApprover       : GasApprover       = AlwaysApprover
+      val TransactionLogger : TransactionLogger = Invoker.TransactionLogger.None
+      val ClientFactory     : Client.Factory    = Client.Factory.Default
+      val Poller            : Poller            = com.mchange.sc.v2.concurrent.Poller.Default
+      val ExecutionContext  : ExecutionContext  = scala.concurrent.ExecutionContext.global
     }
     final object Default extends Default
 
     def fromUrl[ U : URLSource ](
       jsonRpcUrl    : U,
-      gasPriceTweak : MarkupOrOverride = Default.GasPriceTweak,
-      gasLimitTweak : MarkupOrOverride = Default.GasLimitTweak,
-      pollPeriod    : Duration         = Default.PollPeriod, 
-      pollTimeout   : Duration         = Default.PollTimeout,
-      gasApprover   : GasApprover      = Default.GasApprover 
+      gasPriceTweak     : MarkupOrOverride  = Default.GasPriceTweak,
+      gasLimitTweak     : MarkupOrOverride  = Default.GasLimitTweak,
+      pollPeriod        : Duration          = Default.PollPeriod, 
+      pollTimeout       : Duration          = Default.PollTimeout,
+      gasApprover       : GasApprover       = Default.GasApprover,
+      transactionLogger : TransactionLogger = Default.TransactionLogger
     )( implicit cfactory : Client.Factory = Default.ClientFactory, poller : Poller = Default.Poller, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
-      Context( LoadBalancer.Single( jsonRpcUrl ), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, gasApprover, cfactory, poller, econtext )
+      Context( LoadBalancer.Single( jsonRpcUrl ), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, gasApprover, transactionLogger, cfactory, poller, econtext )
     }
     def fromUrls[ U : URLSource ](
-      jsonRpcUrls   : immutable.Iterable[U],
-      gasPriceTweak : MarkupOrOverride = Default.GasPriceTweak,
-      gasLimitTweak : MarkupOrOverride = Default.GasLimitTweak,
-      pollPeriod    : Duration         = Default.PollPeriod, 
-      pollTimeout   : Duration         = Default.PollTimeout,
-      gasApprover   : GasApprover      = Default.GasApprover 
+      jsonRpcUrls       : immutable.Iterable[U],
+      gasPriceTweak     : MarkupOrOverride  = Default.GasPriceTweak,
+      gasLimitTweak     : MarkupOrOverride  = Default.GasLimitTweak,
+      pollPeriod        : Duration          = Default.PollPeriod, 
+      pollTimeout       : Duration          = Default.PollTimeout,
+      gasApprover       : GasApprover       = Default.GasApprover, 
+      transactionLogger : TransactionLogger = Default.TransactionLogger
     )( implicit cfactory : Client.Factory = Default.ClientFactory, poller : Poller = Default.Poller, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
-      Context( LoadBalancer.RoundRobin( jsonRpcUrls ), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, gasApprover, cfactory, poller, econtext )
+      Context( LoadBalancer.RoundRobin( jsonRpcUrls ), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, gasApprover, transactionLogger, cfactory, poller, econtext )
     }
     def fromLoadBalancer (
-      loadBalancer  : LoadBalancer,
-      gasPriceTweak : MarkupOrOverride = Default.GasPriceTweak,
-      gasLimitTweak : MarkupOrOverride = Default.GasLimitTweak,
-      pollPeriod    : Duration         = Default.PollPeriod, 
-      pollTimeout   : Duration         = Default.PollTimeout,
-      gasApprover   : GasApprover      = Default.GasApprover 
+      loadBalancer      : LoadBalancer,
+      gasPriceTweak     : MarkupOrOverride = Default.GasPriceTweak,
+      gasLimitTweak     : MarkupOrOverride = Default.GasLimitTweak,
+      pollPeriod        : Duration         = Default.PollPeriod, 
+      pollTimeout       : Duration         = Default.PollTimeout,
+      gasApprover       : GasApprover      = Default.GasApprover, 
+      transactionLogger : TransactionLogger = Default.TransactionLogger
     )( implicit cfactory : Client.Factory = Default.ClientFactory, poller : Poller = Default.Poller, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
-      Context( loadBalancer, gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, gasApprover, cfactory, poller, econtext )
+      Context( loadBalancer, gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, gasApprover, transactionLogger, cfactory, poller, econtext )
     }
   }
   final case class Context(
-    val loadBalancer  : LoadBalancer,
-    val gasPriceTweak : MarkupOrOverride,
-    val gasLimitTweak : MarkupOrOverride,
-    val pollPeriod    : Duration,
-    val pollTimeout   : Duration,
-    val gasApprover   : GasApprover,
-    val cfactory      : Client.Factory,
-    val poller        : Poller,
-    val econtext      : ExecutionContext
+    val loadBalancer      : LoadBalancer,
+    val gasPriceTweak     : MarkupOrOverride,
+    val gasLimitTweak     : MarkupOrOverride,
+    val pollPeriod        : Duration,
+    val pollTimeout       : Duration,
+    val gasApprover       : GasApprover,
+    val transactionLogger : TransactionLogger,
+    val cfactory          : Client.Factory,
+    val poller            : Poller,
+    val econtext          : ExecutionContext
   )
 
   private def computedGas(
@@ -209,7 +234,8 @@ object Invoker {
     )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
       implicit val ( cfactory, poller, econtext ) = ( icontext.cfactory, icontext.poller, icontext.econtext )
 
-      borrow( cfactory( icontext.loadBalancer.nextURL ) ) { client =>
+      val url = icontext.loadBalancer.nextURL
+      borrow( cfactory( url ) ) { client =>
 
         val from = senderSigner.address
 
@@ -224,6 +250,7 @@ object Invoker {
           signed = unsigned.sign( senderSigner )
           hash <- client.eth.sendSignedTransaction( signed )
         } yield {
+          TransactionLogger.log( icontext.transactionLogger, hash, signed, url.toExternalForm )
           hash
         }
       }
@@ -235,7 +262,8 @@ object Invoker {
     )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
       implicit val ( cfactory, poller, econtext ) = ( icontext.cfactory, icontext.poller, icontext.econtext )
 
-      borrow( cfactory( icontext.loadBalancer.nextURL ) ) { client =>
+      val url = icontext.loadBalancer.nextURL
+      borrow( cfactory( url ) ) { client =>
 
         val from = creatorSigner.address
 
@@ -250,6 +278,7 @@ object Invoker {
           signed = unsigned.sign( creatorSigner )
           hash <- client.eth.sendSignedTransaction( signed )
         } yield {
+          TransactionLogger.log( icontext.transactionLogger, hash, signed, url.toExternalForm )
           hash
         }
       }

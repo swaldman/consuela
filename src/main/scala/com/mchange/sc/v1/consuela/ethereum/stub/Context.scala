@@ -16,31 +16,34 @@ object Context {
 
   def fromUrl[ U : URLSource ](
     jsonRpcUrl         : U,
-    gasPriceTweak      : MarkupOrOverride = Default.GasPriceTweak,
-    gasLimitTweak      : MarkupOrOverride = Default.GasLimitTweak,
-    pollPeriod         : Duration         = Default.PollPeriod,
-    pollTimeout        : Duration         = Default.PollTimeout,
-    gasApprover        : GasApprover      = Default.GasApprover,
-    eventConfirmations : Int              = Default.EventConfirmations
+    gasPriceTweak      : MarkupOrOverride  = Default.GasPriceTweak,
+    gasLimitTweak      : MarkupOrOverride  = Default.GasLimitTweak,
+    pollPeriod         : Duration          = Default.PollPeriod,
+    pollTimeout        : Duration          = Default.PollTimeout,
+    gasApprover        : GasApprover       = Default.GasApprover,
+    transactionLogger  : TransactionLogger = Default.TransactionLogger,
+    eventConfirmations : Int               = Default.EventConfirmations
   )( implicit cfactory : Client.Factory = Default.ClientFactory, poller : Poller = Default.Poller, scheduler : Scheduler = Default.Scheduler, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
     val icontext = Invoker.Context.fromUrl (
-      jsonRpcUrl    = jsonRpcUrl,
-      gasPriceTweak = gasPriceTweak,
-      gasLimitTweak = gasLimitTweak,
-      pollPeriod    = pollPeriod,
-      pollTimeout   = pollTimeout,
-      gasApprover   = gasApprover
+      jsonRpcUrl        = jsonRpcUrl,
+      gasPriceTweak     = gasPriceTweak,
+      gasLimitTweak     = gasLimitTweak,
+      pollPeriod        = pollPeriod,
+      pollTimeout       = pollTimeout,
+      gasApprover       = gasApprover,
+      transactionLogger = transactionLogger
     )( implicitly[URLSource[U]], cfactory, poller, econtext )
     Context( icontext, eventConfirmations, scheduler )
   }
   def fromUrls[ U : URLSource ](
     jsonRpcUrls        : immutable.Iterable[U],
-    gasPriceTweak      : MarkupOrOverride = Default.GasPriceTweak,
-    gasLimitTweak      : MarkupOrOverride = Default.GasLimitTweak,
-    pollPeriod         : Duration         = Default.PollPeriod,
-    pollTimeout        : Duration         = Default.PollTimeout,
-    gasApprover        : GasApprover      = Default.GasApprover,
-    eventConfirmations : Int              = Default.EventConfirmations
+    gasPriceTweak      : MarkupOrOverride  = Default.GasPriceTweak,
+    gasLimitTweak      : MarkupOrOverride  = Default.GasLimitTweak,
+    pollPeriod         : Duration          = Default.PollPeriod,
+    pollTimeout        : Duration          = Default.PollTimeout,
+    gasApprover        : GasApprover       = Default.GasApprover,
+    transactionLogger  : TransactionLogger = Default.TransactionLogger,
+    eventConfirmations : Int               = Default.EventConfirmations
   )( implicit cfactory : Client.Factory = Default.ClientFactory, poller : Poller = Default.Poller, scheduler : Scheduler = Default.Scheduler, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
     val icontext = Invoker.Context.fromUrls (
       jsonRpcUrls        = jsonRpcUrls,
@@ -48,18 +51,20 @@ object Context {
       gasLimitTweak      = gasLimitTweak,
       pollPeriod         = pollPeriod,
       pollTimeout        = pollTimeout,
-      gasApprover        = gasApprover
+      gasApprover        = gasApprover,
+      transactionLogger  = transactionLogger
     )( implicitly[URLSource[U]], cfactory, poller, econtext )
     Context( icontext, eventConfirmations, scheduler )
   }
   def fromLoadBalancer (
     loadBalancer       : LoadBalancer,
-    gasPriceTweak      : MarkupOrOverride = Default.GasPriceTweak,
-    gasLimitTweak      : MarkupOrOverride = Default.GasLimitTweak,
-    pollPeriod         : Duration         = Default.PollPeriod,
-    pollTimeout        : Duration         = Default.PollTimeout,
-    gasApprover        : GasApprover      = Default.GasApprover,
-    eventConfirmations : Int              = Default.EventConfirmations
+    gasPriceTweak      : MarkupOrOverride  = Default.GasPriceTweak,
+    gasLimitTweak      : MarkupOrOverride  = Default.GasLimitTweak,
+    pollPeriod         : Duration          = Default.PollPeriod,
+    pollTimeout        : Duration          = Default.PollTimeout,
+    gasApprover        : GasApprover       = Default.GasApprover,
+    transactionLogger  : TransactionLogger = Default.TransactionLogger,
+    eventConfirmations : Int               = Default.EventConfirmations
   )( implicit cfactory : Client.Factory = Default.ClientFactory, poller : Poller = Default.Poller, scheduler : Scheduler = Default.Scheduler, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
     val icontext = Invoker.Context.fromLoadBalancer (
       loadBalancer       = loadBalancer,
@@ -67,7 +72,8 @@ object Context {
       gasLimitTweak      = gasLimitTweak,
       pollPeriod         = pollPeriod,
       pollTimeout        = pollTimeout,
-      gasApprover        = gasApprover
+      gasApprover        = gasApprover,
+      transactionLogger  = transactionLogger
     )( cfactory, poller, econtext )
     Context( icontext, eventConfirmations, scheduler )
   }

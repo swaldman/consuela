@@ -23,6 +23,15 @@ package object stub {
 
   type GasApprover = Invoker.GasApprover
 
+  val  ComputedGas = Invoker.ComputedGas
+  type ComputedGas = Invoker.ComputedGas
+
+  val  TransactionLogger = Invoker.TransactionLogger
+  type TransactionLogger = Invoker.TransactionLogger
+
+  val  TransactionLogEntry = Invoker.TransactionLogEntry
+  type TransactionLogEntry = Invoker.TransactionLogEntry
+
   final object ScalaParameterHelper {
     def apply( scalaTypeName : String ) : ScalaParameterHelper = this.apply( scalaTypeName, identity, name => s"${name}.asInstanceOf[${scalaTypeName}]" )
   }
