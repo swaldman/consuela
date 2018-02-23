@@ -235,7 +235,7 @@ object Generator {
       generateFactoryMethods( className, abi, iw )
       iw.downIndent()
       iw.println(  "}" )
-      val mbExtends = eventsNoEvents( abi )( s"extends Publisher[${className}.Event]", "" )
+      val mbExtends = eventsNoEvents( abi )( s" extends Publisher[${className}.Event]", "" )
       iw.println( s"final class $className( val contractAddress : EthAddress )( implicit scontext : stub.Context )${mbExtends} {" )
       iw.upIndent()
       iw.println()
