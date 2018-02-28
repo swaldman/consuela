@@ -144,6 +144,11 @@ package object ethabi {
     }
   }
 
+  def decodeConstructorArgs( constructorArgHex : immutable.Seq[Byte], constructor : Abi.Constructor ) : Failable[immutable.Seq[Decoded.Value]] = {
+    val encoders = encodersForAbiParameters( constructor.inputs )
+    decodeOutValues( constructor.inputs, encoders )( constructorArgHex )
+  }
+
   def decodeReturnValuesForFunction( returnData : immutable.Seq[Byte], abiFunction : Abi.Function ) : Failable[immutable.Seq[Decoded.Value]] = {
     decodeOutValues( abiFunction.outputs, outputEncodersForAbiFunction( abiFunction ) )( returnData )
   }
