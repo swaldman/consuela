@@ -32,8 +32,8 @@ object Invoker {
 
   class InvokerException( message : String, cause : Throwable = null ) extends EthereumException( message, cause )
   final class TimeoutException( transactionHash : EthHash, timeout : Duration ) extends InvokerException( s"Could not retrieve receipt for transaction '0x${transactionHash.hex}' within ${timeout}" )
-  final class TransactionDisapprovedException( message : String, tci : TransactionCostInfo )
-      extends InvokerException( message + s" [Disapproved: gasPrice -> ${tci.computedGas.gasPrice}, gasLimit -> ${tci.computedGas.gasLimit}, valueInWei -> ${tci.valueInWei}]" )
+  final class TransactionDisapprovedException( val transaction : EthTransaction.Signed, message : String )
+      extends InvokerException( message + s" [Disapproved: gasPrice -> ${transaction.gasPrice}, gasLimit -> ${transaction.gasLimit}, valueInWei -> ${transaction.value}]" )
 
   private def rounded( bd : BigDecimal ) = bd.round( bd.mc ) // work around absence of default rounded method in scala 2.10 BigDecimal
 
@@ -58,12 +58,12 @@ object Invoker {
   }
 
   final case class ComputedGas( gasPrice : BigInt, gasLimit : BigInt )
-  final case class TransactionCostInfo( computedGas : ComputedGas, valueInWei : BigInt ) {
-    def throwDisapproved( message : String ) : Nothing = throw new TransactionDisapprovedException( message, this )
-    def throwDisapproved                     : Nothing = throwDisapproved( "Transaction aborted." )
-  }
 
-  type TransactionApprover = TransactionCostInfo => Future[Unit] // a failure, usually a TransactionDisapprovedException, signifies disapproval
+  def throwDisapproved( signed : EthTransaction.Signed, message : String ) : Nothing = throw new TransactionDisapprovedException( signed, message )
+  def throwDisapproved( signed : EthTransaction.Signed )                   : Nothing = throwDisapproved( signed, "Transaction aborted." )
+
+
+  type TransactionApprover = EthTransaction.Signed => Future[Unit] // a failure, usually a TransactionDisapprovedException, signifies disapproval
 
   val AlwaysApprover : TransactionApprover = _ => Future.successful( () )
 
@@ -249,10 +249,10 @@ object Invoker {
 
         for {
           cg <- fComputedGas
-          _ <- icontext.transactionApprover( TransactionCostInfo( cg, valueInWei.widen ) )
           nextNonce <- fNextNonce
           unsigned = TRACE.logEval( "Message transaction" )( EthTransaction.Unsigned.Message( Unsigned256(nextNonce), Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), to, valueInWei, data ) )
           signed = unsigned.sign( senderSigner )
+          _ <- icontext.transactionApprover( signed )
           hash <- client.eth.sendSignedTransaction( signed )
         } yield {
           TransactionLogger.log( icontext.transactionLogger, hash, signed, url.toExternalForm )
@@ -277,10 +277,10 @@ object Invoker {
 
         for {
           cg <- fComputedGas
-          _ <- icontext.transactionApprover( TransactionCostInfo( cg, valueInWei.widen ) )
           nextNonce <- fNextNonce
           unsigned = TRACE.logEval("Contract creation transaction")( EthTransaction.Unsigned.ContractCreation( Unsigned256(nextNonce), Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), valueInWei, init ) )
           signed = unsigned.sign( creatorSigner )
+          _ <- icontext.transactionApprover( signed )
           hash <- client.eth.sendSignedTransaction( signed )
         } yield {
           TransactionLogger.log( icontext.transactionLogger, hash, signed, url.toExternalForm )

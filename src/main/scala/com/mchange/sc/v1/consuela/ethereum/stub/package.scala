@@ -26,9 +26,6 @@ package object stub {
   val  ComputedGas = Invoker.ComputedGas
   type ComputedGas = Invoker.ComputedGas
 
-  val  TransactionCostInfo = Invoker.TransactionCostInfo
-  type TransactionCostInfo = Invoker.TransactionCostInfo
-
   val  TransactionLogger = Invoker.TransactionLogger
   type TransactionLogger = Invoker.TransactionLogger
 
