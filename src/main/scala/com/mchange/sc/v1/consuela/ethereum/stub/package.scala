@@ -21,10 +21,13 @@ package object stub {
   val  Override = Invoker.Override
   type Override = Invoker.Override
 
-  type GasApprover = Invoker.GasApprover
+  type TransactionApprover = Invoker.TransactionApprover
 
   val  ComputedGas = Invoker.ComputedGas
   type ComputedGas = Invoker.ComputedGas
+
+  val  TransactionCostInfo = Invoker.TransactionCostInfo
+  type TransactionCostInfo = Invoker.TransactionCostInfo
 
   val  TransactionLogger = Invoker.TransactionLogger
   type TransactionLogger = Invoker.TransactionLogger

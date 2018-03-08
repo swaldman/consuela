@@ -32,7 +32,8 @@ object Invoker {
 
   class InvokerException( message : String, cause : Throwable = null ) extends EthereumException( message, cause )
   final class TimeoutException( transactionHash : EthHash, timeout : Duration ) extends InvokerException( s"Could not retrieve receipt for transaction '0x${transactionHash.hex}' within ${timeout}" )
-  final class GasDisapprovedException( message : String, computedGas : ComputedGas ) extends InvokerException( message + s" [Disapproved: gasPrice -> ${computedGas.gasPrice}, gasLimit -> ${computedGas.gasLimit}]" )
+  final class TransactionDisapprovedException( message : String, tci : TransactionCostInfo )
+      extends InvokerException( message + s" [Disapproved: gasPrice -> ${tci.computedGas.gasPrice}, gasLimit -> ${tci.computedGas.gasLimit}, valueInWei -> ${tci.valueInWei}]" )
 
   private def rounded( bd : BigDecimal ) = bd.round( bd.mc ) // work around absence of default rounded method in scala 2.10 BigDecimal
 
@@ -57,10 +58,14 @@ object Invoker {
   }
 
   final case class ComputedGas( gasPrice : BigInt, gasLimit : BigInt )
+  final case class TransactionCostInfo( computedGas : ComputedGas, valueInWei : BigInt ) {
+    def throwDisapproved( message : String ) : Nothing = throw new TransactionDisapprovedException( message, this )
+    def throwDisapproved                     : Nothing = throwDisapproved( "Transaction aborted." )
+  }
 
-  type GasApprover = ComputedGas => Future[Unit] // a failure, usually a GasDisapprovedException, signifies disapproval
+  type TransactionApprover = TransactionCostInfo => Future[Unit] // a failure, usually a TransactionDisapprovedException, signifies disapproval
 
-  val AlwaysApprover : GasApprover = _ => Future.successful( () )
+  val AlwaysApprover : TransactionApprover = _ => Future.successful( () )
 
   final case class TransactionLogEntry( transactionHash : EthHash, transaction : EthTransaction.Signed, jsonRpcUrl : String )
 
@@ -85,63 +90,63 @@ object Invoker {
   object Context {
     // we define these in a trait so that e.g. stub.Context can easily steal them
     trait Default {
-      val GasPriceTweak     : MarkupOrOverride  = Markup(0)
-      val GasLimitTweak     : MarkupOrOverride  = Markup(0.2)
-      val PollPeriod        : Duration          = 3.seconds
-      val PollTimeout       : Duration          = Duration.Inf
-      val GasApprover       : GasApprover       = AlwaysApprover
-      val TransactionLogger : TransactionLogger = Invoker.TransactionLogger.None
-      val ClientFactory     : Client.Factory    = Client.Factory.Default
-      val Poller            : Poller            = com.mchange.sc.v2.concurrent.Poller.Default
-      val ExecutionContext  : ExecutionContext  = scala.concurrent.ExecutionContext.global
+      val GasPriceTweak       : MarkupOrOverride    = Markup(0)
+      val GasLimitTweak       : MarkupOrOverride    = Markup(0.2)
+      val PollPeriod          : Duration            = 3.seconds
+      val PollTimeout         : Duration            = Duration.Inf
+      val TransactionApprover : TransactionApprover = AlwaysApprover
+      val TransactionLogger   : TransactionLogger   = Invoker.TransactionLogger.None
+      val ClientFactory       : Client.Factory      = Client.Factory.Default
+      val Poller              : Poller              = com.mchange.sc.v2.concurrent.Poller.Default
+      val ExecutionContext    : ExecutionContext    = scala.concurrent.ExecutionContext.global
     }
     final object Default extends Default
 
     def fromUrl[ U : URLSource ](
-      jsonRpcUrl    : U,
-      gasPriceTweak     : MarkupOrOverride  = Default.GasPriceTweak,
-      gasLimitTweak     : MarkupOrOverride  = Default.GasLimitTweak,
-      pollPeriod        : Duration          = Default.PollPeriod, 
-      pollTimeout       : Duration          = Default.PollTimeout,
-      gasApprover       : GasApprover       = Default.GasApprover,
-      transactionLogger : TransactionLogger = Default.TransactionLogger
+      jsonRpcUrl          : U,
+      gasPriceTweak       : MarkupOrOverride    = Default.GasPriceTweak,
+      gasLimitTweak       : MarkupOrOverride    = Default.GasLimitTweak,
+      pollPeriod          : Duration            = Default.PollPeriod, 
+      pollTimeout         : Duration            = Default.PollTimeout,
+      transactionApprover : TransactionApprover = Default.TransactionApprover,
+      transactionLogger   : TransactionLogger   = Default.TransactionLogger
     )( implicit cfactory : Client.Factory = Default.ClientFactory, poller : Poller = Default.Poller, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
-      Context( LoadBalancer.Single( jsonRpcUrl ), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, gasApprover, transactionLogger, cfactory, poller, econtext )
+      Context( LoadBalancer.Single( jsonRpcUrl ), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, transactionApprover, transactionLogger, cfactory, poller, econtext )
     }
     def fromUrls[ U : URLSource ](
-      jsonRpcUrls       : immutable.Iterable[U],
-      gasPriceTweak     : MarkupOrOverride  = Default.GasPriceTweak,
-      gasLimitTweak     : MarkupOrOverride  = Default.GasLimitTweak,
-      pollPeriod        : Duration          = Default.PollPeriod, 
-      pollTimeout       : Duration          = Default.PollTimeout,
-      gasApprover       : GasApprover       = Default.GasApprover, 
-      transactionLogger : TransactionLogger = Default.TransactionLogger
+      jsonRpcUrls         : immutable.Iterable[U],
+      gasPriceTweak       : MarkupOrOverride    = Default.GasPriceTweak,
+      gasLimitTweak       : MarkupOrOverride    = Default.GasLimitTweak,
+      pollPeriod          : Duration            = Default.PollPeriod, 
+      pollTimeout         : Duration            = Default.PollTimeout,
+      transactionApprover : TransactionApprover = Default.TransactionApprover, 
+      transactionLogger   : TransactionLogger = Default.TransactionLogger
     )( implicit cfactory : Client.Factory = Default.ClientFactory, poller : Poller = Default.Poller, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
-      Context( LoadBalancer.RoundRobin( jsonRpcUrls ), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, gasApprover, transactionLogger, cfactory, poller, econtext )
+      Context( LoadBalancer.RoundRobin( jsonRpcUrls ), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, transactionApprover, transactionLogger, cfactory, poller, econtext )
     }
     def fromLoadBalancer (
-      loadBalancer      : LoadBalancer,
-      gasPriceTweak     : MarkupOrOverride = Default.GasPriceTweak,
-      gasLimitTweak     : MarkupOrOverride = Default.GasLimitTweak,
-      pollPeriod        : Duration         = Default.PollPeriod, 
-      pollTimeout       : Duration         = Default.PollTimeout,
-      gasApprover       : GasApprover      = Default.GasApprover, 
-      transactionLogger : TransactionLogger = Default.TransactionLogger
+      loadBalancer        : LoadBalancer,
+      gasPriceTweak       : MarkupOrOverride    = Default.GasPriceTweak,
+      gasLimitTweak       : MarkupOrOverride    = Default.GasLimitTweak,
+      pollPeriod          : Duration            = Default.PollPeriod, 
+      pollTimeout         : Duration            = Default.PollTimeout,
+      transactionApprover : TransactionApprover = Default.TransactionApprover, 
+      transactionLogger   : TransactionLogger   = Default.TransactionLogger
     )( implicit cfactory : Client.Factory = Default.ClientFactory, poller : Poller = Default.Poller, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
-      Context( loadBalancer, gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, gasApprover, transactionLogger, cfactory, poller, econtext )
+      Context( loadBalancer, gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, transactionApprover, transactionLogger, cfactory, poller, econtext )
     }
   }
   final case class Context(
-    val loadBalancer      : LoadBalancer,
-    val gasPriceTweak     : MarkupOrOverride,
-    val gasLimitTweak     : MarkupOrOverride,
-    val pollPeriod        : Duration,
-    val pollTimeout       : Duration,
-    val gasApprover       : GasApprover,
-    val transactionLogger : TransactionLogger,
-    val cfactory          : Client.Factory,
-    val poller            : Poller,
-    val econtext          : ExecutionContext
+    val loadBalancer        : LoadBalancer,
+    val gasPriceTweak       : MarkupOrOverride,
+    val gasLimitTweak       : MarkupOrOverride,
+    val pollPeriod          : Duration,
+    val pollTimeout         : Duration,
+    val transactionApprover : TransactionApprover,
+    val transactionLogger   : TransactionLogger,
+    val cfactory            : Client.Factory,
+    val poller              : Poller,
+    val econtext            : ExecutionContext
   )
 
   private def computedGas(
@@ -244,7 +249,7 @@ object Invoker {
 
         for {
           cg <- fComputedGas
-          _ <- icontext.gasApprover(cg)
+          _ <- icontext.transactionApprover( TransactionCostInfo( cg, valueInWei.widen ) )
           nextNonce <- fNextNonce
           unsigned = TRACE.logEval( "Message transaction" )( EthTransaction.Unsigned.Message( Unsigned256(nextNonce), Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), to, valueInWei, data ) )
           signed = unsigned.sign( senderSigner )
@@ -272,7 +277,7 @@ object Invoker {
 
         for {
           cg <- fComputedGas
-          _ <- icontext.gasApprover(cg)
+          _ <- icontext.transactionApprover( TransactionCostInfo( cg, valueInWei.widen ) )
           nextNonce <- fNextNonce
           unsigned = TRACE.logEval("Contract creation transaction")( EthTransaction.Unsigned.ContractCreation( Unsigned256(nextNonce), Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), valueInWei, init ) )
           signed = unsigned.sign( creatorSigner )
