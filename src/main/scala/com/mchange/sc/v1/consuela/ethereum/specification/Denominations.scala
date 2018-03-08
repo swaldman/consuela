@@ -5,7 +5,7 @@ import com.mchange.sc.v1.consuela.ethereum.EthereumException
 
 // from yellow paper, sec 2.1
 object Denominations {
-  sealed abstract class Denomination( multiplier : scala.BigDecimal ) {
+  sealed abstract class Denomination( val multiplier : scala.BigDecimal ) {
     val unitName : String
 
     def fromWei( wei : BigInt ) : BigDecimal = {
@@ -19,8 +19,6 @@ object Denominations {
   }
   final object GWei extends Denomination( Multiplier.BigDecimal.GWei ) {
     val unitName : String = "gwei"
-
-    override def fromWei( wei : BigInt ) : BigDecimal = BigDecimal(wei)
   }
   final object Szabo extends Denomination( Multiplier.BigDecimal.Szabo ) {
     val unitName : String = "szabo"
@@ -75,21 +73,21 @@ object Denominations {
     }
   }
 
-  private def rounded( bd : BigDecimal ) = bd.round( bd.mc ) // work around absence of default rounded method in scala 2.10 BigDecimal
+  private def rounded( bd : BigDecimal ) : BigInt = bd.setScale( 0, BigDecimal.RoundingMode.HALF_UP ).toBigInt
 
   implicit class DoubleEther ( val value : Double ) extends AnyVal {
-    def wei    = rounded( BigDecimal( value ) * Multiplier.BigDecimal.Wei ).toBigInt
-    def gwei   = rounded( BigDecimal( value ) * Multiplier.BigDecimal.GWei ).toBigInt
-    def szabo  = rounded( BigDecimal( value ) * Multiplier.BigDecimal.Szabo ).toBigInt
-    def finney = rounded( BigDecimal( value ) * Multiplier.BigDecimal.Finney ).toBigInt
-    def ether  = rounded( BigDecimal( value ) * Multiplier.BigDecimal.Ether ).toBigInt
+    def wei    = rounded( BigDecimal( value ) * Multiplier.BigDecimal.Wei    )
+    def gwei   = rounded( BigDecimal( value ) * Multiplier.BigDecimal.GWei   )
+    def szabo  = rounded( BigDecimal( value ) * Multiplier.BigDecimal.Szabo  )
+    def finney = rounded( BigDecimal( value ) * Multiplier.BigDecimal.Finney )
+    def ether  = rounded( BigDecimal( value ) * Multiplier.BigDecimal.Ether  )
   }
   implicit class BigDecimalEther ( val value : BigDecimal ) extends AnyVal {
-    def wei    = rounded( value * Multiplier.BigDecimal.Wei ).toBigInt
-    def gwei   = rounded( value * Multiplier.BigDecimal.GWei ).toBigInt
-    def szabo  = rounded( value * Multiplier.BigDecimal.Szabo ).toBigInt
-    def finney = rounded( value * Multiplier.BigDecimal.Finney ).toBigInt
-    def ether  = rounded( value * Multiplier.BigDecimal.Ether ).toBigInt
+    def wei    = rounded( value * Multiplier.BigDecimal.Wei    )
+    def gwei   = rounded( value * Multiplier.BigDecimal.GWei   )
+    def szabo  = rounded( value * Multiplier.BigDecimal.Szabo  )
+    def finney = rounded( value * Multiplier.BigDecimal.Finney )
+    def ether  = rounded( value * Multiplier.BigDecimal.Ether  )
   }
   implicit class LongEther( val value : Long ) extends AnyVal {
     def wei    = BigInt( value ) * Multiplier.Long.Wei
