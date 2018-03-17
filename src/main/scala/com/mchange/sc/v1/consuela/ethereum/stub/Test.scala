@@ -8,6 +8,8 @@ object Test {
     * which may be used as a faucet on testnets.
     * 
     * The additional five accounts are just conveniences for testing.
-    */ 
-  val Sender : IndexedSeq[Sender] = (0x7e57 to 0x7e5c).map( i => stub.Sender.Basic( EthPrivateKey( BigInt(i) ) ) )
+    */
+  val PrivateKey : IndexedSeq[EthPrivateKey] = (0x7e57 to 0x7e5c).map( i => EthPrivateKey( BigInt(i) ) )
+
+  val Sender : IndexedSeq[Sender] = PrivateKey.map( pvt => stub.Sender.Basic( pvt ) )
 }
