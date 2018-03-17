@@ -45,4 +45,5 @@ trait Sender {
   def sendMessage( to : EthAddress, valueInWei : Unsigned256, data : immutable.Seq[Byte] )(implicit icontext : jsonrpc.Invoker.Context, cfactory : jsonrpc.Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
     jsonrpc.Invoker.transaction.sendMessage( this.findSigner(), to, valueInWei, data )
   }
+  def contractAddress( nonce : BigInt ) : EthAddress = EthAddress.forContract( address, Unsigned256(nonce) )
 }
