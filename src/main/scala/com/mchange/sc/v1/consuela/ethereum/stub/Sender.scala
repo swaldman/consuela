@@ -7,7 +7,7 @@ import com.mchange.sc.v1.consuela.crypto.jce
 import com.mchange.sc.v1.consuela.ethereum.wallet
 import com.mchange.sc.v1.consuela.ethereum.jsonrpc
 
-import com.mchange.sc.v1.consuela.ethereum.{EthAddress, EthHash, EthKeyPair, EthPrivateKey, EthSigner}
+import com.mchange.sc.v1.consuela.ethereum.{stub, EthAddress, EthHash, EthKeyPair, EthPrivateKey, EthSigner}
 
 import com.mchange.sc.v1.consuela.ethereum.specification.Types.Unsigned256
 
@@ -39,11 +39,15 @@ trait Sender {
 
   def findSigner() : EthSigner
 
-  def sendWei( to : EthAddress, valueInWei : Unsigned256 )(implicit icontext : jsonrpc.Invoker.Context, cfactory : jsonrpc.Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
-    jsonrpc.Invoker.transaction.sendWei( this.findSigner(), to, valueInWei )
+  def getBalance()(implicit scontext : stub.Context ) : Future[BigInt] = {
+    jsonrpc.Invoker.getBalance( address )( scontext.icontext )
   }
-  def sendMessage( to : EthAddress, valueInWei : Unsigned256, data : immutable.Seq[Byte] )(implicit icontext : jsonrpc.Invoker.Context, cfactory : jsonrpc.Client.Factory, econtext : ExecutionContext ) : Future[EthHash] = {
-    jsonrpc.Invoker.transaction.sendMessage( this.findSigner(), to, valueInWei, data )
+
+  def sendWei( to : EthAddress, valueInWei : Unsigned256 )(implicit scontext : stub.Context ) : Future[EthHash] = {
+    jsonrpc.Invoker.transaction.sendWei( this.findSigner(), to, valueInWei )( scontext.icontext )
+  }
+  def sendMessage( to : EthAddress, valueInWei : Unsigned256, data : immutable.Seq[Byte] )(implicit scontext : stub.Context ) : Future[EthHash] = {
+    jsonrpc.Invoker.transaction.sendMessage( this.findSigner(), to, valueInWei, data )( scontext.icontext )
   }
   def contractAddress( nonce : BigInt ) : EthAddress = EthAddress.forContract( address, Unsigned256(nonce) )
 }

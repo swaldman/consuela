@@ -220,6 +220,13 @@ object Invoker {
     awaitTransactionReceipt( transactionHash ).getOrElse( throw new TimeoutException( transactionHash, icontext.pollTimeout ) )
   }
 
+  def getBalance( address : EthAddress )( implicit icontext : Invoker.Context ) : Future[BigInt] = {
+      implicit val ( cfactory, econtext ) = ( icontext.cfactory, icontext.econtext )
+
+      borrow( cfactory( icontext.loadBalancer.nextURL ) ) { client =>
+        client.eth.getBalance( address, Client.BlockNumber.Latest )
+      }
+  }
 
   final object transaction {
 
