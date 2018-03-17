@@ -28,10 +28,9 @@ object Sender {
     * This is just a conventional account to use as an Ether fountain in testing environments
     *
     * Corresponds to eth address 0xaba220742442621625bb1160961d2cfcb64c7682
+    * with private key 0x7e57 (get it?)
     */
-  lazy val TestSigner = EthPrivateKey( BigInt( 0x7e57 ) )
-
-  lazy val TestSender = Sender.Basic( TestSigner )
+  lazy val TestSender = Test.Sender(0)
 
   lazy val Default = TestSender
 }
