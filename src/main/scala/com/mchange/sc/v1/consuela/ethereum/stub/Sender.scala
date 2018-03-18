@@ -42,7 +42,6 @@ trait Sender {
   def getBalance()(implicit scontext : stub.Context ) : Future[BigInt] = {
     jsonrpc.Invoker.getBalance( address )( scontext.icontext )
   }
-
   def sendWei( to : EthAddress, valueInWei : Unsigned256 )(implicit scontext : stub.Context ) : Future[EthHash] = {
     jsonrpc.Invoker.transaction.sendWei( this.findSigner(), to, valueInWei )( scontext.icontext )
   }
