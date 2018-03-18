@@ -206,6 +206,9 @@ object sol {
   val  UInt256 = Unsigned256
   type UInt256 = Unsigned256
 
+  val  UInt = UInt256
+  type UInt = UInt256
+
   val  Int8 = Types.Int8
   type Int8 = Types.Int8
 
