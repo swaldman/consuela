@@ -32,6 +32,9 @@ package object stub {
   val  TransactionLogEntry = Invoker.TransactionLogEntry
   type TransactionLogEntry = Invoker.TransactionLogEntry
 
+  val  BlockNumber = Client.BlockNumber
+  type BlockNumber = Client.BlockNumber
+
   final object ScalaParameterHelper {
     def apply( scalaTypeName : String ) : ScalaParameterHelper = this.apply( scalaTypeName, identity, name => s"${name}.asInstanceOf[${scalaTypeName}]" )
   }

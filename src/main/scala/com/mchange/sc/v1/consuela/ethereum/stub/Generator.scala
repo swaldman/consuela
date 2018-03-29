@@ -33,6 +33,7 @@ object Generator {
     "com.mchange.sc.v2.net.{LoadBalancer,URLSource}",
     "com.mchange.sc.v2.failable._",
     "com.mchange.sc.v1.consuela._",
+    "com.mchange.sc.v1.log.MLevel._",
     "com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash,EthLogEntry}",
     "com.mchange.sc.v1.consuela.ethereum.ethabi",
     "com.mchange.sc.v1.consuela.ethereum.ethabi.{Decoded,SolidityEvent}",
@@ -207,7 +208,10 @@ object Generator {
       iw.println( s"object ${className} {" )
       iw.upIndent()
 
-      generateContractAbiAndFunctionsVals( abi, iw )
+      iw.println( "private implicit lazy val logger = mlogger( this )" )
+      iw.println()
+
+      generateContractAbiAndEventFunctionsVals( abi, iw )
       ifEvents( abi ) {
         generateEventTopicVals( overloadedEvents, abi, iw )
         generateTopLevelEventAndFactory( className, overloadedEvents, abi, iw )
@@ -480,10 +484,13 @@ object Generator {
     iw.println( "}" )
   }
   
-  private def generateContractAbiAndFunctionsVals( abi : Abi, iw : IndentedWriter ) : Unit = {
+  private def generateContractAbiAndEventFunctionsVals( abi : Abi, iw : IndentedWriter ) : Unit = {
     iw.println( s"val ContractAbi : Abi = Json.parse( \042\042\042${Json.stringify(Json.toJson(abi))}\042\042\042 ).as[Abi]" )
     abi.functions.zip( Stream.from(0) ).foreach { case ( fcn, index ) =>
       iw.println( s"val ${functionValName(fcn)} = ContractAbi.functions(${index})" )
+    }
+    abi.events.zip( Stream.from(0) ).foreach { case ( event, index ) =>
+      iw.println( s"val ${eventValName(event,abi)} = ContractAbi.events(${index})" )
     }
   }
 
@@ -515,6 +522,17 @@ object Generator {
   private def functionValName( f : Abi.Function ) : String = {
     val base = s"Function_${f.name}"
     val typesPart = f.inputs.map( sanitizedType ).mkString("_")
+    if ( typesPart.isEmpty ) base else s"${base}_${typesPart}"
+  }
+
+  private def eventValName( event : Abi.Event, abi : Abi ) : String = {
+    val resolvedEventName = abiEventToResolvedName( event, abi )
+    eventValName( event, resolvedEventName )
+  }
+
+  private def eventValName( event : Abi.Event, resolvedEventName : String ) : String = {
+    val base = s"Event_${resolvedEventName}"
+    val typesPart = event.inputs.map( sanitizedType ).mkString("_")
     if ( typesPart.isEmpty ) base else s"${base}_${typesPart}"
   }
 
@@ -606,7 +624,7 @@ object Generator {
   }
 
   private def writeTypedAnonymousEventDefinition (
-    stubUtilitiesClassName : String,
+    stubUtilitiesClassName     : String,
     event                      : Abi.Event,
     overloadedEvents           : OverloadedEventsMap,
     iw                         : IndentedWriter
@@ -615,7 +633,7 @@ object Generator {
   }
 
   private def writeTypedEventDefinition (
-    stubUtilitiesClassName : String,
+    stubUtilitiesClassName     : String,
     event                      : Abi.Event,
     overloadedEvents           : OverloadedEventsMap,
     resolvedEventName          : String, // usually just event.name, but not for overloaded or typed anonymous events
@@ -664,6 +682,39 @@ object Generator {
     iw.downIndent()
     iw.println( "}" )
     if ( !event.anonymous ) {
+      iw.println( s"private def fromLog( recordedLog : Client.Log.Recorded ) : Failable[${ resolvedEventName }] = {" )
+      iw.upIndent()
+      iw.println( s"val event = ${eventValName( event, resolvedEventName )}" )
+      iw.println(  "val logEntry = recordedLog.ethLogEntry" )
+      iw.println(  "val metadata = stub.Event.Metadata( recordedLog )" )
+      iw.println( s"SolidityEvent.interpretLogEntryAsEvent( logEntry, event ).map( inputs => SolidityEvent.Named( inputs, logEntry, event ) ).map( se => ${ resolvedEventName }.apply( se, metadata ) )" )
+      iw.downIndent()
+      iw.println(  "}" )
+      iw.println()
+      iw.println( s"def fetch( addresses : Seq[EthAddress], fromBlock : Option[stub.BlockNumber], toBlock : Option[stub.BlockNumber] )( implicit scontext : stub.Context ) : Future[immutable.Seq[${resolvedEventName}]] = {" )
+      iw.upIndent()
+      iw.println(  "implicit val ec = scontext.icontext.econtext" )
+      iw.println( s"val signatureRestriction = Client.Log.Filter.TopicRestriction.Exact( ${anyEventSignatureTopicValName( overloadedEvents, event )} )" )
+      iw.println(  "val query = Client.Log.Filter.Query( addresses = addresses, fromBlock = fromBlock, toBlock = toBlock, restriction_1 = signatureRestriction )" )
+      iw.println(  "val flogs = jsonrpc.Invoker.getLogs( query )( scontext.icontext )" )
+      iw.println(  "flogs.map( seq => seq.partition( _.isInstanceOf[Client.Log.Recorded] ) ).map { case ( recorded, others ) =>" )
+      iw.upIndent()
+      iw.println( """others.foreach( o => WARNING.log( s"Ignored unrecorded log: ${o}" ) )""" )
+      iw.println( s"val f_fetched = recorded.map( rec => ${resolvedEventName}.fromLog( rec.asInstanceOf[Client.Log.Recorded] ) )" )
+      iw.println(  "val ( succeeded, failed ) = f_fetched.zip( recorded ).partition( _._1.isSucceeded )" )
+      iw.println(  "failed.foreach { case ( failure, log ) => " )
+      iw.upIndent()
+      iw.println( """val logMe = s"Despite a topic indicating a matching event name and types, log '${log}' could not be interpreted as a """ + resolvedEventName + """, and will be skipped."""" )
+      iw.println( """val fail = failure.fail""" )
+      iw.println( """WARNING.log( logMe + s" Fail message: '${fail.message}', Fail source: '${fail.source.toString}'" )""" )
+      iw.downIndent()
+      iw.println("}")
+      iw.println( "Failable.sequence( succeeded.map( _._1 ) ).get" )
+      iw.downIndent()
+      iw.println( "}" )
+      iw.downIndent()
+      iw.println( "}" )
+      iw.println()
       generateNamedEventSpecializedPublisher( resolvedEventName, overloadedEvents, event, iw  )
     }
     iw.downIndent()

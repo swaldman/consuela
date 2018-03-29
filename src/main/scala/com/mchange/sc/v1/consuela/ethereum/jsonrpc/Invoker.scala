@@ -228,6 +228,14 @@ object Invoker {
       }
   }
 
+  def getLogs( query : Client.Log.Filter.Query )( implicit icontext : Invoker.Context ) : Future[immutable.Seq[Client.Log]] = {
+      implicit val ( cfactory, econtext ) = ( icontext.cfactory, icontext.econtext )
+
+      borrow( cfactory( icontext.loadBalancer.nextURL ) ) { client =>
+        client.eth.getLogs( query )
+      }
+  }
+
   final object transaction {
 
     def sendWei(

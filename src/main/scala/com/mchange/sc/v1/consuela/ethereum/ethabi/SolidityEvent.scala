@@ -17,7 +17,8 @@ final object SolidityEvent {
     def decode( param : Abi.Parameter, encoder : Encoder[_], topic : EthLogEntry.Topic ) : Failable[Decoded] = {
       if ( encoder.encodesDynamicType ) {
         succeed( Decoded.Hash( param, EthHash.withBytes( topic.widen ) ) )
-      } else {
+      }
+      else {
         for {
           ( decoded, extra ) <- encoder.decode( topic.widen )
           formatted <- encoder.formatUntyped( decoded )
@@ -30,9 +31,18 @@ final object SolidityEvent {
         }
       }
     }
-    Failable.sequence {
-      params.zip(encoders).zip( topics ).map { case ( ( param, encoder ), topic ) =>
-        decode( param, encoder, topic )
+
+    val len = params.length
+
+    assert( len == encoders.length, s"""Internal error, we should always have retrieved as many encoders as there ar params, params: ${params.mkString(", ")}, encoders: ${encoders.mkString(", ")}""" )
+    if ( len != topics.length ) {
+      fail( s"""The number of decodable topics should but does not match the number of indexed params, indexed params: ${params.mkString(", ")}, topics: ${topics.mkString(", ")}""" )
+    }
+    else {
+      Failable.sequence {
+        params.zip(encoders).zip( topics ).map { case ( ( param, encoder ), topic ) =>
+          decode( param, encoder, topic )
+        }
       }
     }
   }
@@ -55,16 +65,23 @@ final object SolidityEvent {
 
   def interpretLogEntryAsEvent( logEntry : EthLogEntry, abiEvent : Abi.Event ) : Failable[immutable.Seq[Decoded]] = {
     val ( indexed, nonIndexed ) = indexedNonindexed( abiEvent )
-    for {
-      dts        <- decodableTopics( logEntry, abiEvent )
-      iencoders  <- encodersForAbiParameters( indexed )
-      ivalues    <- decodeIndexed( indexed, iencoders, dts )
-      nivalues   <- decodeOutValues( nonIndexed, encodersForAbiParameters( nonIndexed ) )( logEntry.data )
+
+    // XXX: UGLY, TEMPORARY -- until we fix the failable library to catch Exceptions and yield failures in map / flatMap
+    val nestedFailable = {
+      for {
+        dts        <- decodableTopics( logEntry, abiEvent )
+        iencoders  <- encodersForAbiParameters( indexed )
+        ivalues    <- decodeIndexed( indexed, iencoders, dts )
+        nivalues   <- decodeOutValues( nonIndexed, encodersForAbiParameters( nonIndexed ) )( logEntry.data )
+      }
+      yield {
+        Failable {
+          val pmap = (ivalues ++ nivalues).map( d => ( d.parameter, d ) ).toMap
+          abiEvent.inputs.map( pmap )
+        }
+      }
     }
-    yield {
-      val pmap = (ivalues ++ nivalues).map( d => ( d.parameter, d ) ).toMap
-      abiEvent.inputs.map( pmap )
-    }
+    nestedFailable.flatten
   }
 
 
