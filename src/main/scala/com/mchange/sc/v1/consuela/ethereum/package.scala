@@ -62,6 +62,8 @@ package object ethereum {
   val  EthHash    = Keccak256;
   val  EthHashLen = Keccak256.HashLength;
 
+  def hashRLP[ T : RLPSerializing ]( t : T ) : EthHash = EthHash.hash( RLP.encode( t ) )
+
   val EmptyByteSeqHash = EthHash.hash( encoding.RLP.Encoded.EmptyByteSeq );
   val AllZeroesEthHash = EthHash.withBytes( Array.ofDim[Byte]( EthHashLen ) );
 
