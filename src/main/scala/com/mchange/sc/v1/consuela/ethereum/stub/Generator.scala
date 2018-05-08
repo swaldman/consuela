@@ -364,7 +364,7 @@ object Generator {
     iw.println( s"class Processor()(implicit scheduler : Scheduler, executionContext : ExecutionContext) extends SimpleProcessor[(SolidityEvent, stub.Event.Metadata ), Event.${resolvedName}]()(scheduler, executionContext) {" )
     iw.upIndent()
 
-    iw.println( s"override def ftransform( pair : (SolidityEvent, stub.Event.Metadata) ) : Failable[Event.${resolvedName}] = succeed( Event.${resolvedName}.apply( pair._1.asInstanceOf[SolidityEvent.Named], pair._2 ) )" )
+    iw.println( s"override def ftransform( pair : (SolidityEvent, stub.Event.Metadata) ) : Failable[Event.${resolvedName}] = Failable.succeed( Event.${resolvedName}.apply( pair._1.asInstanceOf[SolidityEvent.Named], pair._2 ) )" )
 
     iw.downIndent()
     iw.println( "}" )
@@ -481,7 +481,7 @@ object Generator {
       s"class Processor()(implicit scheduler : Scheduler, executionContext : ExecutionContext) extends SimpleProcessor[(SolidityEvent, stub.Event.Metadata ), ${stubUtilitiesClassName}.this.Event]()(scheduler, executionContext) {"
     )
     iw.upIndent()
-    iw.println( s"override def ftransform( pair : (SolidityEvent, stub.Event.Metadata) ) : Failable[${stubUtilitiesClassName}.this.Event] = succeed( ${stubUtilitiesClassName}.this.Event.apply( pair._1, pair._2 ) )" )
+    iw.println( s"override def ftransform( pair : (SolidityEvent, stub.Event.Metadata) ) : Failable[${stubUtilitiesClassName}.this.Event] = Failable.succeed( ${stubUtilitiesClassName}.this.Event.apply( pair._1, pair._2 ) )" )
     iw.downIndent()
     iw.println( "}" )
   }
