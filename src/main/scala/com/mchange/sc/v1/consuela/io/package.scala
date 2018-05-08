@@ -15,7 +15,7 @@ import java.io.File
 
 import com.mchange.sc.v2.lang.borrow
 
-import com.mchange.sc.v2.failable._
+import com.mchange.sc.v3.failable._
 
 import com.mchange.sc.v2.util.Platform
 
@@ -50,8 +50,8 @@ package object io {
     Platform.Current match {
       case Some( Platform.Mac ) | Some( Platform.Unix ) => f( path, Posix )
       case Some( Platform.Windows )                     => f( path, Windows )
-      case Some( unknownPlatform )                      => fail( s"No handler for platform '${unknownPlatform}'" )
-      case None                                         => fail( "Unable to detect platform in order to restrict directory access to user." )
+      case Some( unknownPlatform )                      => Failable.fail( s"No handler for platform '${unknownPlatform}'" )
+      case None                                         => Failable.fail( "Unable to detect platform in order to restrict directory access to user." )
     }
   }
 
@@ -72,9 +72,9 @@ package object io {
       def checkPermissions = {
         val filePermissions = Files.getPosixFilePermissions( path )
         if ( UserOnlyDirectoryPermissions.asScala == filePermissions.asScala ) { // use asScala, so we are doing a value rather than identity check
-          succeed( path )
+          Failable.succeed( path )
         } else {
-          fail( s"Directory '${path}' must be readable and writable only by its owner, but in fact has permissions ${filePermissions}" )
+          Failable.fail( s"Directory '${path}' must be readable and writable only by its owner, but in fact has permissions ${filePermissions}" )
         }
       }
 
@@ -172,7 +172,7 @@ package object io {
           val view = Files.getFileAttributeView(path, classOf[AclFileAttributeView])
           val acls = view.getAcl().asScala
           val badPrincipals = acls.filter( acl => !isWhitelistedPrincipal( userPrincipal, acl.principal ) )
-          if ( badPrincipals.size == 0 ) succeed ( path ) else fail( "${path} should be a user-only directory, but is accessible by ${badPrincipals.mkString}." )
+          if ( badPrincipals.size == 0 ) Failable.succeed( path ) else Failable.fail( "${path} should be a user-only directory, but is accessible by ${badPrincipals.mkString}." )
         }
       }
     }

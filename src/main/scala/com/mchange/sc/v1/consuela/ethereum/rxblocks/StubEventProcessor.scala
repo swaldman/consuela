@@ -10,7 +10,7 @@ import com.mchange.sc.v1.consuela.ethereum.stub
 
 import com.mchange.sc.v2.concurrent.Scheduler
 
-import com.mchange.sc.v2.failable._
+import com.mchange.sc.v3.failable._
 
 final class StubEventProcessor( abi : Abi, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
   scheduler : Scheduler,

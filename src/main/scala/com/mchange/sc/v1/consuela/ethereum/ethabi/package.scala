@@ -2,7 +2,7 @@ package com.mchange.sc.v1.consuela.ethereum
 
 import jsonrpc._
 
-import com.mchange.sc.v2.failable._
+import com.mchange.sc.v3.failable._
 
 import com.mchange.sc.v1.consuela._
 
@@ -29,9 +29,9 @@ package object ethabi {
     val candidates = abiFunctionsForFunctionName( functionName, abi )
     val usable = candidates.filter( checkTypesForFunction( functionTypes, _  ) )
     usable.length match {
-      case 0 => fail( s"""No matching function '${functionName}' for types '${functionTypes.mkString(",")}' in ABI: ${abi}""" )
-      case 1 => succeed( usable.head )
-      case 2 => fail(
+      case 0 => Failable.fail( s"""No matching function '${functionName}' for types '${functionTypes.mkString(",")}' in ABI: ${abi}""" )
+      case 1 => Failable.succeed( usable.head )
+      case 2 => Failable.fail(
         s"""Ambiguous, multiple matches of function '${functionName} for types '${functionTypes.mkString(",")}' in ABI: ${abi}""" +
           "\n\t" +
           usable.mkString("\n\t") +
@@ -132,11 +132,11 @@ package object ethabi {
     }
 
     if ( abi.constructors.isEmpty ) {
-      succeed( Nil )
+      Failable.succeed( Nil )
     } else {
       for {
         _                  <- (abi.constructors.length == 1).toFailable(s"The ABI contains multiple constructors, but constructor overloading is not currently supported (or legal in solidity): ${abi.constructors})")
-        ctorAsFunction     <- succeed( constructorAsFunction( abi.constructors.head ) )
+        ctorAsFunction     <- Failable.succeed( constructorAsFunction( abi.constructors.head ) )
         asFunctionCallData <- callDataForAbiFunctionFromStringArgs( args, ctorAsFunction )
       } yield {
         asFunctionCallData.drop( IdentifierLength )
@@ -194,9 +194,9 @@ package object ethabi {
     val candidates = abiFunctionsForFunctionName( functionName, abi )
     val usable = candidates.filter( candidate => checkArgsForFunction( args, candidate ) )
     usable.length match {
-      case 0 => fail( s"""No matching function '${functionName}' for args '${args.mkString(",")}' in ABI: ${abi}""" )
-      case 1 => succeed( usable.head )
-      case 2 => fail(
+      case 0 => Failable.fail( s"""No matching function '${functionName}' for args '${args.mkString(",")}' in ABI: ${abi}""" )
+      case 1 => Failable.succeed( usable.head )
+      case 2 => Failable.fail(
         s"""Ambiguous, multiple matches of function '${functionName} for args '${args.mkString(",")}' in ABI: ${abi}""" +
           "\n\t" +
           usable.mkString("\n\t") +
@@ -231,10 +231,10 @@ package object ethabi {
   }
   private [ethabi] def encodersForAbiParameters( params : Seq[Abi.Parameter] ) : Failable[immutable.Seq[Encoder[_]]] = {
     val mbEncodersTypes = params.map( param => Tuple2(Encoder.encoderForSolidityType( param.`type` ), param.`type` ) )
-    val reverseEncoders = mbEncodersTypes.foldLeft( succeed( Nil : List[Encoder[_]] ) ) { ( accum, tup ) =>
+    val reverseEncoders = mbEncodersTypes.foldLeft( Failable.succeed( Nil : List[Encoder[_]] ) ) { ( accum, tup ) =>
       tup match {
         case Tuple2( Some( encoder ), _ ) => accum.map( list => encoder :: list )
-        case Tuple2( _, t)                => fail(s"Encoder not found for type ${t}")
+        case Tuple2( _, t)                => Failable.fail(s"Encoder not found for type ${t}")
       }
     }
     reverseEncoders.map( _.reverse )
@@ -252,7 +252,7 @@ package object ethabi {
     } else {
       val mbEncoders = function.inputs.map( param => Encoder.encoderForSolidityType( param.`type` ) )
       mbEncoders.zip( args ).map {
-        case ( mbenc, arg ) => mbenc.fold( fail(s"Encoder not found for ${arg}").asInstanceOf[Failable[Any]] )( _.parse( arg ) )
+        case ( mbenc, arg ) => mbenc.fold( Failable.fail(s"Encoder not found for ${arg}").asInstanceOf[Failable[Any]] )( _.parse( arg ) )
       }.forall( _.isSucceeded )
     }
   }

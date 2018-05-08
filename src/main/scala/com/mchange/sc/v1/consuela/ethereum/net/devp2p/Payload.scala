@@ -1,6 +1,6 @@
 package com.mchange.sc.v1.consuela.ethereum.net.devp2p;
 
-import com.mchange.sc.v2.failable._
+import com.mchange.sc.v3.failable._
 import com.mchange.sc.v1.consuela.ethereum.specification.Types.Unsigned16
 import com.mchange.sc.v1.consuela.ethereum.encoding.{RLP,RLPSerializing};
 
@@ -16,9 +16,9 @@ object Payload {
 
     def validate( payload : Payload[_] ) : Failable[P] = {
       if (payload.factory == this) {
-        succeed( payload.asInstanceOf[P] )
+        Failable.succeed( payload.asInstanceOf[P] )
       } else {
-        fail( s"Cannot pickle, payload ${payload} is inappropriate for factory ${this}." )
+        Failable.fail( s"Cannot pickle, payload ${payload} is inappropriate for factory ${this}." )
       }
     }
 

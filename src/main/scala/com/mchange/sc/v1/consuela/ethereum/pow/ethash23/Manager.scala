@@ -42,6 +42,8 @@ import ethereum.specification.Types.Unsigned64;
 
 import com.mchange.sc.v1.log.MLevel._;
 
+import com.mchange.sc.v3.failable.logging._;
+
 import scala.concurrent.Future;
 import scala.concurrent.ExecutionContext.Implicits.global;
 import scala.collection._;

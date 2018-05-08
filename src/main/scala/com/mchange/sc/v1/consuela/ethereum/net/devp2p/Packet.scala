@@ -9,7 +9,7 @@ import com.mchange.sc.v1.consuela.ethereum.specification.Types.Unsigned16;
 import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq;
 import com.mchange.lang.IntegerUtils;
 
-import com.mchange.sc.v2.failable._
+import com.mchange.sc.v3.failable._
 
 object Packet {
   val SyncToken              = 0x22400891
@@ -45,13 +45,13 @@ object Packet {
       val pf : Payload.Factory[P] = session.payloadFactories( payload.typeCode.widen ).asInstanceOf[Payload.Factory[P]]
       val repayload = pf.validate( payload )
       repayload.map( pf.rlp.encode(_) ).map( f )
-    } catch Poop
+    } catch Failed.FromThrowable
   }
 
   def decode( session : Session, packet : Seq[Byte] ) : Failable[Payload[_]] = {
     def badHeaderMessage : String                    = s"Four byte packet header 0x${ packet.slice(0, SyncTokenLen).hex } is not the expected value 0x${SyncTokenBytes.hex}"
 
-    def headerCheck   : Failable[Unit] = if ((0 until SyncTokenLen).forall( i => packet(i) == SyncTokenBytes( i ) )) succeed( () ) else fail( badHeaderMessage );
+    def headerCheck   : Failable[Unit] = if ((0 until SyncTokenLen).forall( i => packet(i) == SyncTokenBytes( i ) )) Failable.succeed( () ) else Failable.fail( badHeaderMessage );
     def payloadLength : Failable[Int]  = Try( IntegerUtils.intFromByteArray( packet.slice( SizeStart, PayloadStart ).toArray, 0 ) ).toFailable
     def payloadElement( plen : Int ) : Failable[RLP.Element.Seq] = {
       Try ( RLP.Element.decodeComplete( packet.slice( PayloadStart, PayloadStart + plen ) ).asInstanceOf[RLP.Element.Seq] ).toFailable
@@ -59,8 +59,8 @@ object Packet {
     def peekTypeCode( rlpseq : RLP.Element.Seq ) : Failable[Unsigned16] = {
       Try {
         rlpseq match {
-          case RLP.Element.Seq.of( RLP.Element.ByteSeq( typeCodeBytes ), _* ) => succeed( Unsigned16( typeCodeBytes.toUnsignedBigInt ) )
-          case _                                                              => fail( s"Unexpected RLP structure for payload ${rlpseq}" )
+          case RLP.Element.Seq.of( RLP.Element.ByteSeq( typeCodeBytes ), _* ) => Failable.succeed( Unsigned16( typeCodeBytes.toUnsignedBigInt ) )
+          case _                                                              => Failable.fail( s"Unexpected RLP structure for payload ${rlpseq}" )
         }
       }.toFailable.flatten
     }

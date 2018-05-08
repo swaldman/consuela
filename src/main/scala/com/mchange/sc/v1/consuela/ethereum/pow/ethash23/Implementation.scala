@@ -49,7 +49,7 @@ import ethereum.specification.Types.{Unsigned64,Unsigned256};
 import com.mchange.lang.{LongUtils,IntegerUtils};
 import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq;
 
-import com.mchange.sc.v2.failable._;
+import com.mchange.sc.v3.failable._;
 
 import com.mchange.sc.v1.log.MLogger;
 import com.mchange.sc.v1.log.MLevel._;
@@ -680,7 +680,7 @@ trait Implementation {
         try this.readDagFile( is, Some( file.length ) ) finally is.close
       }.toFailable
     } else {
-      fail( s"Failed to read DAG from ${file}; The file does not exist or is unreadble." );
+      Failable.fail( s"Failed to read DAG from ${file}; The file does not exist or is unreadble." );
     }
   }
   def cacheDataset( seed : Array[Byte], dataset : Dataset ) : Failable[Unit] = {
@@ -733,7 +733,7 @@ trait Implementation {
     // which we don't use to update our member record
     val seed      = mbSeed.getOrElse( Seed.getForEpoch( epochNumber ) );
     val cache     = mbCache.getOrElse( this.mkCacheForEpoch( epochNumber ) );
-    val failableFile = mbFile.fold( dagFileReadyToWrite( seed ) )( succeed(_) )
+    val failableFile = mbFile.fold( dagFileReadyToWrite( seed ) )( Failable.succeed(_) )
     failableFile.flatMap( f => streamDagFileForEpochNumber( epochNumber, cache, f )( mf ) )
   }
 

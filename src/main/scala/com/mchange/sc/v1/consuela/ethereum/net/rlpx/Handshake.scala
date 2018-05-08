@@ -10,7 +10,7 @@ import com.mchange.sc.v2.restrict.RestrictedByteSeq;
 
 import com.mchange.sc.v1.consuela.ethereum.ethcrypt.bouncycastle.EthECIES._
 
-import com.mchange.sc.v2.failable._;
+import com.mchange.sc.v3.failable._;
 
 import scala.collection._
 
@@ -126,9 +126,9 @@ object Handshake {
     def decryptToMessage( to : EthPrivateKey, mbSharedSecret : Option[ByteSeqExact32] ) : Failable[Message] = {
       val plaintext = this.decryptToPlaintext( to, mbSharedSecret )
       plaintext.length match {
-        case Message.Initiator.Length => succeed( Message.Initiator._apply( this.decryptToPlaintext( to, mbSharedSecret ) ) )
-        case Message.Receiver.Length  => succeed( Message.Receiver._apply( this.decryptToPlaintext( to, mbSharedSecret ) ) )
-        case _                        => fail( s"Plaintext length ${plaintext.length} does not match the expected length of any Handshake.Message." )
+        case Message.Initiator.Length => Failable.succeed( Message.Initiator._apply( this.decryptToPlaintext( to, mbSharedSecret ) ) )
+        case Message.Receiver.Length  => Failable.succeed( Message.Receiver._apply( this.decryptToPlaintext( to, mbSharedSecret ) ) )
+        case _                        => Failable.fail( s"Plaintext length ${plaintext.length} does not match the expected length of any Handshake.Message." )
       }
     }
   }
@@ -136,7 +136,7 @@ object Handshake {
     final object Initiator {
       val Length = 194
       def apply( arr : Array[Byte] ) : Failable[Initiator] = {
-        if ( arr.length == Length ) succeed( _apply(arr) ) else fail( s"Initator must be ${Length} bytes, found ${arr.length} bytes" )
+        if ( arr.length == Length ) Failable.succeed( _apply(arr) ) else Failable.fail( s"Initator must be ${Length} bytes, found ${arr.length} bytes" )
       }
       def apply( bytes : ByteSeqExact194 ) : Initiator = _apply( bytes.widen.toArray )
 
@@ -177,7 +177,7 @@ object Handshake {
     final object Receiver {
       val Length = 97
       def apply( arr : Array[Byte] ) : Failable[Receiver] = {
-        if ( arr.length == Length ) succeed( _apply(arr) ) else fail( s"Receiver must be ${Length} bytes, found ${arr.length} bytes" )
+        if ( arr.length == Length ) Failable.succeed( _apply(arr) ) else Failable.fail( s"Receiver must be ${Length} bytes, found ${arr.length} bytes" )
       }
       def apply( bytes : ByteSeqExact97 ) : Receiver = _apply( bytes.widen.toArray )
 

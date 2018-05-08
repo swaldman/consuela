@@ -37,7 +37,7 @@ package com.mchange.sc.v1.consuela.ethereum;
 
 import com.mchange.sc.v1.consuela._;
 
-import com.mchange.sc.v2.failable._;
+import com.mchange.sc.v3.failable._;
 
 import scala.collection._;
 
@@ -93,21 +93,21 @@ package object encoding {
   implicit final object ByteSeqSerializer extends RLPSerializing[Seq[Byte]] {
     def toElement( bytes : Seq[Byte] )             : RLP.Element = RLP.Element.ByteSeq( bytes );
     def fromElement( element : RLP.Element.Basic ) : Failable[Seq[Byte]] = element match {
-      case RLP.Element.ByteSeq( bytes ) => succeed( bytes );
+      case RLP.Element.ByteSeq( bytes ) => Failable.succeed( bytes );
       case _                            => failNotLeaf( element );
     }
   }
   implicit final object ImmutableByteSeqSerializer extends RLPSerializing[immutable.Seq[Byte]] {
     def toElement( bytes : immutable.Seq[Byte] )   : RLP.Element = RLP.Element.ByteSeq( bytes );
     def fromElement( element : RLP.Element.Basic ) : Failable[immutable.Seq[Byte]] = element match {
-      case RLP.Element.ByteSeq( bytes ) => succeed( bytes );
+      case RLP.Element.ByteSeq( bytes ) => Failable.succeed( bytes );
       case _                            => failNotLeaf( element );
     }
   }
   implicit final object ByteArraySerializer extends RLPSerializing[Array[Byte]] {
     def toElement( bytes : Array[Byte] )           : RLP.Element = RLP.Element.ByteSeq( bytes );
     def fromElement( element : RLP.Element.Basic ) : Failable[Array[Byte]] = element match {
-      case RLP.Element.ByteSeq( bytes ) => succeed( bytes.toArray );
+      case RLP.Element.ByteSeq( bytes ) => Failable.succeed( bytes.toArray );
       case _                            => failNotLeaf( element );
     }
   }
@@ -118,22 +118,22 @@ package object encoding {
       case RLP.Element.ByteSeq( bytes ) if (bytes.length <= 4) => {
         val result = RLP.Element.intFromScalarBytes(bytes);
         if ( result >= 0 ) {
-          succeed( result ) 
+          Failable.succeed( result ) 
         } else {
-          fail( 
+          Failable.fail( 
             s"Desired int would be negative (${result}); RLP scalars must be nonnegative. " +
              "Perhaps this represents an unigned value too large to fit in a for byte Int. " +
              "If negative values are expected, applications may read an interpret the byte sequence directly.")
         }
       }
-      case RLP.Element.ByteSeq( bytes ) if (bytes.length > 4)  => fail( "The Int value requested cannot be represented in an 4 byte Int." );
+      case RLP.Element.ByteSeq( bytes ) if (bytes.length > 4)  => Failable.fail( "The Int value requested cannot be represented in an 4 byte Int." );
       case _                                                   => failNotLeaf( element );
     }
   }
   implicit final object UnsignedBigIntSerializer extends RLPSerializing[BigInt] {
     def toElement( bi : BigInt )                   : RLP.Element = RLP.Element.UnsignedBigInt( bi );
     def fromElement( element : RLP.Element.Basic ) : Failable[BigInt] = element match {
-      case RLP.Element.ByteSeq( bytes ) => succeed( BigInt( 1, bytes.toArray ) );
+      case RLP.Element.ByteSeq( bytes ) => Failable.succeed( BigInt( 1, bytes.toArray ) );
       case _                            => failNotLeaf( element );
     }
   }

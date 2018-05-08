@@ -42,7 +42,7 @@ import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact64,B
 
 import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq;
 
-import com.mchange.sc.v2.failable._;
+import com.mchange.sc.v3.failable._;
 
 import java.util.Arrays;
 
@@ -56,9 +56,9 @@ object EthPublicKey {
   def fromBytesWithUncompressedHeader( bytes : ByteSeqExact65 ) : Failable[EthPublicKey] = {
     val header = bytes.widen(0) 
     if ( header == 0x04 ) {
-      succeed( apply( ByteSeqExact64.assert( bytes.widen.toArray.drop(1) ) ) ) 
+      Failable.succeed( apply( ByteSeqExact64.assert( bytes.widen.toArray.drop(1) ) ) ) 
     } else {
-      fail( s"Bad header for public key. We expressed the uncompressed marker, 0x04, found 0x${header.hex}" )
+      Failable.fail( s"Bad header for public key. We expressed the uncompressed marker, 0x04, found 0x${header.hex}" )
     }
   }
 }

@@ -37,7 +37,7 @@ package com.mchange.sc.v1.consuela.ethereum.encoding;
 
 import com.mchange.sc.v1.consuela._
 
-import com.mchange.sc.v2.failable._;
+import com.mchange.sc.v3.failable._;
 
 import scala.util.Try;
 import java.nio.charset.{Charset, StandardCharsets};

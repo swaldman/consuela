@@ -40,7 +40,7 @@ import com.mchange.sc.v1.consuela.ethereum.encoding._;
 
 import com.mchange.sc.v2.restrict._;
 
-import com.mchange.sc.v2.failable._;
+import com.mchange.sc.v3.failable._;
 
 import scala.collection._
 
@@ -97,7 +97,7 @@ package object specification {
   }
   abstract class RestrictedTypeRLPSerializing[BELLY, SHIELD <: ShieldType[BELLY]]( factory : RestrictedType[_, BELLY, SHIELD] ) extends RLPSerializing[SHIELD] {
     def toElement( shield : SHIELD )               : RLP.Element      = elementFromBelly( shield.unwrap ); // boxes then unboxes, but that's okay.
-    def fromElement( element : RLP.Element.Basic ) : Failable[SHIELD] = try succeed( factory( bellyFromElement( element ) ) ) catch Poop; 
+    def fromElement( element : RLP.Element.Basic ) : Failable[SHIELD] = try Failable.succeed( factory( bellyFromElement( element ) ) ) catch Failable.ThrowableToFailed 
 
     def elementFromBelly( belly : BELLY )               : RLP.Element;
     def bellyFromElement( element : RLP.Element.Basic ) : BELLY; // let it throw its Exceptions

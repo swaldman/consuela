@@ -4,7 +4,7 @@ import com.mchange.sc.v1.consuela.ethereum._
 import com.mchange.sc.v1.consuela.ethereum.encoding._
 import com.mchange.sc.v1.consuela.ethereum.specification.Types._
 
-import com.mchange.sc.v2.failable._
+import com.mchange.sc.v3.failable._
 
 import java.nio.charset.{Charset,StandardCharsets}
 import scala.collection.immutable;
@@ -22,7 +22,7 @@ package object devp2p {
     def fromElement( element : RLP.Element.Basic ) : Failable[Subprotocol.P2P4.Hello.Capabilities] = {
       element match {
         case RLP.Element.Seq( seq ) => decodeTuples( seq ).map( tupleSeq => Subprotocol.P2P4.Hello.Capabilities( immutable.Set( tupleSeq : _* ) ) )
-        case other                  => fail( s"Subprotocol.P2P4.Hello.Capabilities should be a sequence, found ${other}" )
+        case other                  => Failable.fail( s"Subprotocol.P2P4.Hello.Capabilities should be a sequence, found ${other}" )
       }
     }
     private def decodeTuples( seq : immutable.Seq[RLP.Element] ) : Failable[Seq[(StringASCII_Exact3, Unsigned16)]] = {
@@ -36,12 +36,12 @@ package object devp2p {
               ( capName, capVersion )
             }
           }
-          case other => fail( s"Individual elements of Subprotocol.P2P4.Hello.Capabilities should be a pair encoded as a sequence, found ${other}" )
+          case other => Failable.fail( s"Individual elements of Subprotocol.P2P4.Hello.Capabilities should be a pair encoded as a sequence, found ${other}" )
         }
       }
       val failables    : immutable.Seq[Failable[(StringASCII_Exact3, Unsigned16)]] = seq.map( decodeTuple );
       val firstFailure : Option[Failed[(StringASCII_Exact3, Unsigned16)]]          = failables.find( _.isFailed ).map( _.asFailed );
-      firstFailure.fold( succeed( failables.map( _.get ) ) )( failed => refail( failed ) )
+      firstFailure.fold( Failable.succeed( failables.map( _.get ) ) )( failed => Failable.refail( failed ) )
     }
   }
   implicit final object Subprotocol_P2P4_Hello_RLPSerialzing extends RLPSerializing[Subprotocol.P2P4.Hello] {
@@ -70,7 +70,7 @@ package object devp2p {
             Subprotocol.P2P4.Hello( typeCode, p2pVersion, clientId, capabilities, listenPort, nodeId )
           }
         }
-        case other => fail( s"Unexpected element for Subprotocol.P2P4.Hello: ${other}" );
+        case other => Failable.fail( s"Unexpected element for Subprotocol.P2P4.Hello: ${other}" );
       }
     }
   }
@@ -86,7 +86,7 @@ package object devp2p {
             Subprotocol.P2P4.Disconnect( typeCode, reason )
           }
         }
-        case other => fail( s"Unexpected element for Subprotocol.P2P4.Disconnect: ${other}" );
+        case other => Failable.fail( s"Unexpected element for Subprotocol.P2P4.Disconnect: ${other}" );
       }
     }
   }
@@ -101,7 +101,7 @@ package object devp2p {
             Subprotocol.P2P4.Ping( typeCode )
           }
         }
-        case other => fail( s"Unexpected element for Subprotocol.P2P4.Ping: ${other}" );
+        case other => Failable.fail( s"Unexpected element for Subprotocol.P2P4.Ping: ${other}" );
       }
     }
   }
@@ -116,7 +116,7 @@ package object devp2p {
             Subprotocol.P2P4.Pong( typeCode )
           }
         }
-        case other => fail( s"Unexpected element for Subprotocol.P2P4.Pong: ${other}" );
+        case other => Failable.fail( s"Unexpected element for Subprotocol.P2P4.Pong: ${other}" );
       }
     }
   }
@@ -141,7 +141,7 @@ package object devp2p {
             Subprotocol.Eth60.Status( typeCode, protocolVersion, networkId, totalDifficulty, bestHash, genesisHash  )
           }
         }
-        case other => fail( s"Unexpected element for Subprotocol.Eth60.Status: ${other}" );
+        case other => Failable.fail( s"Unexpected element for Subprotocol.Eth60.Status: ${other}" );
       }
     }
   }
@@ -173,7 +173,7 @@ package object devp2p {
             Subprotocol.Eth60.GetBlockHashes( typeCode, hash, maxBlocks )
           }
         }
-        case other => fail( s"Unexpected element for Subprotocol.Eth60.GetBlockHashes: ${other}" );
+        case other => Failable.fail( s"Unexpected element for Subprotocol.Eth60.GetBlockHashes: ${other}" );
       }
     }
   }
@@ -208,7 +208,7 @@ package object devp2p {
             Subprotocol.Eth60.NewBlock( typeCode, block, totalDifficulty )
           }
         }
-        case other => fail( s"Unexpected element for Subprotocol.Eth60.NewBlock: ${other}" );
+        case other => Failable.fail( s"Unexpected element for Subprotocol.Eth60.NewBlock: ${other}" );
       }
     }
   }
@@ -224,11 +224,11 @@ package object devp2p {
         RLP.fromElement[Unsigned16]( typeCodeE.simplify ).flatMap{ typeCode =>
           val failables = hashEs.map( hashE => RLP.fromElement[T]( hashE.simplify ) );
           val mbFirstFailure = failables.find( _.isFailed )
-          val failableSeq = mbFirstFailure.fold( succeed( failables.map( _.get ) ) )( failable => refail( failable.asFailed ) )
+          val failableSeq = mbFirstFailure.fold( Failable.succeed( failables.map( _.get ) ) )( failable => Failable.refail( failable.asFailed ) )
           failableSeq.map( seq => ( typeCode, immutable.IndexedSeq( seq : _* ) ) )
         }
       }
-      case other => fail( s"Unexpected element for ${className}: ${other}" );
+      case other => Failable.fail( s"Unexpected element for ${className}: ${other}" );
     }
   }
 }

@@ -11,6 +11,8 @@ import java.io.StringWriter
 
 import com.mchange.sc.v2.lang.borrow
 
+import com.mchange.sc.v3.failable.logging._
+
 import com.mchange.v2.io.IndentedWriter
 
 import com.mchange.sc.v1.log.MLevel._
@@ -29,9 +31,9 @@ object Generator {
     "scala.collection._",
     "scala.concurrent._",
     "scala.concurrent.duration.Duration",
+    "com.mchange.sc.v3.failable._",
     "com.mchange.sc.v2.concurrent.{Poller,Scheduler}",
     "com.mchange.sc.v2.net.{LoadBalancer,URLSource}",
-    "com.mchange.sc.v2.failable._",
     "com.mchange.sc.v1.consuela._",
     "com.mchange.sc.v1.log.MLevel._",
     "com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash,EthLogEntry}",

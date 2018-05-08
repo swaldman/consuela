@@ -44,7 +44,7 @@ import ethereum.specification.Types.{SignatureV, SignatureR, SignatureS, ByteSeq
 import com.mchange.sc.v1.consuela.hash.Keccak256
 import com.mchange.sc.v1.consuela.bloom.BitSetBloom
 
-import com.mchange.sc.v2.failable._
+import com.mchange.sc.v3.failable._
 
 import scala.collection._
 
@@ -166,11 +166,11 @@ package object ethereum {
                   Signed( b, sig )
                 }
               }
-              case uhhuh => fail( s"After base transaction elements, expected a three part signature, instead found '${uhhuh}'." );
+              case uhhuh => Failable.fail( s"After base transaction elements, expected a three part signature, instead found '${uhhuh}'." );
             }
           }
         }
-        case whatever => fail( s"Expected a sequence of at least 6 ByteSeqs. Instead found '${whatever}'" );
+        case whatever => Failable.fail( s"Expected a sequence of at least 6 ByteSeqs. Instead found '${whatever}'" );
       }
     }
   }
@@ -199,7 +199,7 @@ package object ethereum {
             EthWorldState.Account( nonce, balance, storageRoot, codeHash );
           }
         }
-        case other => fail( s"Expected ( nonceE , balanceE, storageRootE, codeHashE ), found ${other}" );
+        case other => Failable.fail( s"Expected ( nonceE , balanceE, storageRootE, codeHashE ), found ${other}" );
       }
     }
   }
@@ -241,7 +241,7 @@ package object ethereum {
             )
           }
         }
-        case other => fail( s"${other} is not in the expected format of an EthBlock.Header" );
+        case other => Failable.fail( s"${other} is not in the expected format of an EthBlock.Header" );
       }
     }
   }
@@ -266,7 +266,7 @@ package object ethereum {
             EthBlock( header, txns, ommers )
           }
         }
-        case other => fail( s"Expected RLP.Element.Seq.of( headerE, txnsSeqE, ommersSeqE), found ${element}" )
+        case other => Failable.fail( s"Expected RLP.Element.Seq.of( headerE, txnsSeqE, ommersSeqE), found ${element}" )
       }
     }
   }
@@ -289,7 +289,7 @@ package object ethereum {
             EthLogEntry( address, topics, data )
           }
         }
-        case other => fail( s"${other} is not in the expected format of an EthLogEntry" );
+        case other => Failable.fail( s"${other} is not in the expected format of an EthLogEntry" );
       }
     }
   }
@@ -313,7 +313,7 @@ package object ethereum {
             EthTransactionReceipt( postTransactionState, gasUsed, logsBloom, logEntries )
           }
         }
-        case other => fail( s"${other} is not in the expected format of an EthTransactionReceipt" );
+        case other => Failable.fail( s"${other} is not in the expected format of an EthTransactionReceipt" );
       }
     }
   }

@@ -6,8 +6,10 @@ import com.mchange.sc.v1.consuela.ethereum.jsonrpc.Client
 import Client.Filter
 
 import com.mchange.sc.v2.concurrent.Scheduler
-import com.mchange.sc.v2.failable._
 import com.mchange.sc.v2.lang._
+
+import com.mchange.sc.v3.failable._
+import com.mchange.sc.v3.failable.logging._
 
 import org.reactivestreams.{Publisher => RxPublisher, Subscriber => RxSubscriber, Subscription => RxSubscription}
 

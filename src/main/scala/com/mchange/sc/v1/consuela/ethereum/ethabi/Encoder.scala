@@ -10,9 +10,9 @@ import com.mchange.sc.v1.consuela.math._
 import com.mchange.sc.v1.consuela.ethereum.EthAddress
 import com.mchange.sc.v1.consuela.ethereum.specification.Types.ByteSeqExact20
 
-import com.mchange.sc.v2.failable._
-
 import com.mchange.sc.v2.literal.StringLiteral
+
+import com.mchange.sc.v3.failable._
 
 import com.mchange.lang.ByteUtils.unsignedPromote
 
@@ -213,7 +213,7 @@ object Encoder {
 
   private def parseOneByteCharQuotedString( quotedString : String ) : Failable[immutable.Seq[Byte]] = {
     Failable( StringLiteral.parsePermissiveStringLiteral( quotedString ).parsed )
-      .flatMap( str => if (str.exists( _ >= 256 )) fail("Expected a string of bytes, found multibyte chars") else succeed( str.map( _.toByte ).toImmutableSeq ) )
+      .flatMap( str => if (str.exists( _ >= 256 )) Failable.fail("Expected a string of bytes, found multibyte chars") else Failable.succeed( str.map( _.toByte ).toImmutableSeq ) )
   }
   private def formatOneByteCharQuotedString( bytes : Seq[Byte] ) : Failable[String] = Failable( StringLiteral.formatPermissiveStringLiteral( bytes.map( _.toChar ).mkString ) )
 
@@ -239,8 +239,8 @@ object Encoder {
     val strim    = str.trim
     val strimLen = strim.length
 
-    if ( strim.length < 2 ) return fail( "A String representation of an array must have at least two characters, [ and ]!" )
-    if ( strim.charAt(0) != '[' || strim.charAt( strimLen - 1 ) != ']' ) return fail( "A String representation of an array must begin with '[' and end with ']'!" )
+    if ( strim.length < 2 ) return Failable.fail( "A String representation of an array must have at least two characters, [ and ]!" )
+    if ( strim.charAt(0) != '[' || strim.charAt( strimLen - 1 ) != ']' ) return Failable.fail( "A String representation of an array must begin with '[' and end with ']'!" )
 
     val uncapped = strim.substring( 1, strimLen - 1 )
     val len = uncapped.length
@@ -374,7 +374,7 @@ object Encoder {
     @tailrec
     private def _decode( countdown : Int, len : Int, nascent : Array[Any], more : immutable.Seq[Byte] ) : Failable[Tuple2[ArrayRep,immutable.Seq[Byte]]] = {
       if ( countdown == 0 ) {
-        succeed( Tuple2( ArrayRep( elementTypeName, nascent.toVector ), more ) )
+        Failable.succeed( Tuple2( ArrayRep( elementTypeName, nascent.toVector ), more ) )
       } else {
         // convoluted to keep this function tail recursive
         // note the crucial side effect
@@ -383,7 +383,7 @@ object Encoder {
           nextBytes
         }
         if ( goodBytes.isFailed ) {
-          refail( goodBytes.asFailed )
+          Failable.refail( goodBytes.asFailed )
         } else {
           _decode( countdown - 1, len, nascent, goodBytes.get )
         }
@@ -408,7 +408,7 @@ object Encoder {
       Failable( String.valueOf( representation ) )
     }
     def encode( representation : Boolean ) : Failable[immutable.Seq[Byte]] = {
-      succeed( (0 until 31).map( _ => ZeroByte ) :+ (if ( representation ) OneByte else ZeroByte) )
+      Failable.succeed( (0 until 31).map( _ => ZeroByte ) :+ (if ( representation ) OneByte else ZeroByte) )
     }
     private [Encoder] def decodeCompleteNoLengthCheck( bytes : immutable.Seq[Byte] ) : Failable[Boolean] = {
       val last = bytes.last
@@ -543,9 +543,9 @@ object Encoder {
     private [Encoder] def decodeCompleteNoLengthCheck( bytes : immutable.Seq[Byte] ) : Failable[immutable.Seq[Byte]] = {
       val ( good, pad ) = bytes.splitAt( len )
       if ( allZero( pad ) ) {
-        succeed( good.toImmutableSeq )
+        Failable.succeed( good.toImmutableSeq )
       } else {
-        fail( s"Expected byte string of length ${len}, span of nozero bytes (from left) is more than that: ${bytes.hex}" )
+        Failable.fail( s"Expected byte string of length ${len}, span of nozero bytes (from left) is more than that: ${bytes.hex}" )
       }
     }
   }
@@ -564,7 +564,7 @@ object Encoder {
         val split = bytes.splitAt( repLen )
         decodeCompleteNoLengthCheck( split._1 ).map( rep => ( rep, split._2 ) )
       } else {
-        fail( s"Insufficient number of bytes, ${repLen} required, found ${bytes.length}." )
+        Failable.fail( s"Insufficient number of bytes, ${repLen} required, found ${bytes.length}." )
       }
     }
 

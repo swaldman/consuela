@@ -5,7 +5,7 @@ import com.mchange.sc.v1.consuela.io.createReadOnlyFile
 import com.mchange.sc.v1.consuela.ethereum.{wallet,EthAddress}
 import com.mchange.sc.v1.consuela.ethereum.specification.Types.ByteSeqExact20
 
-import com.mchange.sc.v2.failable._
+import com.mchange.sc.v3.failable._
 import com.mchange.sc.v2.lang.borrow
 import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq
 
@@ -56,7 +56,7 @@ final object KeyStore {
 
   def listAddresses() : Failable[immutable.Seq[EthAddress]] = Directory.map( dir => ImmutableArraySeq.createNoCopy( dir.list.map( parseAddress ).filter( _.isDefined ).map( _.get ) ) )
 
-  def walletForAddress( dir : File, address : EthAddress ) : Failable[wallet.V3] = _walletForAddress( succeed( dir ), address )
+  def walletForAddress( dir : File, address : EthAddress ) : Failable[wallet.V3] = _walletForAddress( Failable.succeed( dir ), address )
 
   def walletForAddress( address : EthAddress ) : Failable[wallet.V3] = _walletForAddress( Directory, address )
 
@@ -65,9 +65,9 @@ final object KeyStore {
 
     val goodName = {
       goodFileNames.flatMap { names =>
-        if ( names.length == 1 ) succeed( names.head )
-        else if ( names.length == 0 ) fail( s"Wallet for address 0x${address.bytes.widen.hex} not found." )
-        else fail ( s"""Multiple wallets found for address 0x${address.bytes.widen.hex} -- ${names.mkString(",")}""" )
+        if ( names.length == 1 ) Failable.succeed( names.head )
+        else if ( names.length == 0 ) Failable.fail( s"Wallet for address 0x${address.bytes.widen.hex} not found." )
+        else Failable.fail( s"""Multiple wallets found for address 0x${address.bytes.widen.hex} -- ${names.mkString(",")}""" )
       }
     }
     val file = goodName.flatMap( name => Directory.map( dir => new File( dir, name ) ) )

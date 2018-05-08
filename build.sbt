@@ -6,11 +6,11 @@ organization := "com.mchange"
 
 name := "consuela"
 
-version := "0.0.5"
+version := "0.0.6-SNAPSHOT"
 
-scalaVersion := "2.11.11"
+scalaVersion := "2.12.6"
 
-crossScalaVersions := Seq("2.10.6", "2.11.11", "2.12.4")
+crossScalaVersions := Seq("2.10.7", "2.11.12", "2.12.6")
 
 scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked" /*, "-Xlog-implicits" */)
 
@@ -33,12 +33,15 @@ publishTo := {
 }
 
 val restrictedTypeVersion = "0.0.4"
+val failableVersion       = "0.0.1-SNAPSHOT"
 
 libraryDependencies ++= Seq(
   "com.mchange"             %% "mlog-scala"                      % "0.3.10",
-  "com.mchange"             %% "restricted-type"                 % restrictedTypeVersion,
+  "com.mchange"             %% "failable"                        % failableVersion,
+  "com.mchange"             %% "failable-logging"                % failableVersion,
+  "com.mchange"             %% "restricted-type"                 % restrictedTypeVersion changing(),
   "com.mchange"             %% "yinyang"                         % "0.0.2",
-  "com.mchange"             %% "mchange-commons-scala"           % "0.4.5",
+  "com.mchange"             %% "mchange-commons-scala"           % "0.4.6-SNAPSHOT" changing(),
   "com.mchange"             %% "literal"                         % "0.0.2",
   "com.mchange"             %% "mchange-play-json-util"          % "0.0.2",
   "com.mchange"             %% "jsonrpc-client"                  % "0.0.2",

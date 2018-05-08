@@ -5,8 +5,10 @@ import com.mchange.sc.v1.consuela.crypto.jce
 import com.mchange.sc.v1.consuela.ethereum.{clients,EthAddress,EthHash,EthPrivateKey,EthereumException}
 import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact20,ByteSeqExact32}
 
-import com.mchange.sc.v2.failable._
 import com.mchange.sc.v2.lang.borrow
+
+import com.mchange.sc.v3.failable._
+import com.mchange.sc.v3.failable.logging._
 
 import com.mchange.sc.v1.log.MLevel._
 

@@ -38,11 +38,9 @@ package com.mchange.sc.v1.consuela.ethereum.encoding;
 import com.mchange.sc.v1.consuela._;
 import com.mchange.sc.v1.consuela.util;
 
-import com.mchange.sc.v2.failable._;
+import com.mchange.sc.v3.failable._;
 
-import com.mchange.sc.v2.yinyang._
-
-import scala.collection._;
+import scala.collection._
 
 import scala.util.Try;
 
@@ -82,14 +80,14 @@ object RLPSerializing {
       element match {
         case RLP.Element.Seq( elements ) => {
           val rlpSerializing = implicitly[RLPSerializing[U]];
-          elements.foldLeft( succeed( immutable.Seq.empty[U] ) ){ ( failable : Failable[immutable.Seq[U]], element : RLP.Element ) =>
+          elements.foldLeft( Failable.succeed( immutable.Seq.empty[U] ) ){ ( failable : Failable[immutable.Seq[U]], element : RLP.Element ) =>
             failable match {
-              case Yin(_) => failable;
-              case Yang( nascentSeq ) => {
+              case _ : Failed[_] => failable;
+              case Succeeded( nascentSeq ) => {
                 val mbDecoded : Failable[U] = rlpSerializing.fromElement( element.simplify );
                 mbDecoded match {
-                  case ouch : Yin[Fail,U]  => refail( ouch );
-                  case good : Yang[Fail,U] => Yang( nascentSeq :+ good.get );
+                  case ouch : Failed[U]  => Failable.refail( ouch );
+                  case good : Succeeded[U] => Succeeded( nascentSeq :+ good.get );
                 }
               }
             }
@@ -123,7 +121,7 @@ trait RLPSerializing[T] {
   def decodeComplete( bytes : Seq[Byte] ) : Failable[T] = {
     val ( mbDecoded, rest ) = decode( bytes );
     if (mbDecoded.isSucceeded && rest.length > 0 ) {
-      fail(s"RLPSerializing ${this.getClass.getName} decodeComplete(...) received bytes for ${mbDecoded} with 0x${rest.hex} left over.");
+      Failable.fail(s"RLPSerializing ${this.getClass.getName} decodeComplete(...) received bytes for ${mbDecoded} with 0x${rest.hex} left over.");
     } else {
       mbDecoded
     }
@@ -131,9 +129,9 @@ trait RLPSerializing[T] {
   def encode( rlpSerializable : T ) : immutable.Seq[Byte] = RLP.Element.encode( toElement( rlpSerializable ) );
 
   protected def failNotLeaf( found : Any ) : Failable[Nothing] = {
-    fail(s"Expected a RLP.Element.ByteSeq( bytes ) when deserializing with ${this.getClass.getName}, found ${found}.")
+    Failable.fail(s"Expected a RLP.Element.ByteSeq( bytes ) when deserializing with ${this.getClass.getName}, found ${found}.")
   }
   protected def failNotSeq( found : Any ) : Failable[Nothing] = {
-    fail(s"Expected a RLP.Element.Seq( element ) when deserializing with ${this.getClass.getName}, found ${found}.")
+    Failable.fail(s"Expected a RLP.Element.Seq( element ) when deserializing with ${this.getClass.getName}, found ${found}.")
   }
 }
