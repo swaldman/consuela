@@ -58,13 +58,13 @@ libraryDependencies ++= Seq(
 libraryDependencies += {
   CrossVersion.partialVersion(Keys.scalaVersion.value) match {
     case Some((2, 12)) => {
-      "com.typesafe.play" %% "play-json" % "2.6.7"
+      "com.typesafe.play" %% "play-json" % "2.6.9"
     }
     case Some((2, 11)) => {
-      "com.typesafe.play" %% "play-json" % "2.5.15"
+      "com.typesafe.play" %% "play-json" % "2.5.18"
     }
     case _ => {
-      "com.typesafe.play" %% "play-json" % "2.4.9"
+      "com.typesafe.play" %% "play-json" % "2.4.11"
     }
   }
 }
