@@ -20,6 +20,8 @@ import java.util.UUID
 import javax.crypto.{Cipher, SecretKey, SecretKeyFactory}
 import javax.crypto.spec.{IvParameterSpec, PBEKeySpec, SecretKeySpec}
 
+import scala.collection._
+
 import scala.io.Codec
 
 /*
@@ -158,7 +160,7 @@ object V3 {
 
   def apply( s : String ) : V3 = V3( Json.parse(s).asInstanceOf[JsObject] )
 
-  def keyStoreMap( dir : File ) : Map[EthAddress,V3] = {
+  def keyStoreMultiMap( dir : File ) : Map[EthAddress,immutable.Set[V3]] = {
     require( dir.isDirectory, s"Invalid key store directory, '${dir}': Not a directory." )
 
     def binding( fileName : String ) : Failable[(EthAddress,V3)] = {
@@ -173,12 +175,7 @@ object V3 {
       .map( binding )
       .filter( _.isSucceeded )
       .map( _.get )
-      .foldLeft( Map.empty[EthAddress,V3] ){ ( map, binding ) =>
-      if ( map.contains( binding._1 ) ) {
-        WARNING.log( s"'${dir}' contains multiple wallet for address ${binding._1}. Only the final one will be available." )
-      }
-      map + binding
-    }
+      .foldLeft( Map.empty[EthAddress,immutable.Set[V3]].withDefaultValue( immutable.Set.empty[V3] ) ){ case ( map, Tuple2( key, value ) ) => map + Tuple2( key, map(key) + value ) }
   }
 
   def generateScrypt(
