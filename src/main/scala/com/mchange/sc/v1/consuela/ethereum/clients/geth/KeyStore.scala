@@ -54,6 +54,14 @@ final object KeyStore {
     }
   }.flatten
 
+  def importAll( keyStoreDir : File, srcDir : File ) : Failable[immutable.Set[wallet.V3]] = Failable {
+    val alreadyInKeyStore = wallet.V3.keyStoreMultiMap( keyStoreDir ).values.foldLeft( immutable.Set.empty[wallet.V3] )( _ ++ _ )
+    val fromSrcDir = wallet.V3.keyStoreMultiMap( srcDir ).values.foldLeft( immutable.Set.empty[wallet.V3] )( _ ++ _ )
+    val shouldImport = fromSrcDir -- alreadyInKeyStore
+    shouldImport.foreach( wallet => this.add( keyStoreDir, wallet ).assert )
+    shouldImport
+  }
+
   def listAddresses() : Failable[immutable.Seq[EthAddress]] = Directory.map( dir => ImmutableArraySeq.createNoCopy( dir.list.map( parseAddress ).filter( _.isDefined ).map( _.get ) ) )
 
   def walletsForAddress( dir : File, address : EthAddress ) : Failable[immutable.Set[wallet.V3]] = _walletsForAddress( Failable.succeed( dir ), address )
