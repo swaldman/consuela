@@ -11,7 +11,7 @@ import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq
 
 import java.io.File
 
-import scala.collection.immutable
+import scala.collection._
 
 final object KeyStore {
 
@@ -56,23 +56,14 @@ final object KeyStore {
 
   def listAddresses() : Failable[immutable.Seq[EthAddress]] = Directory.map( dir => ImmutableArraySeq.createNoCopy( dir.list.map( parseAddress ).filter( _.isDefined ).map( _.get ) ) )
 
-  def walletForAddress( dir : File, address : EthAddress ) : Failable[wallet.V3] = _walletForAddress( Failable.succeed( dir ), address )
+  def walletsForAddress( dir : File, address : EthAddress ) : Failable[immutable.Set[wallet.V3]] = _walletsForAddress( Failable.succeed( dir ), address )
 
-  def walletForAddress( address : EthAddress ) : Failable[wallet.V3] = _walletForAddress( Directory, address )
+  def walletsForAddress( address : EthAddress ) : Failable[immutable.Set[wallet.V3]] = _walletsForAddress( Directory, address )
 
-  private def _walletForAddress( dir : Failable[File], address : EthAddress ) : Failable[wallet.V3] = {
-    val goodFileNames = Directory.map( d => d.list.filter( fname => parseAddress( fname ).isDefined ).filter( _.toLowerCase.endsWith( address.bytes.widen.hex.toLowerCase ) ) )
-
-    val goodName = {
-      goodFileNames.flatMap { names =>
-        if ( names.length == 1 ) Failable.succeed( names.head )
-        else if ( names.length == 0 ) Failable.fail( s"Wallet for address 0x${address.bytes.widen.hex} not found." )
-        else Failable.fail( s"""Multiple wallets found for address 0x${address.bytes.widen.hex} -- ${names.mkString(",")}""" )
-      }
-    }
-    val file = goodName.flatMap( name => Directory.map( dir => new File( dir, name ) ) )
-
-    file.map( wallet.V3.apply )
+  private def _walletsForAddress( dir : Failable[File], address : EthAddress ) : Failable[immutable.Set[wallet.V3]] = {
+    val goodFileNames : Failable[Array[String]] = dir.map( d => d.list.filter( fname => parseAddress( fname ).isDefined ).filter( _.toLowerCase.endsWith( address.bytes.widen.hex.toLowerCase ) ) )
+    val goodFiles     : Failable[Array[File]]   = goodFileNames.flatMap( names => dir.map( d => names.map( name => new File( d, name ) ) ) )
+    goodFiles.map( arr => arr.map( wallet.V3.apply ).toSet )
   }
 
   lazy val Directory : Failable[File] = Home.Directory.map( home => new File( home, DirName ) )
