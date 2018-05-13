@@ -160,7 +160,7 @@ object V3 {
 
   def apply( s : String ) : V3 = V3( Json.parse(s).asInstanceOf[JsObject] )
 
-  def keyStoreMultiMap( dir : File ) : Map[EthAddress,immutable.Set[V3]] = {
+  def keyStoreMultiMap( dir : File ) : immutable.Map[EthAddress,immutable.Set[V3]] = {
     require( dir.isDirectory, s"Invalid key store directory, '${dir}': Not a directory." )
 
     def binding( fileName : String ) : Failable[(EthAddress,V3)] = {
