@@ -175,7 +175,7 @@ object V3 {
       .map( binding )
       .filter( _.isSucceeded )
       .map( _.get )
-      .foldLeft( Map.empty[EthAddress,immutable.Set[V3]].withDefaultValue( immutable.Set.empty[V3] ) ){ case ( map, Tuple2( key, value ) ) => map + Tuple2( key, map(key) + value ) }
+      .foldLeft( immutable.Map.empty[EthAddress,immutable.Set[V3]] ){ case ( map, Tuple2( key, values ) ) => map + Tuple2( key, map.get(key).getOrElse( immutable.Set.empty ) + values ) }
   }
 
   def generateScrypt(
