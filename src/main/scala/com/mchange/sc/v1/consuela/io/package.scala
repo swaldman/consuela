@@ -30,6 +30,9 @@ package object io {
   def setUserReadOnlyFilePermissions( path : Path ) : Failable[Path] = doWithPlatformHelper( path )( ( path, helper ) => helper.setUserReadOnlyFilePermissions( path ) )
   def setUserReadOnlyFilePermissions( file : File ) : Failable[File] = setUserReadOnlyFilePermissions( file.toPath ).map( _.toFile )
 
+  def setUserOnlyFilePermissions( path : Path ) : Failable[Path] = doWithPlatformHelper( path )( ( path, helper ) => helper.setUserOnlyFilePermissions( path ) )
+  def setUserOnlyFilePermissions( file : File ) : Failable[File] = setUserOnlyFilePermissions( file.toPath ).map( _.toFile )
+
   def createReadOnlyFile( path : Path, bytes : Array[Byte] ) : Failable[Path] = {
     for {
       emptyFilePath  <- createUserOnlyEmptyFile( path )
@@ -56,9 +59,10 @@ package object io {
   }
 
   private trait UserOnlyHelper {
-    def ensureUserOnlyDirectory( path : Path )     : Failable[Path]
-    def createUserOnlyEmptyFile( path : Path )     : Failable[Path]
-    def setUserReadOnlyFilePermissions( path : Path )  : Failable[Path]
+    def ensureUserOnlyDirectory( path : Path )        : Failable[Path]
+    def createUserOnlyEmptyFile( path : Path )        : Failable[Path]
+    def setUserReadOnlyFilePermissions( path : Path ) : Failable[Path]
+    def setUserOnlyFilePermissions( path : Path )     : Failable[Path]
   }
 
   private final object Posix extends UserOnlyHelper {
@@ -66,6 +70,7 @@ package object io {
     private val UserOnlyDirectoryAttribute   = PosixFilePermissions.asFileAttribute( UserOnlyDirectoryPermissions )
     private val UserOnlyFileAttribute        = PosixFilePermissions.asFileAttribute( EnumSet.of( OWNER_READ, OWNER_WRITE ) )
     private val UserReadOnlyFilePermission   = EnumSet.of( OWNER_READ )
+    private val UserOnlyFilePermission       = EnumSet.of( OWNER_READ, OWNER_WRITE )
 
     def ensureUserOnlyDirectory( path : Path ) : Failable[Path] = {
 
@@ -93,6 +98,11 @@ package object io {
 
     def setUserReadOnlyFilePermissions( path : Path ) : Failable[Path] = Failable {
       Files.setPosixFilePermissions( path, UserReadOnlyFilePermission )
+      path
+    }
+
+    def setUserOnlyFilePermissions( path : Path ) : Failable[Path] = Failable {
+      Files.setPosixFilePermissions( path, UserOnlyFilePermission )
       path
     }
 
@@ -172,7 +182,7 @@ package object io {
           val view = Files.getFileAttributeView(path, classOf[AclFileAttributeView])
           val acls = view.getAcl().asScala
           val badPrincipals = acls.filter( acl => !isWhitelistedPrincipal( userPrincipal, acl.principal ) )
-          if ( badPrincipals.size == 0 ) Failable.succeed( path ) else Failable.fail( "${path} should be a user-only directory, but is accessible by ${badPrincipals.mkString}." )
+          if ( badPrincipals.size == 0 ) Failable.succeed( path ) else Failable.fail( s"${path} should be a user-only directory, but is accessible by ${badPrincipals.mkString}." )
         }
       }
     }
@@ -199,6 +209,17 @@ package object io {
           // XXX: Remove once warned deficiency regarding read-only files is fixed
           WARNING.log("The file could not be made read-only, because doing so would render it inaccessible on Windows. Access is restricted to the current user, however.")
 
+          path
+        }
+      }
+    }
+
+    def setUserOnlyFilePermissions( path : Path ) : Failable[Path] = {
+      findJvmUserPrincipal.flatMap { userPrincipal =>
+        Failable {
+          val view = Files.getFileAttributeView( path, classOf[AclFileAttributeView] )
+          val entries = aclEntryList( userPrincipal, UserOnlyFileCreatePermissions )
+          view.setAcl( entries )
           path
         }
       }
