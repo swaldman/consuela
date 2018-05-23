@@ -217,7 +217,7 @@ package object io {
           view.setAcl( entries )
 
           // XXX: Remove once warned deficiency regarding read-only files is fixed
-          WARNING.log( s"The file '${path}' could not be made read-only, because doing so would render it inaccessible on Windows. Access is restricted to the current user, however.")
+          INFO.log( s"The file '${path}' could not be made read-only, because doing so would render it inaccessible on Windows. Access is restricted to the current user, however.")
 
           path
         }
