@@ -20,6 +20,7 @@ import com.mchange.sc.v3.failable._
 import com.mchange.sc.v2.util.Platform
 
 package object io {
+  final class BadPermissionsException( msg : String, cause : Throwable = null ) extends ConsuelaException( msg, cause )
 
   def ensureUserOnlyDirectory( path : Path ) : Failable[Path] = doWithPlatformHelper( path )( ( path, helper ) => helper.ensureUserOnlyDirectory( path ) )
   def ensureUserOnlyDirectory( file : File ) : Failable[File] = ensureUserOnlyDirectory( file.toPath ).map( _.toFile )
@@ -83,7 +84,7 @@ package object io {
         if ( UserOnlyDirectoryPermissions.asScala == filePermissions.asScala ) { // use asScala, so we are doing a value rather than identity check
           Failable.succeed( path )
         } else {
-          Failable.fail( s"Directory '${path}' must be readable and writable only by its owner, but in fact has permissions ${filePermissions}" )
+          Failable.fail( new BadPermissionsException(s"Directory '${path}' must be readable and writable only by its owner, but in fact has permissions ${filePermissions}" ) )
         }
       }
 
@@ -192,7 +193,7 @@ package object io {
           val view = Files.getFileAttributeView(path, classOf[AclFileAttributeView])
           val acls = view.getAcl().asScala
           val badPrincipals = acls.filter( acl => !isWhitelistedPrincipal( userPrincipal, acl.principal ) )
-          if ( badPrincipals.size == 0 ) Failable.succeed( path ) else Failable.fail( s"${path} should be a user-only directory, but is accessible by ${badPrincipals.mkString}." )
+          if ( badPrincipals.size == 0 ) Failable.succeed( path ) else Failable.fail( new BadPermissionsException( s"${path} should be a user-only directory, but is accessible by ${badPrincipals.mkString}." ) )
         }
       }
     }
