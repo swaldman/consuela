@@ -1,5 +1,11 @@
 package com.mchange.sc.v1.consuela.ethereum
 
+
+/**
+  * The chain ID stuff implements EIP-155
+  * 
+  * See https://eips.ethereum.org/EIPS/eip-155
+  */
 import specification.Types.ByteSeqExact32
 
 object EthSigner {
@@ -29,13 +35,20 @@ object EthSigner {
   }
 }
 /**
-  * For now, this is just an abstraction over EthPrivateKey.
+  * For now, the only implementation is EthPrivateKey.
   * 
-  * But it exists so that more elaborate / secure / decoupled
+  * But we define the trait exists so that more elaborate / secure / decoupled
   * signing services could be supported.
   */
 trait EthSigner {
-  def sign( document : Array[Byte] ) : EthSignature
-  def sign( document : Seq[Byte] ) : EthSignature
+
+  def sign( document : Array[Byte] )                       : EthSignature
+  def sign( document : Array[Byte], chainId : EthChainId ) : EthSignature.WithChainId = EthSignature.WithChainId( sign( document ), chainId )
+  def sign( document : Array[Byte], chainId : Int )        : EthSignature.WithChainId = sign( document, EthChainId( chainId ) )
+
+  def sign( document : Seq[Byte] )                       : EthSignature
+  def sign( document : Seq[Byte], chainId : EthChainId ) : EthSignature.WithChainId = EthSignature.WithChainId( sign( document ), chainId )
+  def sign( document : Seq[Byte], chainId : Int )        : EthSignature.WithChainId = sign( document, EthChainId( chainId ) )
+
   def address : EthAddress
 }
