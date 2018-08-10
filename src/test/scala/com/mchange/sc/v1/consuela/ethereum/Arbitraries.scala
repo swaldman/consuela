@@ -52,7 +52,7 @@ object Arbitraries {
   implicit val ArbitraryEthAddress    : Arbitrary[EthAddress]    = Arbitrary( genByteArrayN( EthAddress.ByteLength ).map( bs => EthAddress(ByteSeqExact20(bs) ) ) )
   implicit val ArbitraryEthHash       : Arbitrary[EthHash]       = Arbitrary( genByteArrayN( EthHashLen ).map( EthHash.withBytes( _ ) ) )
   implicit val ArbitraryEthPrivateKey : Arbitrary[EthPrivateKey] = Arbitrary( genByteArrayN( EthPrivateKey.ByteLength ).map( bs => EthPrivateKey.apply( ByteSeqExact32(bs) ) ) )
-  implicit val ArbitraryEthChainId    : Arbitrary[EthChainId]    = Arbitrary( ArbitraryUnsigned64.arbitrary.map( n => EthChainId( UnsignedBigInt(n.widen/2 + 1) ) ) )
+  implicit val ArbitraryEthChainId    : Arbitrary[EthChainId]    = Arbitrary( ArbitraryUnsigned256.arbitrary.map( n => EthChainId( UnsignedBigInt(n.widen) ) ) )
 
   val GenTransactionUnsignedMessage : Gen[EthTransaction.Unsigned.Message] = {
     for {
