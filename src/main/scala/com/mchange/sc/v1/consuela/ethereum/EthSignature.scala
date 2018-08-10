@@ -94,11 +94,21 @@ object EthSignature {
     * Represents an EIP 155 signature with embedded Chain ID
     * 
     * See https://eips.ethereum.org/EIPS/eip-155
-    */ 
-  final case class withChainId( val v : SignatureWithChainIdV, val r : SignatureR, val s : SignatureS ) {
+    */
+  object WithChainId {
+    def apply( simple : EthSignature, chainId : EthChainId ) : WithChainId = {
+      val v = chainId.signatureWithChainIdV( simple.v )
+      val r = simple.r
+      val s = simple.s
+      apply( v, r, s )
+    }
+  }
+  final case class WithChainId( val v : SignatureWithChainIdV, val r : SignatureR, val s : SignatureS ) {
     private lazy val extracted = EthChainId.extract( v )
     def ethSignature : EthSignature = EthSignature( extracted._1, r, s ) 
     def chainId      : EthChainId   = extracted._2
+
+    def wasSigned( document : Array[Byte] ) : Option[EthPublicKey] = ethSignature.wasSigned( document )
   }
 }
 
