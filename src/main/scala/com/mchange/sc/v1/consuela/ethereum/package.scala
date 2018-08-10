@@ -39,7 +39,7 @@ import ethereum.encoding._
 import RLPSerializing.asElement  // implicit conversion
 import RLPSerializing.asElements // not implicit 
 
-import ethereum.specification.Types.{SignatureV, SignatureR, SignatureS, ByteSeqMax1024, ByteSeqExact20, ByteSeqExact32, ByteSeqExact256, Unsigned64, Unsigned256, Unsigned2048}
+import ethereum.specification.Types.{SignatureV, SignatureR, SignatureS, ByteSeqMax1024, ByteSeqExact20, ByteSeqExact32, ByteSeqExact256, Unsigned64, Unsigned256, Unsigned2048, UnsignedBigInt}
 
 import com.mchange.sc.v1.consuela.hash.Keccak256
 import com.mchange.sc.v1.consuela.bloom.BitSetBloom
@@ -122,11 +122,11 @@ package object ethereum {
         }
         Vector( elem( unsigned.nonce ), elem( unsigned.gasPrice ), elem( unsigned.gasLimit ), elem( rlpMbTo ), elem( unsigned.value ), elem( payload ) );
       }
-      def sigElements( signed : Signed ) : Vector[RLP.Element] = Vector( elem( signed.v ), elem( signed.r ), elem( signed.s ) ) 
+      def sigElements( signed : Signed ) : Vector[RLP.Element] = Vector( elem( signed.untypedV ), elem( signed.r ), elem( signed.s ) )
 
       txn match {
         case unsigned : Unsigned => RLP.Element.Seq( baseElements( unsigned ) );
-        case signed   : Signed   => RLP.Element.Seq( baseElements( signed.base ) ++ sigElements( signed ) );
+        case signed   : Signed   => RLP.Element.Seq( baseElements( signed.unsignedTransaction ) ++ sigElements( signed ) );
         case other               => throw new AssertionError( s"Huh? Saw an EthTransaction that is marked neither Signed nor Unsigned: ${other}" );
       }
     }
@@ -158,10 +158,10 @@ package object ethereum {
               case Seq( vE, rE, sE ) => {
                 for {
                   b        <- base;
-                  v        <- RLP.fromElement[SignatureV]( vE.simplify );
+                  untypedV <- RLP.fromElement[UnsignedBigInt]( vE.simplify );
                   r        <- RLP.fromElement[SignatureR]( rE.simplify );
                   s        <- RLP.fromElement[SignatureS]( sE.simplify );
-                  sig      <- Try( EthSignature( v, r, s ) ).toFailable
+                  sig      <- Try( EthSignature.Base( untypedV, r, s ) ).toFailable
                 } yield {
                   Signed( b, sig )
                 }

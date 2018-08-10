@@ -143,11 +143,11 @@ object Types {
 
   final object Unsigned2048   extends RestrictedBigInt.UnsignedWithBitLength[Unsigned2048]( 2048 ) { override protected def create( value : BigInt ) = new Unsigned2048( value ); }
 
-  final object SignatureR            extends RestrictedBigInt.MinUntil[SignatureR]( Min.SignatureR, Limit.SignatureR )               { override protected def create( value : BigInt ) = new SignatureR( value ); }
-  final object SignatureS            extends RestrictedBigInt.MinUntil[SignatureS]( Min.SignatureS, Limit.SignatureS )               { override protected def create( value : BigInt ) = new SignatureS( value ); }
-  final object SignatureV            extends RestrictedByte.MinUntil[SignatureV]( Min.SignatureV, Limit.SignatureV )                 { override protected def create( value : Byte   ) = new SignatureV( value ); }
-  final object SignatureRecId        extends RestrictedByte.ZeroUntil[SignatureRecId]( Limit.SignatureRecId )                        { override protected def create( value : Byte   ) = new SignatureRecId( value ); }
-  final object SignatureWithChainIdV extends RestrictedInt.MinUntil[SignatureWithChainIdV]( Min.SignatureWithChainIdV, Int.MaxValue) { override protected def create( value : Int   )  = new SignatureWithChainIdV( value ); }
+  final object SignatureR            extends RestrictedBigInt.MinUntil[SignatureR]( Min.SignatureR, Limit.SignatureR )    { override protected def create( value : BigInt ) = new SignatureR( value ); }
+  final object SignatureS            extends RestrictedBigInt.MinUntil[SignatureS]( Min.SignatureS, Limit.SignatureS )    { override protected def create( value : BigInt ) = new SignatureS( value ); }
+  final object SignatureV            extends RestrictedByte.MinUntil[SignatureV]( Min.SignatureV, Limit.SignatureV )      { override protected def create( value : Byte   ) = new SignatureV( value ); }
+  final object SignatureRecId        extends RestrictedByte.ZeroUntil[SignatureRecId]( Limit.SignatureRecId )             { override protected def create( value : Byte   ) = new SignatureRecId( value ); }
+  final object SignatureWithChainIdV extends RestrictedBigInt.AtLeast[SignatureWithChainIdV]( Min.SignatureWithChainIdV ) { override protected def create( value : BigInt )  = new SignatureWithChainIdV( value ); }
 
   // for solidity stubs, we need the full set of type restrictions from bytes1 to bytes32. grrr.
   // codegeneration in the REPL to the rescue...
@@ -277,7 +277,7 @@ object Types {
   final class SignatureR            private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];
   final class SignatureS            private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];
   final class SignatureV            private ( val widen : Byte   ) extends AnyVal with RestrictedType.Element[Byte];
-  final class SignatureWithChainIdV private ( val widen : Int    ) extends AnyVal with RestrictedType.Element[Int];
+  final class SignatureWithChainIdV private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];
   final class SignatureRecId private ( val widen : Byte   ) extends AnyVal with RestrictedType.Element[Byte];
 
   // for solidity stubs, we need the full set of type restrictions from bytes1 to bytes32. grrr.

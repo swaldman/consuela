@@ -45,60 +45,135 @@ import java.util.Arrays;
 import scala.util.hashing.MurmurHash3;
 
 import encoding.{RLP, RLPSerializing};
-import specification.Types.{ByteSeqExact64, SignatureV, SignatureR, SignatureS, Unsigned256};
+import specification.Types.{ByteSeqExact64, SignatureWithChainIdV, SignatureV, SignatureR, SignatureS, Unsigned256, UnsignedBigInt};
 
 object EthTransaction {
   final object Unsigned {
-    final case class Message( nonce : Unsigned256, gasPrice : Unsigned256, gasLimit : Unsigned256, to : EthAddress, value : Unsigned256, data : immutable.Seq[Byte] ) 
+    private val ZeroElem = RLP.Element.UnsignedInt(0)
+
+    final case class Message( nonce : Unsigned256, gasPrice : Unsigned256, gasLimit : Unsigned256, to : EthAddress, value : Unsigned256, data : immutable.Seq[Byte] )
         extends Unsigned with EthTransaction.Message {
-      def sign( signer : EthSigner ) : Signed.Message = Signed.Message( this, signer.sign( RLP.encode[EthTransaction]( this ) ) );
+      def sign( signer : EthSigner ) : Signed.NoChainId.Message                 = Signed.NoChainId.Message( this, signer.sign( this.signableBytes( None ) ) );
+      def sign( signer : EthSigner, chainId : EthChainId ) : Signed.WithChainId = Signed.WithChainId.Message( this, signer.sign( this.signableBytes( Some( chainId ) ), chainId ) )
     }
     final case class ContractCreation( nonce : Unsigned256, gasPrice : Unsigned256, gasLimit : Unsigned256, value : Unsigned256, init : immutable.Seq[Byte] ) 
         extends Unsigned with EthTransaction.ContractCreation {
-      def sign( signer : EthSigner ) : Signed.ContractCreation = Signed.ContractCreation( this, signer.sign( RLP.encode[EthTransaction]( this ) ) );
+      def sign( signer : EthSigner ) : Signed.NoChainId.ContractCreation        = Signed.NoChainId.ContractCreation( this, signer.sign( this.signableBytes( None ) ) );
+      def sign( signer : EthSigner, chainId : EthChainId ) : Signed.WithChainId = Signed.WithChainId.ContractCreation( this, signer.sign( this.signableBytes( Some( chainId ) ), chainId ) )
     }
   }
   sealed trait Unsigned extends EthTransaction {
+
+    val unsignedTransaction : EthTransaction.Unsigned = this
+
     override def signed = false;
 
-    def sign( signer : EthSigner ) : Signed;
-  }
-  final object Signed {
-    def apply( base : Unsigned, sig : EthSignature ) : Signed = {
-      base match {
-        case msg : Unsigned.Message          => Message( msg, sig );
-        case cc  : Unsigned.ContractCreation => ContractCreation( cc, sig );
+    def signableBytes( mbChainId : Option[EthChainId] ) : immutable.Seq[Byte] = {
+      mbChainId match {
+        case Some( chainId ) => {
+          val nosigSeqElement = RLP.toElement[EthTransaction](this)
+          assert( nosigSeqElement.isInstanceOf[RLP.Element.Seq], s"We expect transactions to serialize to an RLP Sequence! Instead found ${nosigSeqElement}" )
+          val nosigElementSeq = nosigSeqElement.asInstanceOf[RLP.Element.Seq].seq
+          val eip155_extraElements =  RLP.Element.UnsignedBigInt(chainId.value.widen) :: Unsigned.ZeroElem :: Unsigned.ZeroElem :: Nil
+          val fullSeqElem = RLP.Element.Seq( nosigElementSeq ++ eip155_extraElements )
+          RLP.Element.encode( fullSeqElem )
+        }
+        case None => {
+          RLP.encode[EthTransaction]( this )
+        }
       }
     }
-    final case class Message( base : Unsigned.Message, val signature : EthSignature ) extends Signed with EthTransaction.Message {
-      def nonce    : Unsigned256         = base.nonce;
-      def gasPrice : Unsigned256         = base.gasPrice;
-      def gasLimit : Unsigned256         = base.gasLimit;
-      def to       : EthAddress          = base.to; 
-      def value    : Unsigned256         = base.value;
-      def data     : immutable.Seq[Byte] = base.data;
-
-      override def toString() = s"Signed.Message(nonce=${nonce},gasPrice=${gasPrice},gasLimit=${gasLimit},to=${to},value=${value},data=${data},signature=${signature})"
+    def sign( signer : EthSigner ) : Signed.NoChainId;
+    def sign( signer : EthSigner, chainId : EthChainId ) : Signed.WithChainId;
+    def sign( signer : EthSigner, chainId : Long ) : Signed.WithChainId = sign( signer, EthChainId( chainId ) )
+  }
+  final object Signed {
+    def apply( unsignedTransaction : Unsigned, sig : EthSignature.Base ) : Signed = {
+      sig match {
+        case simple : EthSignature             => NoChainId  ( unsignedTransaction, simple )
+        case wci    : EthSignature.WithChainId => WithChainId( unsignedTransaction, wci    )
+      }
     }
-    final case class ContractCreation( base : Unsigned.ContractCreation, val signature : EthSignature ) extends Signed  with EthTransaction.ContractCreation {
-      def nonce    : Unsigned256         = base.nonce;
-      def gasPrice : Unsigned256         = base.gasPrice;
-      def gasLimit : Unsigned256         = base.gasLimit;
-      def value    : Unsigned256         = base.value;
-      def init     : immutable.Seq[Byte] = base.init;
 
-      override def toString() = s"Signed.ContractCreation(nonce=${nonce},gasPrice=${gasPrice},gasLimit=${gasLimit},,value=${value},init=${init},signature=${signature})"
+    final object NoChainId {
+      def apply( unsignedTransaction : Unsigned, sig : EthSignature ) : NoChainId = {
+        unsignedTransaction match {
+          case msg : Unsigned.Message          => Message( msg, sig );
+          case cc  : Unsigned.ContractCreation => ContractCreation( cc, sig );
+        }
+      }
+      final case class Message( unsignedTransaction : Unsigned.Message, val signature : EthSignature ) extends Signed.NoChainId with EthTransaction.Message {
+        def nonce    : Unsigned256         = unsignedTransaction.nonce;
+        def gasPrice : Unsigned256         = unsignedTransaction.gasPrice;
+        def gasLimit : Unsigned256         = unsignedTransaction.gasLimit;
+        def to       : EthAddress          = unsignedTransaction.to;
+        def value    : Unsigned256         = unsignedTransaction.value;
+        def data     : immutable.Seq[Byte] = unsignedTransaction.data;
+
+        override def toString() = s"Signed.NoChainId.Message(nonce=${nonce},gasPrice=${gasPrice},gasLimit=${gasLimit},to=${to},value=${value},data=${data},signature=${signature})"
+      }
+      final case class ContractCreation( unsignedTransaction : Unsigned.ContractCreation, val signature : EthSignature ) extends Signed.NoChainId with EthTransaction.ContractCreation {
+        def nonce    : Unsigned256         = unsignedTransaction.nonce;
+        def gasPrice : Unsigned256         = unsignedTransaction.gasPrice;
+        def gasLimit : Unsigned256         = unsignedTransaction.gasLimit;
+        def value    : Unsigned256         = unsignedTransaction.value;
+        def init     : immutable.Seq[Byte] = unsignedTransaction.init;
+
+        override def toString() = s"Signed.NoChainId.ContractCreation(nonce=${nonce},gasPrice=${gasPrice},gasLimit=${gasLimit},,value=${value},init=${init},signature=${signature})"
+      }
+    }
+    sealed trait NoChainId extends Signed {
+      val signature : EthSignature
+      lazy val signedBytes = unsignedTransaction.signableBytes( None )
+
+      def v : SignatureV = signature.v;
+    }
+
+    final object WithChainId {
+      def apply( unsignedTransaction : Unsigned, sig : EthSignature.WithChainId ) : WithChainId = {
+        unsignedTransaction match {
+          case msg : Unsigned.Message          => Message( msg, sig );
+          case cc  : Unsigned.ContractCreation => ContractCreation( cc, sig );
+        }
+      }
+      final case class Message( unsignedTransaction : Unsigned.Message, val signature : EthSignature.WithChainId ) extends Signed.WithChainId with EthTransaction.Message {
+        def nonce    : Unsigned256         = unsignedTransaction.nonce;
+        def gasPrice : Unsigned256         = unsignedTransaction.gasPrice;
+        def gasLimit : Unsigned256         = unsignedTransaction.gasLimit;
+        def to       : EthAddress          = unsignedTransaction.to;
+        def value    : Unsigned256         = unsignedTransaction.value;
+        def data     : immutable.Seq[Byte] = unsignedTransaction.data;
+
+        override def toString() = s"Signed.WithChainId.Message(nonce=${nonce},gasPrice=${gasPrice},gasLimit=${gasLimit},to=${to},value=${value},data=${data},signature=${signature})"
+      }
+      final case class ContractCreation( unsignedTransaction : Unsigned.ContractCreation, val signature : EthSignature.WithChainId ) extends Signed.WithChainId with EthTransaction.ContractCreation {
+        def nonce    : Unsigned256         = unsignedTransaction.nonce;
+        def gasPrice : Unsigned256         = unsignedTransaction.gasPrice;
+        def gasLimit : Unsigned256         = unsignedTransaction.gasLimit;
+        def value    : Unsigned256         = unsignedTransaction.value;
+        def init     : immutable.Seq[Byte] = unsignedTransaction.init;
+
+        override def toString() = s"Signed.WithChainId.ContractCreation(nonce=${nonce},gasPrice=${gasPrice},gasLimit=${gasLimit},,value=${value},init=${init},signature=${signature})"
+      }
+    }
+    sealed trait WithChainId extends Signed {
+      val signature : EthSignature.WithChainId
+      lazy val signedBytes = unsignedTransaction.signableBytes( Some( chainId ) )
+
+      def v : SignatureWithChainIdV = signature.v;
+
+      def chainId : EthChainId = signature.chainId
     }
   }
-  sealed trait Signed extends EthTransaction {
-    val base      : Unsigned;
-    val signature : EthSignature;
+  sealed trait Signed extends EthTransaction{
+    val signature           : EthSignature.Base
 
-    lazy val signedBytes = RLP.encode[EthTransaction](base)
+    def signedBytes : immutable.Seq[Byte]
 
-    def v : SignatureV = signature.v;
     def r : SignatureR = signature.r;
     def s : SignatureS = signature.s;
+
+    def untypedV : UnsignedBigInt = signature.untypedV
 
     lazy val senderPublicKey : EthPublicKey = {
       def fail : EthPublicKey = throw new EthereumException(s"Could not recover public key for signature ${signature} with signed bytes '${signedBytes}'");
@@ -109,13 +184,13 @@ object EthTransaction {
 
     override def signed = true;
   }
-  trait Message extends EthTransaction {
+  sealed trait Message extends EthTransaction {
     def to   : EthAddress; // not optional once we know we are a message
     def data : immutable.Seq[Byte];
 
     def isMessage = true;
   }
-  trait ContractCreation extends EthTransaction {
+  sealed trait ContractCreation extends EthTransaction {
     def init : immutable.Seq[Byte];
 
     def isMessage = false;
@@ -131,6 +206,8 @@ sealed trait EthTransaction {
 
   def isMessage          : Boolean;
   def isContractCreation : Boolean = !this.isMessage;
+
+  def unsignedTransaction : EthTransaction.Unsigned
 }
 
 

@@ -1,7 +1,6 @@
 package com.mchange.sc.v1.consuela.ethereum;
 
-import com.mchange.sc.v2.restrict.RestrictedInt.UnsignedInt
-import specification.Types.{SignatureV,SignatureWithChainIdV}
+import specification.Types.{SignatureV,SignatureWithChainIdV,UnsignedBigInt}
 
 
 /**
@@ -19,22 +18,25 @@ object EthChainId {
 
   val Known = Mainnet :: Ropsten :: Rinkeby :: Kovan :: EtcMainnet :: EtcTestnet :: Nil
 
-  def findKnown( value : Int ) : Option[EthChainId] = Known.find( _.value.widen == value )
+  def findKnown( value : UnsignedBigInt ) : Option[EthChainId] = Known.find( _.value.widen == value.widen )
 
-  def apply( value : Int, name : Option[String] = None ) : EthChainId = {
+  def apply( value : UnsignedBigInt, name : Option[String] = None ) : EthChainId = {
     name match {
-      case someName : Some[String] => new EthChainId( UnsignedInt(value), someName )
-      case None                    => EthChainId.findKnown( value ).getOrElse( new EthChainId(UnsignedInt(value), None ) )
+      case someName : Some[String] => new EthChainId( value, someName )
+      case None                    => EthChainId.findKnown( value ).getOrElse( new EthChainId(value, None ) )
     }
   }
+
+  def apply( value : Long ) : EthChainId = apply( UnsignedBigInt(value) )
+  def apply( value : Long, name : Option[String] ) : EthChainId = apply( UnsignedBigInt(value), name )
 
   def extract( v : SignatureWithChainIdV ) : ( SignatureV, EthChainId ) = {
     val _v = v.widen
     val ( sigv, idval ) = if ((_v % 2) == 0) ( SignatureV(28), (_v - 36) / 2 ) else ( SignatureV(27), (_v - 35) / 2 )
-    ( sigv, EthChainId( idval ) )
+    ( sigv, EthChainId( UnsignedBigInt(idval ) ) )
   }
 }
-final class EthChainId private ( val value : UnsignedInt, val name : Option[String] ){
+final class EthChainId private ( val value : UnsignedBigInt, val name : Option[String] ){
 
   def signatureWithChainIdV( rawSignatureV : Int ) : SignatureWithChainIdV = {
     rawSignatureV match {
@@ -55,7 +57,7 @@ final class EthChainId private ( val value : UnsignedInt, val name : Option[Stri
       case _                => false
     }
   }
-  override def hashCode() : Int = this.value.widen
+  override def hashCode() : Int = ~this.value.widen.hashCode
 
   override def toString() : String = {
     name match {

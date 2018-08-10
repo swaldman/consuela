@@ -49,8 +49,10 @@ import Arbitrary.arbitrary;
 object Arbitraries {
   def genByteArrayN( n : Int ) : Gen[Array[Byte]] = Gen.containerOfN[Array,Byte]( n, Gen.choose( Byte.MinValue, Byte.MaxValue ).map( _.toByte ) )
 
-  implicit val ArbitraryEthAddress : Arbitrary[EthAddress] = Arbitrary( genByteArrayN( EthAddress.ByteLength ).map( bs => EthAddress(ByteSeqExact20(bs) ) ) )
-  implicit val ArbitraryEthHash    : Arbitrary[EthHash]    = Arbitrary( genByteArrayN( EthHashLen ).map( EthHash.withBytes( _ ) ) )
+  implicit val ArbitraryEthAddress    : Arbitrary[EthAddress]    = Arbitrary( genByteArrayN( EthAddress.ByteLength ).map( bs => EthAddress(ByteSeqExact20(bs) ) ) )
+  implicit val ArbitraryEthHash       : Arbitrary[EthHash]       = Arbitrary( genByteArrayN( EthHashLen ).map( EthHash.withBytes( _ ) ) )
+  implicit val ArbitraryEthPrivateKey : Arbitrary[EthPrivateKey] = Arbitrary( genByteArrayN( EthPrivateKey.ByteLength ).map( bs => EthPrivateKey.apply( ByteSeqExact32(bs) ) ) )
+  implicit val ArbitraryEthChainId    : Arbitrary[EthChainId]    = Arbitrary( ArbitraryUnsigned64.arbitrary.map( n => EthChainId( UnsignedBigInt(n.widen/2 + 1) ) ) )
 
   val GenTransactionUnsignedMessage : Gen[EthTransaction.Unsigned.Message] = {
     for {
@@ -79,27 +81,26 @@ object Arbitraries {
 
   implicit val ArbitraryTransactionUnsigned = Arbitrary( GenTransactionUnsigned );
 
-  val GenEthSignature : Gen[EthSignature] = {
-    for {
-      v <- arbitrary[SignatureV];
-      r <- arbitrary[SignatureR];
-      s <- arbitrary[SignatureS]
-    } yield {
-      EthSignature( v, r, s )
-    }
-  }
-
-  implicit val ArbitraryEthSignature = Arbitrary( GenEthSignature );
-
-  val GenTransactionSigned : Gen[EthTransaction.Signed] = {
+  val GenTransactionSigned : Gen[EthTransaction.Signed.NoChainId] = {
     for {
       unsigned <- arbitrary[EthTransaction.Unsigned];
-      sig      <- arbitrary[EthSignature]
+      signer   <- arbitrary[EthPrivateKey]
     } yield {
-      EthTransaction.Signed( unsigned, sig )
+      unsigned.sign( signer )
     }
   }
-  val GenTransaction : Gen[EthTransaction] = Gen.oneOf(GenTransactionUnsigned, GenTransactionSigned);
+
+  val GenTransactionSignedWithChainId : Gen[EthTransaction.Signed.WithChainId] = {
+    for {
+      unsigned <- arbitrary[EthTransaction.Unsigned];
+      signer   <- arbitrary[EthPrivateKey]
+      chainId  <- arbitrary[EthChainId]
+    } yield {
+      unsigned.sign( signer, chainId )
+    }
+  }
+
+  val GenTransaction : Gen[EthTransaction] = Gen.oneOf(GenTransactionUnsigned, GenTransactionSigned, GenTransactionSignedWithChainId);
 
   implicit val ArbitraryTransaction : Arbitrary[EthTransaction] = Arbitrary( GenTransaction );
 

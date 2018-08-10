@@ -39,7 +39,7 @@ import com.mchange.sc.v1.consuela._;
 
 import scala.collection._;
 
-import specification.Types.{ByteSeqExact64, ByteSeqExact65, SignatureV, SignatureR, SignatureS, SignatureRecId, SignatureWithChainIdV};
+import specification.Types.{ByteSeqExact64, ByteSeqExact65, SignatureV, SignatureR, SignatureS, SignatureRecId, SignatureWithChainIdV, UnsignedBigInt};
 
 // what should I name 32 so that I don't keep retyping 32?
 object EthSignature {
@@ -90,6 +90,28 @@ object EthSignature {
   def fromBytesRSI( arr : Array[Byte] ) : EthSignature = fromBytesRSI( arr, 0 )
   def fromBytesRSI( seq : Seq[Byte] )   : EthSignature = fromBytesRSI( seq.toArray )
 
+  object Base {
+    def apply( v : UnsignedBigInt, r : SignatureR, s : SignatureS ) : Base = {
+      if ( v.widen.isValidByte && SignatureV.contains( v.widen.toByte ) ) {
+        EthSignature( SignatureV( v.widen.toByte ), r, s )
+      }
+      else if (SignatureWithChainIdV.contains(v.widen)) {
+        EthSignature.WithChainId( SignatureWithChainIdV(v.widen), r, s )
+      }
+      else {
+        throw new IllegalArgumentException( s"${v.widen} is not a valid value for a signature v, with or without an encode EIP-155 Chain ID." )
+      }
+    }
+  }
+  sealed trait Base {
+    def r : SignatureR
+    def s : SignatureS
+
+    def untypedV : UnsignedBigInt
+
+    def wasSigned( document : Array[Byte] ) : Option[EthPublicKey]
+  }
+
   /**
     * Represents an EIP 155 signature with embedded Chain ID
     * 
@@ -103,16 +125,18 @@ object EthSignature {
       apply( v, r, s )
     }
   }
-  final case class WithChainId( val v : SignatureWithChainIdV, val r : SignatureR, val s : SignatureS ) {
+  final case class WithChainId( val v : SignatureWithChainIdV, val r : SignatureR, val s : SignatureS ) extends Base {
     private lazy val extracted = EthChainId.extract( v )
     def ethSignature : EthSignature = EthSignature( extracted._1, r, s ) 
     def chainId      : EthChainId   = extracted._2
 
     def wasSigned( document : Array[Byte] ) : Option[EthPublicKey] = ethSignature.wasSigned( document )
+
+    lazy val untypedV : UnsignedBigInt = UnsignedBigInt(v.widen)
   }
 }
 
-final case class EthSignature( val v : SignatureV, val r : SignatureR, val s : SignatureS ) {
+final case class EthSignature( val v : SignatureV, val r : SignatureR, val s : SignatureS ) extends EthSignature.Base {
 
   private def rawBytesWereSigned( bytes : Array[Byte] ) : Option[EthPublicKey] = {
     crypto.secp256k1.recoverPublicKeyBytesV( v.widen, r.widen.bigInteger, s.widen.bigInteger, bytes ).map( bytes => EthPublicKey( ByteSeqExact64( bytes ) ) )
@@ -123,6 +147,8 @@ final case class EthSignature( val v : SignatureV, val r : SignatureR, val s : S
 
   // default
   def wasSigned( document : Array[Byte] ) : Option[EthPublicKey] = this.ethHashOfDocumentWasSigned( document );
+
+  lazy val untypedV : UnsignedBigInt = UnsignedBigInt(v.widen.toInt) // XXX: promotes Byte to Int without truncation. fix restrict library to handle this automatically, as it claims it should
 
   lazy val exportBytesVRS : ByteSeqExact65 = ByteSeqExact65.assert( v.widen +: Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) : _* ) );
   lazy val exportBytesRSV : ByteSeqExact65 = ByteSeqExact65.assert( Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) :+ v.widen : _* ) );

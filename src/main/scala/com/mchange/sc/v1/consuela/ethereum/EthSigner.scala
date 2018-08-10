@@ -6,7 +6,7 @@ package com.mchange.sc.v1.consuela.ethereum
   * 
   * See https://eips.ethereum.org/EIPS/eip-155
   */
-import specification.Types.ByteSeqExact32
+import specification.Types.{ByteSeqExact32, UnsignedBigInt}
 
 object EthSigner {
   trait Source[T] {
@@ -44,11 +44,13 @@ trait EthSigner {
 
   def sign( document : Array[Byte] )                       : EthSignature
   def sign( document : Array[Byte], chainId : EthChainId ) : EthSignature.WithChainId = EthSignature.WithChainId( sign( document ), chainId )
-  def sign( document : Array[Byte], chainId : Int )        : EthSignature.WithChainId = sign( document, EthChainId( chainId ) )
+  def sign( document : Array[Byte], chainId : BigInt )     : EthSignature.WithChainId = sign( document, EthChainId( UnsignedBigInt( chainId ) ) )
+  def sign( document : Array[Byte], chainId : Long )       : EthSignature.WithChainId = sign( document, chainId )
 
   def sign( document : Seq[Byte] )                       : EthSignature
   def sign( document : Seq[Byte], chainId : EthChainId ) : EthSignature.WithChainId = EthSignature.WithChainId( sign( document ), chainId )
-  def sign( document : Seq[Byte], chainId : Int )        : EthSignature.WithChainId = sign( document, EthChainId( chainId ) )
+  def sign( document : Seq[Byte], chainId : BigInt )     : EthSignature.WithChainId = sign( document, EthChainId( UnsignedBigInt( chainId ) ) )
+  def sign( document : Seq[Byte], chainId : Long )       : EthSignature.WithChainId = sign( document, chainId )
 
   def address : EthAddress
 }
