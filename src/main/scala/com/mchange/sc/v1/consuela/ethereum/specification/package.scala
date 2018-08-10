@@ -143,9 +143,10 @@ package object specification {
 
   implicit final object Unsigned2048_RLPSerializing   extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.Unsigned2048]  ( Types.Unsigned2048 );
 
-  implicit final object SignatureR_RLPSerializing extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.SignatureR]( Types.SignatureR );
-  implicit final object SignatureS_RLPSerializing extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.SignatureS]( Types.SignatureS );
-  implicit final object SignatureV_RLPSerializing extends RestrictedTypeRLPSerializing.UnsignedByte[Types.SignatureV]  ( Types.SignatureV );
+  implicit final object SignatureR_RLPSerializing            extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.SignatureR]        ( Types.SignatureR );
+  implicit final object SignatureS_RLPSerializing            extends RestrictedTypeRLPSerializing.UnsignedBigInt[Types.SignatureS]        ( Types.SignatureS );
+  implicit final object SignatureV_RLPSerializing            extends RestrictedTypeRLPSerializing.UnsignedByte[Types.SignatureV]          ( Types.SignatureV );
+  implicit final object SignatureWithChainIdV_RLPSerializing extends RestrictedTypeRLPSerializing.UnsignedInt[Types.SignatureWithChainIdV]( Types.SignatureWithChainIdV );
 
   // for solidity stubs, we need the full set of type restrictions from bytes1 to bytes32. grrr.
   // codegeneration in the REPL to the rescue...

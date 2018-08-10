@@ -39,7 +39,7 @@ import com.mchange.sc.v1.consuela._;
 
 import scala.collection._;
 
-import specification.Types.{ByteSeqExact64, ByteSeqExact65, SignatureV, SignatureR, SignatureS, SignatureRecId};
+import specification.Types.{ByteSeqExact64, ByteSeqExact65, SignatureV, SignatureR, SignatureS, SignatureRecId, SignatureWithChainIdV};
 
 // what should I name 32 so that I don't keep retyping 32?
 object EthSignature {
@@ -90,7 +90,16 @@ object EthSignature {
   def fromBytesRSI( arr : Array[Byte] ) : EthSignature = fromBytesRSI( arr, 0 )
   def fromBytesRSI( seq : Seq[Byte] )   : EthSignature = fromBytesRSI( seq.toArray )
 
-
+  /**
+    * Represents an EIP 155 signature with embedded Chain ID
+    * 
+    * See https://eips.ethereum.org/EIPS/eip-155
+    */ 
+  final case class withChainId( val v : SignatureWithChainIdV, val r : SignatureR, val s : SignatureS ) {
+    private lazy val extracted = EthChainId.extract( v )
+    def ethSignature : EthSignature = EthSignature( extracted._1, r, s ) 
+    def chainId      : EthChainId   = extracted._2
+  }
 }
 
 final case class EthSignature( val v : SignatureV, val r : SignatureR, val s : SignatureS ) {
