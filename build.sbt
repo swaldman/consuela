@@ -44,7 +44,7 @@ libraryDependencies ++= Seq(
   "com.mchange"             %% "mchange-commons-scala"           % "0.4.6",
   "com.mchange"             %% "literal"                         % "0.0.2",
   "com.mchange"             %% "mchange-play-json-util"          % "0.0.2",
-  "com.mchange"             %% "jsonrpc-client"                  % "0.0.2",
+  "com.mchange"             %% "jsonrpc-client"                  % "0.0.3-SNAPSHOT",
   "com.mchange"             %  "mchange-commons-java"            % "0.2.15",
   "org.reactivestreams"     %  "reactive-streams"                % "1.0.1",
   "com.typesafe"            %  "config"                          % "1.2.1",
