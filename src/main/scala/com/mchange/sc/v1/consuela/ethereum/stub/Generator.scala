@@ -103,7 +103,7 @@ object Generator {
     iw.println( "this.buildLoadBalanced(" )
     iw.upIndent()
     iw.println( "loadBalancer = LoadBalancer.Single( jsonRpcUrl )," )
-    iw.println( "contractAddess = contractAddress," )
+    iw.println( "contractAddress = contractAddress," )
     iw.println( "gasPriceTweak = gasPriceTweak," )
     iw.println( "gasLimitTweak = gasLimitTweak," )
     iw.println( "pollPeriod = pollPeriod," )
