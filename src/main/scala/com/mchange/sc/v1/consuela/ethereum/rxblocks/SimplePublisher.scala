@@ -2,6 +2,8 @@ package com.mchange.sc.v1.consuela.ethereum.rxblocks
 
 import com.mchange.sc.v1.log.MLevel._
 
+import com.mchange.sc.v2.jsonrpc.Exchanger
+
 import com.mchange.sc.v1.consuela.ethereum.jsonrpc.Client
 import Client.Filter
 
@@ -41,9 +43,9 @@ object SimplePublisher {
   final case class Transformed[T]( items : immutable.Seq[T], shouldTerminate : Boolean ) // we don't make inner because of annoying outer reference issues and warnings
 }
 abstract class SimplePublisher[T, S, F <: Filter]( ethJsonRpcUrl : String, blockPollDelay : Duration = 3.seconds, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
-  cfactory                 : Client.Factory   = Client.Factory.Default,
-  scheduler                : Scheduler        = Scheduler.Default,
-  executionContext         : ExecutionContext = ExecutionContext.global // XXX: SHould we reorganize so that by default we use the Scheduler's thread pool?
+  efactory                 : Exchanger.Factory = Exchanger.Factory.Default,
+  scheduler                : Scheduler         = Scheduler.Default,
+  executionContext         : ExecutionContext  = ExecutionContext.global // XXX: SHould we reorganize so that by default we use the Scheduler's thread pool?
 ) extends RxPublisher[T] with SimpleSubscription.Parent[T] {
 
   import SimplePublisher.{logger, Transformed}
@@ -103,7 +105,7 @@ abstract class SimplePublisher[T, S, F <: Filter]( ethJsonRpcUrl : String, block
   // call only while holding this' lock
   private def startupPolling() = {
     try {
-      this._client = cfactory( ethJsonRpcUrl )
+      this._client = Client.forExchanger( efactory( ethJsonRpcUrl ) )
       this.f_filter = acquireFilter( this._client )
       this.scheduled = scheduler.scheduleWithFixedDelay( doPoll _, 0.seconds, blockPollDelay )
     }

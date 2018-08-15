@@ -94,9 +94,10 @@ object Invoker {
       val GasLimitTweak       : MarkupOrOverride    = Markup(0.2)
       val PollPeriod          : Duration            = 3.seconds
       val PollTimeout         : Duration            = Duration.Inf
+      val HttpTimeout         : Duration            = Duration.Inf
       val TransactionApprover : TransactionApprover = AlwaysApprover
       val TransactionLogger   : TransactionLogger   = Invoker.TransactionLogger.None
-      val ClientFactory       : Client.Factory      = Client.Factory.Default
+      val ExchangerFactory       : Exchanger.Factory      = Exchanger.Factory.Default
       val Poller              : Poller              = com.mchange.sc.v2.concurrent.Poller.Default
       val ExecutionContext    : ExecutionContext    = scala.concurrent.ExecutionContext.global
     }
@@ -108,10 +109,11 @@ object Invoker {
       gasLimitTweak       : MarkupOrOverride    = Default.GasLimitTweak,
       pollPeriod          : Duration            = Default.PollPeriod, 
       pollTimeout         : Duration            = Default.PollTimeout,
+      httpTimeout         : Duration            = Default.HttpTimeout,
       transactionApprover : TransactionApprover = Default.TransactionApprover,
       transactionLogger   : TransactionLogger   = Default.TransactionLogger
-    )( implicit cfactory : Client.Factory = Default.ClientFactory, poller : Poller = Default.Poller, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
-      Context( LoadBalancer.Single( jsonRpcUrl ), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, transactionApprover, transactionLogger, cfactory, poller, econtext )
+    )( implicit efactory : Exchanger.Factory = Default.ExchangerFactory, poller : Poller = Default.Poller, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
+      Context( LoadBalancer.Single( jsonRpcUrl ), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, httpTimeout, transactionApprover, transactionLogger, efactory, poller, econtext )
     }
     def fromUrls[ U : URLSource ](
       jsonRpcUrls         : immutable.Iterable[U],
@@ -119,10 +121,11 @@ object Invoker {
       gasLimitTweak       : MarkupOrOverride    = Default.GasLimitTweak,
       pollPeriod          : Duration            = Default.PollPeriod, 
       pollTimeout         : Duration            = Default.PollTimeout,
+      httpTimeout         : Duration            = Default.HttpTimeout,
       transactionApprover : TransactionApprover = Default.TransactionApprover, 
       transactionLogger   : TransactionLogger = Default.TransactionLogger
-    )( implicit cfactory : Client.Factory = Default.ClientFactory, poller : Poller = Default.Poller, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
-      Context( LoadBalancer.RoundRobin( jsonRpcUrls ), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, transactionApprover, transactionLogger, cfactory, poller, econtext )
+    )( implicit efactory : Exchanger.Factory = Default.ExchangerFactory, poller : Poller = Default.Poller, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
+      Context( LoadBalancer.RoundRobin( jsonRpcUrls ), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, httpTimeout, transactionApprover, transactionLogger, efactory, poller, econtext )
     }
     def fromLoadBalancer (
       loadBalancer        : LoadBalancer,
@@ -130,10 +133,11 @@ object Invoker {
       gasLimitTweak       : MarkupOrOverride    = Default.GasLimitTweak,
       pollPeriod          : Duration            = Default.PollPeriod, 
       pollTimeout         : Duration            = Default.PollTimeout,
+      httpTimeout         : Duration            = Default.HttpTimeout,
       transactionApprover : TransactionApprover = Default.TransactionApprover, 
       transactionLogger   : TransactionLogger   = Default.TransactionLogger
-    )( implicit cfactory : Client.Factory = Default.ClientFactory, poller : Poller = Default.Poller, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
-      Context( loadBalancer, gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, transactionApprover, transactionLogger, cfactory, poller, econtext )
+    )( implicit efactory : Exchanger.Factory = Default.ExchangerFactory, poller : Poller = Default.Poller, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
+      Context( loadBalancer, gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, httpTimeout, transactionApprover, transactionLogger, efactory, poller, econtext )
     }
   }
   final case class Context(
@@ -142,12 +146,21 @@ object Invoker {
     val gasLimitTweak       : MarkupOrOverride,
     val pollPeriod          : Duration,
     val pollTimeout         : Duration,
+    val httpTimeout         : Duration,
     val transactionApprover : TransactionApprover,
     val transactionLogger   : TransactionLogger,
-    val cfactory            : Client.Factory,
+    val efactory            : Exchanger.Factory,
     val poller              : Poller,
     val econtext            : ExecutionContext
   )
+
+  private final case class NewClient( client : Client, url : URL ) extends AutoCloseable {
+    def close() : Unit = client.close()
+  }
+  private def newClient( icontext : Invoker.Context ) : NewClient = {
+    val url = icontext.loadBalancer.nextURL
+    NewClient( Client.forExchanger( icontext.efactory( Exchanger.Config( url, icontext.httpTimeout ) ) ), url )
+  }
 
   private def computedGas(
     client     : Client,
@@ -157,7 +170,7 @@ object Invoker {
     data       : immutable.Seq[Byte]
   )(implicit icontext : Invoker.Context ) : Future[ComputedGas] = {
 
-    implicit val ( cfactory, poller, econtext ) = ( icontext.cfactory, icontext.poller, icontext.econtext )
+    implicit val econtext = icontext.econtext
 
     val fDefaultGasPrice = client.eth.gasPrice()
     val fDefaultGas      = client.eth.estimateGas( Some( from ), to, None, None, Some( valueInWei.widen ), Some ( data ) );
@@ -176,9 +189,9 @@ object Invoker {
     transactionHash : EthHash
   )( implicit icontext : Invoker.Context ) : Future[Option[Client.TransactionReceipt]] = {
 
-    implicit val ( cfactory, poller, econtext ) = ( icontext.cfactory, icontext.poller, icontext.econtext )
+    implicit val ( poller, econtext ) = ( icontext.poller, icontext.econtext )
 
-    borrow( cfactory( icontext.loadBalancer.nextURL ) ) { client =>
+    borrow( newClient( icontext ) ) { case NewClient(client, url) =>
 
       def repoll = client.eth.getTransactionReceipt( transactionHash )
 
@@ -211,29 +224,27 @@ object Invoker {
   }
 
   def awaitTransactionReceipt( transactionHash : EthHash )( implicit icontext : Invoker.Context ) : Option[Client.TransactionReceipt] = {
-    implicit val ( cfactory, poller, econtext ) = ( icontext.cfactory, icontext.poller, icontext.econtext )
     Await.result( futureTransactionReceipt( transactionHash ), Duration.Inf ) // the timeout is enforced within futureTransactionReceipt( ... ), not here
   }
 
   def requireTransactionReceipt( transactionHash : EthHash )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Client.TransactionReceipt = {
-    implicit val ( cfactory, poller, econtext ) = ( icontext.cfactory, icontext.poller, icontext.econtext )
     awaitTransactionReceipt( transactionHash ).getOrElse( throw new TimeoutException( transactionHash, icontext.pollTimeout ) )
   }
 
   def getBalance( address : EthAddress )( implicit icontext : Invoker.Context ) : Future[BigInt] = {
-      implicit val ( cfactory, econtext ) = ( icontext.cfactory, icontext.econtext )
+    implicit val econtext = icontext.econtext
 
-      borrow( cfactory( icontext.loadBalancer.nextURL ) ) { client =>
-        client.eth.getBalance( address, Client.BlockNumber.Latest )
-      }
+    borrow( newClient( icontext ) ) { case NewClient(client, url) =>
+      client.eth.getBalance( address, Client.BlockNumber.Latest )
+    }
   }
 
   def getLogs( query : Client.Log.Filter.Query )( implicit icontext : Invoker.Context ) : Future[immutable.Seq[Client.Log]] = {
-      implicit val ( cfactory, econtext ) = ( icontext.cfactory, icontext.econtext )
+    implicit val econtext = icontext.econtext
 
-      borrow( cfactory( icontext.loadBalancer.nextURL ) ) { client =>
-        client.eth.getLogs( query )
-      }
+    borrow( newClient( icontext ) ) { case NewClient(client, url) =>
+      client.eth.getLogs( query )
+    }
   }
 
   final object transaction {
@@ -252,10 +263,9 @@ object Invoker {
       valueInWei    : Unsigned256,
       data          : immutable.Seq[Byte]
     )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
-      implicit val ( cfactory, poller, econtext ) = ( icontext.cfactory, icontext.poller, icontext.econtext )
+      implicit val ( poller, econtext ) = ( icontext.poller, icontext.econtext )
 
-      val url = icontext.loadBalancer.nextURL
-      borrow( cfactory( url ) ) { client =>
+      borrow( newClient( icontext ) ) { case NewClient(client, url) =>
 
         val from = senderSigner.address
 
@@ -280,10 +290,9 @@ object Invoker {
       valueInWei    : Unsigned256,
       init          : immutable.Seq[Byte]
     )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
-      implicit val ( cfactory, poller, econtext ) = ( icontext.cfactory, icontext.poller, icontext.econtext )
+      implicit val ( poller, econtext ) = ( icontext.poller, icontext.econtext )
 
-      val url = icontext.loadBalancer.nextURL
-      borrow( cfactory( url ) ) { client =>
+      borrow( newClient( icontext ) ) { case NewClient(client, url) =>
 
         val from = creatorSigner.address
 
@@ -312,9 +321,9 @@ object Invoker {
       valueInWei : Unsigned256,
       data       : immutable.Seq[Byte]
     )( implicit icontext : Invoker.Context ) : Future[immutable.Seq[Byte]] = {
-      implicit val ( cfactory, poller, econtext ) = ( icontext.cfactory, icontext.poller, icontext.econtext )
+      implicit val ( poller, econtext ) = ( icontext.poller, icontext.econtext )
 
-      borrow( cfactory( icontext.loadBalancer.nextURL ) ) { client =>
+      borrow( newClient( icontext ) ) { case NewClient(client, url) =>
         val fComputedGas = computedGas( client, from, Some(to), valueInWei, data )
         for {
           cg <- fComputedGas

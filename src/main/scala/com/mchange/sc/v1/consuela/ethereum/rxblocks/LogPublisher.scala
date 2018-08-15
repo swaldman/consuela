@@ -1,5 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum.rxblocks
 
+import com.mchange.sc.v2.jsonrpc.Exchanger
+
 import com.mchange.sc.v1.consuela.ethereum.EthHash
 import com.mchange.sc.v1.consuela.ethereum.jsonrpc.Client
 
@@ -17,10 +19,10 @@ object LogPublisher {
   private [LogPublisher] implicit lazy val logger = mlogger( this )
 }
 class LogPublisher( ethJsonRpcUrl : String, query : Client.Log.Filter.Query,  blockPollDelay : Duration = 3.seconds, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
-  cfactory                 : Client.Factory   = Client.Factory.Default,
-  scheduler                : Scheduler        = Scheduler.Default,
-  executionContext         : ExecutionContext = ExecutionContext.global
-) extends SimplePublisher[Client.Log,Client.Log,Client.Log.Filter]( ethJsonRpcUrl, blockPollDelay, subscriptionUpdateDelay )( cfactory, scheduler, executionContext ) {
+  efactory                 : Exchanger.Factory = Exchanger.Factory.Default,
+  scheduler                : Scheduler         = Scheduler.Default,
+  executionContext         : ExecutionContext  = ExecutionContext.global
+) extends SimplePublisher[Client.Log,Client.Log,Client.Log.Filter]( ethJsonRpcUrl, blockPollDelay, subscriptionUpdateDelay )( efactory, scheduler, executionContext ) {
 
   import LogPublisher.logger
 

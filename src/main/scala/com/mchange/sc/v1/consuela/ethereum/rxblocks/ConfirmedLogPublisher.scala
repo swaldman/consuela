@@ -15,6 +15,7 @@ import com.mchange.sc.v1.consuela.ethereum.{EthHash,EthLogEntry}
 import com.mchange.sc.v1.consuela.ethereum.jsonrpc.Client
 import com.mchange.sc.v1.consuela.ethereum.specification.Types.Unsigned256
 
+import com.mchange.sc.v2.jsonrpc.Exchanger
 import com.mchange.sc.v2.concurrent.Scheduler
 
 object ConfirmedLogPublisher {
@@ -30,9 +31,9 @@ object ConfirmedLogPublisher {
   private val LogOrdering = Ordering.by( (l : Client.Log.Recorded) => (l.blockNumber, l.blockHash.hex, l.transactionIndex, l.logIndex) )
 }
 class ConfirmedLogPublisher( ethJsonRpcUrl : String, query : Client.Log.Filter.Query, numConfirmations : Int, blockPollDelay : Duration = 3.seconds, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
-  cfactory                 : Client.Factory   = Client.Factory.Default,
-  scheduler                : Scheduler        = Scheduler.Default,
-  executionContext         : ExecutionContext = ExecutionContext.global
+  efactory                 : Exchanger.Factory = Exchanger.Factory.Default,
+  scheduler                : Scheduler         = Scheduler.Default,
+  executionContext         : ExecutionContext  = ExecutionContext.global
 ) extends RxPublisher[Client.Log.Recorded] with SimpleSubscription.Parent[Client.Log.Recorded] {
 
   import ConfirmedLogPublisher._

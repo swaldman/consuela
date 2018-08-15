@@ -259,157 +259,135 @@ object Client {
     def uninstallFilter( filter : Filter )( implicit ec : ExecutionContext )                                     : Future[Boolean]
   }
 
-  class forExchanger( exchanger : Exchanger ) extends Client {
-    def extractBigInt( success : Response.Success ) : BigInt = decodeQuantity( success.result.as[String] )
+  def forExchanger( exchanger : Exchanger ) : Client = new Client.Implementation.Exchanger( exchanger )
 
-    def responseHandler[T]( onSuccess : Response.Success => T ) : Response => T = { result =>
-      result match {
-        case Yang( success ) => onSuccess( success )
-        case Yin( error )    => error.vomit
-      }
-    }
+  final object Implementation {
+    final class Exchanger( exchanger : com.mchange.sc.v2.jsonrpc.Exchanger ) extends Client {
+      def extractBigInt( success : Response.Success ) : BigInt = decodeQuantity( success.result.as[String] )
 
-    private def doExchange[T]( methodName : String, params : Seq[JsValue] )( successHandler : Response.Success => T )( implicit ec : ExecutionContext ) : Future[T] = {
-      TRACE.log( s"methodName = ${methodName}; params = ${params}" )
-      exchanger.exchange( methodName, JsArray( params ) ).map( responseHandler( successHandler ) )
-    }
-
-    final object ExchangerEth extends Client.eth {
-
-      private def createTransactionCallObject(
-        from     : Option[EthAddress] = None,
-        to       : Option[EthAddress] = None,
-        gas      : Option[BigInt]     = None,
-        gasPrice : Option[BigInt]     = None,
-        value    : Option[BigInt]     = None,
-        data     : Option[Seq[Byte]]  = None
-      ) : JsObject = {
-        def listify[T <: JsValue]( key : String, mb : Option[T] ) = mb.fold( Nil : List[Tuple2[String,T]] )( t => List( Tuple2( key, t ) ) )
-        val _from     = listify("from", from.map( encodeAddress ))
-        val _to       = listify("to", to.map( encodeAddress ))
-        val _gas      = listify("gas", gas.map( encodeQuantity ))
-        val _gasPrice = listify("gasPrice", gasPrice.map( encodeQuantity ))
-        val _value    = listify("value", value.map( encodeQuantity ))
-        val _data     = listify("data", data.map( encodeBytes ))
-        JsObject( _from ::: _to ::: _gas ::: _gasPrice ::: _value ::: _data ::: Nil )
-      }
-
-      def blockNumber()( implicit ec : ExecutionContext ) : Future[BigInt] = {
-        doExchange( "eth_blockNumber", EmptyParams )( success => decodeQuantity( success.result.as[String] ) )
-      }
-
-      def call(
-        from        : Option[EthAddress]     = None,
-        to          : Option[EthAddress]     = None,
-        gas         : Option[BigInt]         = None,
-        gasPrice    : Option[BigInt]         = None,
-        value       : Option[BigInt]         = None,
-        data        : Option[Seq[Byte]]      = None,
-        blockNumber : BlockNumber            = BlockNumber.Latest
-      )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Byte]] = {
-        val txnCallObject = createTransactionCallObject( from, to, gas, gasPrice, value, data )
-        doExchange( "eth_call", Seq(txnCallObject, blockNumber.jsValue) )( success => decodeBytes( success.result.as[String] ) )
-      }
-      def compileSolidity( solidityText : String )( implicit ec : ExecutionContext ) : Future[immutable.Map[String,Compilation.Contract]] = {
-        doExchange( "eth_compileSolidity", Seq(JsString( solidityText )) )( _.result.as[immutable.Map[String,Compilation.Contract]] )
-      }
-      def estimateGas(
-        from     : Option[EthAddress] = None,
-        to       : Option[EthAddress] = None,
-        gas      : Option[BigInt]     = None,
-        gasPrice : Option[BigInt]     = None,
-        value    : Option[BigInt]     = None,
-        data     : Option[Seq[Byte]]  = None
-      )( implicit ec : ExecutionContext ) : Future[BigInt] = {
-        val txnCallObject = createTransactionCallObject( from, to, gas, gasPrice, value, data )
-        doExchange( "eth_estimateGas", Seq(txnCallObject) )( extractBigInt )
-      }
-      def gasPrice()( implicit ec : ExecutionContext ) : Future[BigInt] = {
-        doExchange( "eth_gasPrice", EmptyParams )( extractBigInt )
-      }
-      def getBalance( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[BigInt] = {
-        doExchange( "eth_getBalance", Seq( encodeAddress( address ), blockNumber.jsValue ) )( extractBigInt )
-      }
-      def getCode( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Byte]] = {
-        doExchange( "eth_getCode", Seq( encodeAddress( address ), blockNumber.jsValue ) )( resp => decodeBytes( resp.result.as[String] ) )
-      }
-      def getCompilers()( implicit ec : ExecutionContext ) : Future[immutable.Set[String]] = {
-        doExchange( "eth_getCompilers", EmptyParams )( _.result.as[immutable.Set[String]] )
-      }
-      def getLogs( query : Log.Filter.Query )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Client.Log]] = {
-        doExchange( "eth_getLogs", Seq( query.jsValue ) )( _.result.as[immutable.Seq[RawLog]].map( Client.Log.apply ) )
-      }
-      def getLogs( filter : Log.Filter )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Client.Log]] = {
-        doExchange( "eth_getFilterLogs", Seq( JsString(filter.identifier) ) )( _.result.as[immutable.Seq[RawLog]].map( Client.Log.apply ) )
-      }
-      def getNewLogs( filter : Log.Filter )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Client.Log]] = {
-        doExchange( "eth_getFilterChanges", Seq( JsString(filter.identifier) ) )( _.result.as[immutable.Seq[RawLog]].map( Client.Log.apply ) )
-      }
-      def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext ) : Future[Option[Client.TransactionReceipt]] = {
-        val raw = doExchange( "eth_getTransactionReceipt", Seq( encodeBytes( transactionHash.bytes ) ) )( _.result.as[Option[Client.TransactionReceipt]] )
-
-        // geth 1.8.0 returns an undocumented error response, rather than a null success, on an unknown or pending transaction hash
-        // we recover from this case. See https://github.com/ethereum/go-ethereum/issues/16092#issuecomment-366871447
-
-        raw recover { case e : JsonrpcException =>
-          if ( e.code == -32000 && e.message == "unknown transaction" ) None else throw e
+      def responseHandler[T]( onSuccess : Response.Success => T ) : Response => T = { result =>
+        result match {
+          case Yang( success ) => onSuccess( success )
+          case Yin( error )    => error.vomit
         }
       }
-      def sendRawTransaction( bytes : Seq[Byte] )( implicit ec : ExecutionContext ) : Future[EthHash] = {
-        doExchange( "eth_sendRawTransaction", Seq( encodeBytes( bytes ) ) )( success => EthHash.withBytes( decodeBytes( success.result.as[String] ) ) )
+
+      private def doExchange[T]( methodName : String, params : Seq[JsValue] )( successHandler : Response.Success => T )( implicit ec : ExecutionContext ) : Future[T] = {
+        TRACE.log( s"methodName = ${methodName}; params = ${params}" )
+        exchanger.exchange( methodName, JsArray( params ) ).map( responseHandler( successHandler ) )
       }
-      def sendSignedTransaction( signedTransaction : EthTransaction.Signed )( implicit ec : ExecutionContext ) : Future[EthHash] = {
-        TRACE.log( s"sendSignedTransaction: ${signedTransaction}" )
-        TRACE.log( s"recovered sender address: ${signedTransaction.sender}" )
-        sendRawTransaction( RLP.encode( signedTransaction : EthTransaction ) )
+
+      final object ExchangerEth extends Client.eth {
+
+        private def createTransactionCallObject(
+          from     : Option[EthAddress] = None,
+          to       : Option[EthAddress] = None,
+          gas      : Option[BigInt]     = None,
+          gasPrice : Option[BigInt]     = None,
+          value    : Option[BigInt]     = None,
+          data     : Option[Seq[Byte]]  = None
+        ) : JsObject = {
+          def listify[T <: JsValue]( key : String, mb : Option[T] ) = mb.fold( Nil : List[Tuple2[String,T]] )( t => List( Tuple2( key, t ) ) )
+          val _from     = listify("from", from.map( encodeAddress ))
+          val _to       = listify("to", to.map( encodeAddress ))
+          val _gas      = listify("gas", gas.map( encodeQuantity ))
+          val _gasPrice = listify("gasPrice", gasPrice.map( encodeQuantity ))
+          val _value    = listify("value", value.map( encodeQuantity ))
+          val _data     = listify("data", data.map( encodeBytes ))
+          JsObject( _from ::: _to ::: _gas ::: _gasPrice ::: _value ::: _data ::: Nil )
+        }
+
+        def blockNumber()( implicit ec : ExecutionContext ) : Future[BigInt] = {
+          doExchange( "eth_blockNumber", EmptyParams )( success => decodeQuantity( success.result.as[String] ) )
+        }
+
+        def call(
+          from        : Option[EthAddress]     = None,
+          to          : Option[EthAddress]     = None,
+          gas         : Option[BigInt]         = None,
+          gasPrice    : Option[BigInt]         = None,
+          value       : Option[BigInt]         = None,
+          data        : Option[Seq[Byte]]      = None,
+          blockNumber : BlockNumber            = BlockNumber.Latest
+        )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Byte]] = {
+          val txnCallObject = createTransactionCallObject( from, to, gas, gasPrice, value, data )
+          doExchange( "eth_call", Seq(txnCallObject, blockNumber.jsValue) )( success => decodeBytes( success.result.as[String] ) )
+        }
+        def compileSolidity( solidityText : String )( implicit ec : ExecutionContext ) : Future[immutable.Map[String,Compilation.Contract]] = {
+          doExchange( "eth_compileSolidity", Seq(JsString( solidityText )) )( _.result.as[immutable.Map[String,Compilation.Contract]] )
+        }
+        def estimateGas(
+          from     : Option[EthAddress] = None,
+          to       : Option[EthAddress] = None,
+          gas      : Option[BigInt]     = None,
+          gasPrice : Option[BigInt]     = None,
+          value    : Option[BigInt]     = None,
+          data     : Option[Seq[Byte]]  = None
+        )( implicit ec : ExecutionContext ) : Future[BigInt] = {
+          val txnCallObject = createTransactionCallObject( from, to, gas, gasPrice, value, data )
+          doExchange( "eth_estimateGas", Seq(txnCallObject) )( extractBigInt )
+        }
+        def gasPrice()( implicit ec : ExecutionContext ) : Future[BigInt] = {
+          doExchange( "eth_gasPrice", EmptyParams )( extractBigInt )
+        }
+        def getBalance( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[BigInt] = {
+          doExchange( "eth_getBalance", Seq( encodeAddress( address ), blockNumber.jsValue ) )( extractBigInt )
+        }
+        def getCode( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Byte]] = {
+          doExchange( "eth_getCode", Seq( encodeAddress( address ), blockNumber.jsValue ) )( resp => decodeBytes( resp.result.as[String] ) )
+        }
+        def getCompilers()( implicit ec : ExecutionContext ) : Future[immutable.Set[String]] = {
+          doExchange( "eth_getCompilers", EmptyParams )( _.result.as[immutable.Set[String]] )
+        }
+        def getLogs( query : Log.Filter.Query )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Client.Log]] = {
+          doExchange( "eth_getLogs", Seq( query.jsValue ) )( _.result.as[immutable.Seq[RawLog]].map( Client.Log.apply ) )
+        }
+        def getLogs( filter : Log.Filter )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Client.Log]] = {
+          doExchange( "eth_getFilterLogs", Seq( JsString(filter.identifier) ) )( _.result.as[immutable.Seq[RawLog]].map( Client.Log.apply ) )
+        }
+        def getNewLogs( filter : Log.Filter )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Client.Log]] = {
+          doExchange( "eth_getFilterChanges", Seq( JsString(filter.identifier) ) )( _.result.as[immutable.Seq[RawLog]].map( Client.Log.apply ) )
+        }
+        def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext ) : Future[Option[Client.TransactionReceipt]] = {
+          val raw = doExchange( "eth_getTransactionReceipt", Seq( encodeBytes( transactionHash.bytes ) ) )( _.result.as[Option[Client.TransactionReceipt]] )
+
+          // geth 1.8.0 returns an undocumented error response, rather than a null success, on an unknown or pending transaction hash
+          // we recover from this case. See https://github.com/ethereum/go-ethereum/issues/16092#issuecomment-366871447
+
+          raw recover { case e : JsonrpcException =>
+            if ( e.code == -32000 && e.message == "unknown transaction" ) None else throw e
+          }
+        }
+        def sendRawTransaction( bytes : Seq[Byte] )( implicit ec : ExecutionContext ) : Future[EthHash] = {
+          doExchange( "eth_sendRawTransaction", Seq( encodeBytes( bytes ) ) )( success => EthHash.withBytes( decodeBytes( success.result.as[String] ) ) )
+        }
+        def sendSignedTransaction( signedTransaction : EthTransaction.Signed )( implicit ec : ExecutionContext ) : Future[EthHash] = {
+          TRACE.log( s"sendSignedTransaction: ${signedTransaction}" )
+          TRACE.log( s"recovered sender address: ${signedTransaction.sender}" )
+          sendRawTransaction( RLP.encode( signedTransaction : EthTransaction ) )
+        }
+        def getTransactionCount( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[BigInt] = {
+          doExchange( "eth_getTransactionCount", Seq( encodeAddress( address ), blockNumber.jsValue ) )( extractBigInt )
+        }
+        def newBlockFilter()( implicit ec : ExecutionContext ) : Future[BlockFilter] = {
+          doExchange( "eth_newBlockFilter", EmptyParams )( success => new BlockFilter( success.result.as[String] ) )
+        }
+        def newLogFilter( query : Log.Filter.Query )( implicit ec : ExecutionContext ) : Future[Log.Filter] = {
+          doExchange( "eth_newFilter", Seq( query.jsValue ) )( success => new Log.Filter( success.result.as[String] ) )
+        }
+        def getBlockFilterChanges( filter : BlockFilter )( implicit ec : ExecutionContext ) : Future[immutable.IndexedSeq[EthHash]] = {
+          doExchange( "eth_getFilterChanges", Seq( JsString(filter.identifier) ) )( success =>  success.result.as[immutable.IndexedSeq[JsValue]].map( jss => EthHash.withBytes( jss.as[String].decodeHex ) ) )
+        }
+        def uninstallFilter( filter : Filter )( implicit ec : ExecutionContext ) : Future[Boolean] = {
+          doExchange( "eth_uinstallFilter", Seq( JsString( filter.identifier ) ) )( success =>  success.result.as[Boolean] )
+        }
       }
-      def getTransactionCount( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[BigInt] = {
-        doExchange( "eth_getTransactionCount", Seq( encodeAddress( address ), blockNumber.jsValue ) )( extractBigInt )
-      }
-      def newBlockFilter()( implicit ec : ExecutionContext ) : Future[BlockFilter] = {
-        doExchange( "eth_newBlockFilter", EmptyParams )( success => new BlockFilter( success.result.as[String] ) )
-      }
-      def newLogFilter( query : Log.Filter.Query )( implicit ec : ExecutionContext ) : Future[Log.Filter] = {
-        doExchange( "eth_newFilter", Seq( query.jsValue ) )( success => new Log.Filter( success.result.as[String] ) )
-      }
-      def getBlockFilterChanges( filter : BlockFilter )( implicit ec : ExecutionContext ) : Future[immutable.IndexedSeq[EthHash]] = {
-        doExchange( "eth_getFilterChanges", Seq( JsString(filter.identifier) ) )( success =>  success.result.as[immutable.IndexedSeq[JsValue]].map( jss => EthHash.withBytes( jss.as[String].decodeHex ) ) )
-      }
-      def uninstallFilter( filter : Filter )( implicit ec : ExecutionContext ) : Future[Boolean] = {
-        doExchange( "eth_uinstallFilter", Seq( JsString( filter.identifier ) ) )( success =>  success.result.as[Boolean] )
-      }
+
+      val eth = ExchangerEth
+
+      def close() = exchanger.close()
     }
-
-    val eth = ExchangerEth
-
-    def close() = exchanger.close()
   }
-
-  final object Factory {
-    def createSimpleFactory() : Factory       = Client.Simple
-    def createAsyncFactory()  : Factory.Async = new Async( new JettyExchanger.Factory )
-
-    implicit lazy val Default = new Async( Exchanger.Factory.Default ) // wrap around the default Exchanger, which is asynchronous
-
-    class Async( exchangerFactory : Exchanger.Factory.Async ) extends Client.Factory {
-
-      def apply( httpUrl : URL ) : Client = new Client.forExchanger( exchangerFactory( httpUrl ) )
-
-      def close() : Unit = exchangerFactory.close()
-    }
-  }
-  trait Factory extends AutoCloseable {
-    def apply( httpUrl : URL ) : Client
-    def apply( httpUrl : String ) : Client = this.apply( new URL( httpUrl ) )
-
-    def close() : Unit
-  }
-  final object Simple extends Factory{
-    // annoyingly, only one of these is permit to have a default ExecutionContext
-    def apply( httpUrl : URL ) = new Client.Simple( httpUrl )
-    def close() : Unit = ()
-  }
-  final class Simple( httpUrl : URL ) extends Client.forExchanger( new Exchanger.Simple( httpUrl ) )
 }
 trait Client extends AutoCloseable {
   def eth : Client.eth;

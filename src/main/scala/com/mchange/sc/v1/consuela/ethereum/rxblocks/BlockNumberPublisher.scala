@@ -1,5 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum.rxblocks
 
+import com.mchange.sc.v2.jsonrpc.Exchanger
+
 import com.mchange.sc.v1.consuela.ethereum.jsonrpc.Client
 import Client.Filter
 
@@ -15,10 +17,10 @@ object BlockNumberPublisher {
   private val f_filter = Future.successful( Filter.Dummy )
 }
 class BlockNumberPublisher( ethJsonRpcUrl : String, blockPollDelay : Duration = 3.seconds, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
-  cfactory                 : Client.Factory   = Client.Factory.Default,
-  scheduler                : Scheduler        = Scheduler.Default,
-  executionContext         : ExecutionContext = ExecutionContext.global
-) extends SimplePublisher[BigInt,BigInt,Filter.Dummy.type]( ethJsonRpcUrl, blockPollDelay, subscriptionUpdateDelay )( cfactory, scheduler, executionContext ) {
+  efactory                 : Exchanger.Factory = Exchanger.Factory.Default,
+  scheduler                : Scheduler         = Scheduler.Default,
+  executionContext         : ExecutionContext  = ExecutionContext.global
+) extends SimplePublisher[BigInt,BigInt,Filter.Dummy.type]( ethJsonRpcUrl, blockPollDelay, subscriptionUpdateDelay )( efactory, scheduler, executionContext ) {
 
   import BlockNumberPublisher.f_filter
 
