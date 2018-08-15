@@ -193,7 +193,10 @@ object Invoker {
 
     borrow( newClient( icontext ) ) { case NewClient(client, url) =>
 
-      def repoll = client.eth.getTransactionReceipt( transactionHash )
+      def repoll = {
+        TRACE.log( s"Repolling for transaction receipt, transaction hash: 0x${transactionHash.hex}" )
+        client.eth.getTransactionReceipt( transactionHash )
+      }
 
       val holder = new AtomicReference[Future[Option[Client.TransactionReceipt]]]( repoll )
 
@@ -215,7 +218,7 @@ object Invoker {
         }
       }
 
-      val task = new Poller.Task( s"Polling for transaction hash '0x${transactionHash.hex}'", icontext.pollPeriod, doPoll _, icontext.pollTimeout )
+      val task = TRACE.logEval( new Poller.Task( s"Polling for transaction hash '0x${transactionHash.hex}'", icontext.pollPeriod, doPoll _, icontext.pollTimeout ) )
 
       poller.addTask( task ).map( Some.apply ).recover {
         case e : Poller.TimeoutException => None 

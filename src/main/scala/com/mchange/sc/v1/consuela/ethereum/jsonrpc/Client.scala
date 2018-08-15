@@ -261,6 +261,8 @@ object Client {
 
   def forExchanger( exchanger : Exchanger ) : Client = new Client.Implementation.Exchanger( exchanger )
 
+  def apply( url : URL )( implicit efactory : Exchanger.Factory = Exchanger.Factory.Default ) : Client = Client.forExchanger( efactory( Exchanger.Config( url ) ) )
+
   final object Implementation {
     final class Exchanger( exchanger : com.mchange.sc.v2.jsonrpc.Exchanger ) extends Client {
       def extractBigInt( success : Response.Success ) : BigInt = decodeQuantity( success.result.as[String] )
