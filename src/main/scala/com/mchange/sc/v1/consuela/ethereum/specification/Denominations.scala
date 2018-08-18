@@ -4,7 +4,7 @@ import scala.language.implicitConversions
 import com.mchange.sc.v1.consuela.ethereum.EthereumException
 
 // from yellow paper, sec 2.1
-object Denominations {
+object Denominations extends Denominations {
   sealed abstract class Denomination( val multiplier : scala.BigDecimal ) {
     val unitName : String
 
@@ -75,28 +75,28 @@ object Denominations {
 
   private def rounded( bd : BigDecimal ) : BigInt = bd.setScale( 0, BigDecimal.RoundingMode.HALF_UP ).toBigInt
 
-  implicit class DoubleEther ( val value : Double ) extends AnyVal {
+  class DoubleEther ( val value : Double ) extends AnyVal {
     def wei    = rounded( BigDecimal( value ) * Multiplier.BigDecimal.Wei    )
     def gwei   = rounded( BigDecimal( value ) * Multiplier.BigDecimal.GWei   )
     def szabo  = rounded( BigDecimal( value ) * Multiplier.BigDecimal.Szabo  )
     def finney = rounded( BigDecimal( value ) * Multiplier.BigDecimal.Finney )
     def ether  = rounded( BigDecimal( value ) * Multiplier.BigDecimal.Ether  )
   }
-  implicit class BigDecimalEther ( val value : BigDecimal ) extends AnyVal {
+  class BigDecimalEther ( val value : BigDecimal ) extends AnyVal {
     def wei    = rounded( value * Multiplier.BigDecimal.Wei    )
     def gwei   = rounded( value * Multiplier.BigDecimal.GWei   )
     def szabo  = rounded( value * Multiplier.BigDecimal.Szabo  )
     def finney = rounded( value * Multiplier.BigDecimal.Finney )
     def ether  = rounded( value * Multiplier.BigDecimal.Ether  )
   }
-  implicit class LongEther( val value : Long ) extends AnyVal {
+  class LongEther( val value : Long ) extends AnyVal {
     def wei    = BigInt( value ) * Multiplier.Long.Wei
     def gwei   = BigInt( value ) * Multiplier.Long.GWei
     def szabo  = BigInt( value ) * Multiplier.Long.Szabo
     def finney = BigInt( value ) * Multiplier.Long.Finney
     def ether  = BigInt( value ) * Multiplier.Long.Ether
   }
-  implicit class BigIntEther( val value : BigInt ) extends AnyVal {
+  class BigIntEther( val value : BigInt ) extends AnyVal {
     def wei    = value * Multiplier.BigInt.Wei
     def gwei   = value * Multiplier.BigInt.GWei
     def szabo  = value * Multiplier.BigInt.Szabo
