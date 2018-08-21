@@ -110,6 +110,8 @@ object EthSignature {
     def untypedV : UnsignedBigInt
 
     def wasSigned( document : Array[Byte] ) : Option[EthPublicKey]
+
+    def signsForAddress( document : Array[Byte], address : EthAddress ) : Boolean = wasSigned( document ).map( _.toAddress ).fold( false )( _ == address )
   }
 
   /**
@@ -133,6 +135,8 @@ object EthSignature {
     def wasSigned( document : Array[Byte] ) : Option[EthPublicKey] = ethSignature.wasSigned( document )
 
     def wasSigned( document : Array[Byte], forChainId : EthChainId ) : Option[EthPublicKey] = if ( forChainId == chainId ) wasSigned( document ) else None
+
+    def signsForAddress( document : Array[Byte], address : EthAddress, forChainId : EthChainId ) : Boolean = forChainId == chainId && signsForAddress( document, address )
 
     lazy val untypedV : UnsignedBigInt = UnsignedBigInt(v.widen)
   }
