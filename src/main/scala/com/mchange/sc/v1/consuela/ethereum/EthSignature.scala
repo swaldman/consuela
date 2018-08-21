@@ -132,6 +132,8 @@ object EthSignature {
 
     def wasSigned( document : Array[Byte] ) : Option[EthPublicKey] = ethSignature.wasSigned( document )
 
+    def wasSigned( document : Array[Byte], forChainId : EthChainId ) : Option[EthPublicKey] = if ( forChainId == chainId ) wasSigned( document ) else None
+
     lazy val untypedV : UnsignedBigInt = UnsignedBigInt(v.widen)
   }
 }
