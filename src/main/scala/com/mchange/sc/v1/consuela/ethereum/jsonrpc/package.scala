@@ -24,7 +24,16 @@ package object jsonrpc {
 
   private[jsonrpc] def decodeBytes( encoded : JsString ) : immutable.Seq[Byte] = decodeBytes( encoded.value )
 
-  private[jsonrpc] def decodeBytes( encoded : String ) : immutable.Seq[Byte] = encoded.decodeHex.toImmutableSeq
+  private[jsonrpc] def decodeBytes( encoded : String ) : immutable.Seq[Byte] = {
+    try {
+      encoded.decodeHex.toImmutableSeq
+    }
+    catch { 
+      case e : NumberFormatException => { // handle an annoying special case that shows up in ganache...
+        if ( encoded == "0x0" ) Nil else throw e
+      }
+    }
+  }
 
   private[jsonrpc] def encodeAddress( address : EthAddress ) : JsString = encodeBytes( address.bytes.widen )
 

@@ -47,7 +47,7 @@ object Client {
     implicit val RawLogFormat = Json.format[RawLog]
   }
   private final case class RawLog(
-    removed          : Boolean,
+    removed          : Option[Boolean],
     logIndex         : Option[Unsigned256],
     transactionIndex : Option[Unsigned256],
     transactionHash  : Option[EthHash],
@@ -136,7 +136,14 @@ object Client {
 
       val ele = EthLogEntry( rl.address, rl.topics, rl.data )
 
-      ( looksPending, looksRecorded, rl.removed ) match {
+      val isRemoved = {
+        rl.removed match {
+          case Some( true ) => true
+          case _            => false
+        }
+      }
+
+      ( looksPending, looksRecorded, isRemoved ) match {
         case ( true, false, false ) => Pending( ele )
         case ( true, false, true )  => {
           throw new Exception( s"We should never see a removal of an event that was merely pending! Raw log: ${rl}" )
