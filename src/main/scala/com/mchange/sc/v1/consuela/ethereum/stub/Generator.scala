@@ -728,6 +728,12 @@ object Generator {
       iw.downIndent()
       iw.println( "}" )
       iw.println()
+      iw.println( s"def collect( info : stub.TransactionInfo ) : immutable.Seq[${resolvedEventName}] = {" )
+      iw.upIndent()
+      iw.println( s"${stubUtilitiesClassName}.Event.collect( info ).filter( _.isInstanceOf[${resolvedEventName}] ).map( _.asInstanceOf[${resolvedEventName}] )" )
+      iw.downIndent()
+      iw.println(  "}" )
+
       generateNamedEventSpecializedPublisher( resolvedEventName, overloadedEvents, event, iw  )
     }
     iw.downIndent()
