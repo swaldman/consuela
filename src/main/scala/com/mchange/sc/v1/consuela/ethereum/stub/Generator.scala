@@ -429,6 +429,11 @@ object Generator {
 
     iw.println( "final object Event {" )
     iw.upIndent()
+    iw.println()
+    iw.println( s"def collect( info : stub.TransactionInfo ) : immutable.Seq[${stubUtilitiesClassName}.Event] = stub.Event.collectForAbi( ContractAbi, info, this.apply _ )" )
+    iw.println()
+    iw.println( s"def collect( info : stub.TransactionInfo.Async )( implicit ec : ExecutionContext ) : Future[immutable.Seq[${stubUtilitiesClassName}.Event]] = stub.Event.collectForAbi( ContractAbi, info, this.apply _ )" )
+    iw.println()
     writeAllEventDefinitions( stubUtilitiesClassName, overloadedEvents, abi, iw )
     iw.println()
     iw.println( "def apply( solidityEvent : SolidityEvent, metadata : stub.Event.Metadata ) : Event = {" )
@@ -785,11 +790,11 @@ object Generator {
       }
     } else {
       iw.println( s"""val futHash = jsonrpc.Invoker.transaction.sendMessage( sender.findSigner(), contractAddress, optionalPaymentInWei.getOrElse( Zero ), callData )""" )
-      iw.println( s"""val futTransactionInfo = futHash.flatMap( hash => jsonrpc.Invoker.futureTransactionReceipt( hash ).map( mbctr => stub.TransactionInfo.Message.fromJsonrpcReceipt( hash, mbctr ) ) )""" )
+      iw.println( s"""val futTransactionInfoAsync = futHash.map( hash => stub.TransactionInfo.Async.fromClientTransactionReceipt( hash, jsonrpc.Invoker.futureTransactionReceipt( hash ) ) )""" )
       if ( async ) {
-        iw.println( "futTransactionInfo" )
+        iw.println( "futTransactionInfoAsync" )
       } else {
-        iw.println( s"""Await.result( futTransactionInfo, Duration.Inf )""" )
+        iw.println( s"""Await.result( futTransactionInfoAsync, Duration.Inf ).await""" )
       }
     }
 
@@ -814,7 +819,7 @@ object Generator {
     val post = {
       val raw = {
         if (!constantSection) {
-          "stub.TransactionInfo.Message"
+          if (async) "stub.TransactionInfo.Async" else "stub.TransactionInfo"
         } else {
           fcn.outputs.length match {
             case 0 => {

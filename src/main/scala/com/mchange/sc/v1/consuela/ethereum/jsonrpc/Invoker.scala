@@ -185,9 +185,12 @@ object Invoker {
     }
   }
 
+  /**
+    * If pollTimeout is not infinite, this future can fail with a Poller.TimeoutException
+    */ 
   def futureTransactionReceipt(
     transactionHash : EthHash
-  )( implicit icontext : Invoker.Context ) : Future[Option[Client.TransactionReceipt]] = {
+  )( implicit icontext : Invoker.Context ) : Future[Client.TransactionReceipt] = {
 
     implicit val ( poller, econtext ) = ( icontext.poller, icontext.econtext )
 
@@ -218,20 +221,12 @@ object Invoker {
         }
       }
 
-      val task = TRACE.logEval( new Poller.Task( s"Polling for transaction hash '0x${transactionHash.hex}'", icontext.pollPeriod, doPoll _, icontext.pollTimeout ) )
-
-      poller.addTask( task ).map( Some.apply ).recover {
-        case e : Poller.TimeoutException => None 
+      val task : Poller.Task[Client.TransactionReceipt] = {
+        TRACE.logEval( new Poller.Task( s"Polling for transaction hash '0x${transactionHash.hex}'", icontext.pollPeriod, doPoll _, icontext.pollTimeout ) )
       }
+
+      poller.addTask( task )
     }
-  }
-
-  def awaitTransactionReceipt( transactionHash : EthHash )( implicit icontext : Invoker.Context ) : Option[Client.TransactionReceipt] = {
-    Await.result( futureTransactionReceipt( transactionHash ), Duration.Inf ) // the timeout is enforced within futureTransactionReceipt( ... ), not here
-  }
-
-  def requireTransactionReceipt( transactionHash : EthHash )( implicit icontext : Invoker.Context, econtext : ExecutionContext ) : Client.TransactionReceipt = {
-    awaitTransactionReceipt( transactionHash ).getOrElse( throw new TimeoutException( transactionHash, icontext.pollTimeout ) )
   }
 
   def getBalance( address : EthAddress )( implicit icontext : Invoker.Context ) : Future[BigInt] = {
