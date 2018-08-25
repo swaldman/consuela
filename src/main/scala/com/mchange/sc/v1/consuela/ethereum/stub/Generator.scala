@@ -733,6 +733,8 @@ object Generator {
       iw.println( s"${stubUtilitiesClassName}.Event.collect( info ).filter( _.isInstanceOf[${resolvedEventName}] ).map( _.asInstanceOf[${resolvedEventName}] )" )
       iw.downIndent()
       iw.println(  "}" )
+      iw.println()
+      iw.println( s"def collect( info : stub.TransactionInfo.Async )( implicit ec : ExecutionContext ) : Future[immutable.Seq[${resolvedEventName}]] = info.future.map( collect )" )
 
       generateNamedEventSpecializedPublisher( resolvedEventName, overloadedEvents, event, iw  )
     }

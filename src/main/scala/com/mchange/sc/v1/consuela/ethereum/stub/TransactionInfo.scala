@@ -1,7 +1,7 @@
 package com.mchange.sc.v1.consuela.ethereum.stub
 
 import scala.collection.immutable
-import scala.concurrent.{Await,ExecutionContext,Future}
+import scala.concurrent.{blocking, Await,ExecutionContext,Future}
 import scala.concurrent.duration.Duration
 import scala.util.{Failure,Success,Try}
 import com.mchange.sc.v1.consuela.ethereum.{EthHash,EthLogEntry}
@@ -36,13 +36,16 @@ object TransactionInfo {
     val details         : Future[TransactionInfo.Details]
   ) extends Base {
     def await : TransactionInfo = {
-      Await.ready( details, Duration.Inf ).value match { // the Poller times out internally
-        case Some( Success( deets ) )                       => TransactionInfo( transactionHash, deets )
-        case Some( Failure( t : Poller.TimeoutException ) ) => throw new TimeoutException( transactionHash, t )
-        case Some( Failure( t ) )                           => throw t
-        case None                                           => throw new Exception( s"Huh? Return from Await.ready( ..., Duration.Inf ) without a value???" )
+      blocking {
+        Await.ready( details, Duration.Inf ).value match { // the Poller times out internally
+          case Some( Success( deets ) )                       => TransactionInfo( transactionHash, deets )
+          case Some( Failure( t : Poller.TimeoutException ) ) => throw new TimeoutException( transactionHash, t )
+          case Some( Failure( t ) )                           => throw t
+          case None                                           => throw new Exception( s"Huh? Return from Await.ready( ..., Duration.Inf ) without a value???" )
+        }
       }
     }
+    def future( implicit ec : ExecutionContext ) : Future[TransactionInfo] = Future( this.await )
   }
 }
 case class TransactionInfo (
