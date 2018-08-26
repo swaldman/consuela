@@ -154,7 +154,7 @@ final case class EthSignature( val v : SignatureV, val r : SignatureR, val s : S
   // default
   def wasSigned( document : Array[Byte] ) : Option[EthPublicKey] = this.ethHashOfDocumentWasSigned( document );
 
-  lazy val untypedV : UnsignedBigInt = UnsignedBigInt(v.widen.toInt) // XXX: promotes Byte to Int without truncation. fix restrict library to handle this automatically, as it claims it should
+  lazy val untypedV : UnsignedBigInt = UnsignedBigInt(v.widen)
 
   lazy val exportBytesVRS : ByteSeqExact65 = ByteSeqExact65.assert( v.widen +: Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) : _* ) );
   lazy val exportBytesRSV : ByteSeqExact65 = ByteSeqExact65.assert( Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) :+ v.widen : _* ) );
