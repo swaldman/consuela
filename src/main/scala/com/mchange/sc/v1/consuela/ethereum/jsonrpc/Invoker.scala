@@ -259,7 +259,8 @@ object Invoker {
       senderSigner  : EthSigner,
       to            : EthAddress,
       valueInWei    : Unsigned256,
-      data          : immutable.Seq[Byte]
+      data          : immutable.Seq[Byte],
+      forceNonce    : Option[Unsigned256] = None
     )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
       implicit val ( poller, econtext ) = ( icontext.poller, icontext.econtext )
 
@@ -268,12 +269,17 @@ object Invoker {
         val from = senderSigner.address
 
         val fComputedGas = computedGas( client, from, Some(to), valueInWei, data )
-        val fNextNonce = client.eth.getTransactionCount( from, Client.BlockNumber.Pending )
+        val fNextNonce = {
+          forceNonce match {
+            case Some( nonce ) => Future.successful( nonce )
+            case None          => client.eth.getTransactionCount( from, Client.BlockNumber.Pending ).map( Unsigned256.apply )
+          }
+        }
 
         for {
           cg <- fComputedGas
           nextNonce <- fNextNonce
-          unsigned = TRACE.logEval( "Message transaction" )( EthTransaction.Unsigned.Message( Unsigned256(nextNonce), Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), to, valueInWei, data ) )
+          unsigned = TRACE.logEval( "Message transaction" )( EthTransaction.Unsigned.Message( nextNonce, Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), to, valueInWei, data ) )
           signed = unsigned.sign( senderSigner )
           _ <- icontext.transactionApprover( signed )
           hash <- client.eth.sendSignedTransaction( signed )
