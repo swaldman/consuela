@@ -91,7 +91,8 @@ package object jsonrpc {
         abi             : Option[Abi],
         userDoc         : Option[Doc.User],
         developerDoc    : Option[Doc.Developer],
-        metadata        : Option[String]
+        metadata        : Option[String],
+        sourceTimestamp : Option[Long]
       ) {
         def mbSource               = source.flatMap( opt )
         def mbLanguage             = language.flatMap( opt )
@@ -105,6 +106,7 @@ package object jsonrpc {
         def mbDeveloperDoc         = developerDoc.flatMap( opt[Doc.Developer] )
         def mbDeveloperDocAsString = developerDoc.flatMap( optStr[Doc.Developer] )
         def mbMetadata             = metadata.flatMap( opt )
+        def mbSourceTimestamp      = sourceTimestamp
       }
     }
     final case class Contract( code : String, info : Contract.Info )
