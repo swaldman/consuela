@@ -7,7 +7,7 @@ import com.mchange.sc.v1.consuela.ethereum.jsonrpc.Abi
 
 import scala.collection._
 
-import java.io.StringWriter
+import java.io.{File,StringWriter}
 
 import com.mchange.sc.v2.lang.borrow
 
@@ -23,6 +23,17 @@ import play.api.libs.json.Json
 object Generator {
 
   final case class Generated( className : String, sourceCode : String )
+
+  final object Regenerated {
+    final case class Updated( targetFile : File, sourceCode : String ) extends Regenerated
+    final case class Unchanged( targetFile : File ) extends Regenerated
+
+    def updated( targetFile : File, g : Generated ) : Updated = Updated( targetFile, g.sourceCode )
+    def unchanged( targetFile : File ) : Unchanged = Unchanged( targetFile )
+  }
+  trait Regenerated {
+    def targetFile : File
+  }
 
   private implicit lazy val logger = mlogger( this )
 
@@ -167,6 +178,39 @@ object Generator {
       s"${alwaysCapitalized}Utilities"
   }
 
+  private def allGeneratedClassNames( baseClassName : String ) : immutable.Set[String] = {
+    immutable.Set( stubUtilitiesClassName( baseClassName ), asyncClassName( baseClassName ), baseClassName )
+  }
+
+  private def shouldRegenerate( targetFile : File, abiTimestamp : Option[Long] ) : Boolean = {
+    if ( targetFile.exists() ) {
+      abiTimestamp match {
+        case Some( abiTime ) => {
+          abiTime > targetFile.lastModified
+        }
+        case None => true
+      }
+    }
+    else {
+      true
+    }
+  }
+
+  def regenerateStubClasses( destDir : File, baseClassName : String, fullyQualifiedPackageName : String, abi : Abi, abiTimestamp : Option[Long] ) : immutable.Set[Regenerated] = {
+    def f( className : String ) : File = new File( destDir, className + ".scala" )
+    def regenerated( targetFile : File, generator : => Generated ) : Regenerated = if ( shouldRegenerate( targetFile, abiTimestamp ) ) Regenerated.updated( targetFile, generator ) else Regenerated.unchanged( targetFile )
+
+    val stubUtilitiesFile = f( stubUtilitiesClassName( baseClassName )  )
+    val asyncStubFile = f( asyncClassName( baseClassName ) )
+    val syncStubFile = f( baseClassName )
+
+    immutable.Set(
+      regenerated( stubUtilitiesFile, generateStubUtilities( baseClassName, abi, fullyQualifiedPackageName ) ),
+      regenerated( asyncStubFile, generateContractStub( baseClassName, abi, true, fullyQualifiedPackageName ) ),
+      regenerated( syncStubFile, generateContractStub( baseClassName, abi, false, fullyQualifiedPackageName ) )
+    )
+  }
+
   def generateStubClasses( baseClassName : String, abi : Abi, fullyQualifiedPackageName : String ) : immutable.Set[Generated] = {
     immutable.Set(
       generateStubUtilities( baseClassName, abi, fullyQualifiedPackageName ),
@@ -231,12 +275,14 @@ object Generator {
     Generated( className, sw.toString )
   }
 
+  private def asyncClassName( baseClassName : String ) : String = {
+    val alwaysCapitalized = baseClassName(0).toString.toUpperCase + baseClassName.substring(1)
+    s"Async${alwaysCapitalized}"
+  }
+
   private def generateContractStub( baseClassName : String, abi : Abi, async : Boolean, fullyQualifiedPackageName : String ) : Generated = {
-    def asyncClassName = {
-      val alwaysCapitalized = baseClassName(0).toString.toUpperCase + baseClassName.substring(1)
-      s"Async${alwaysCapitalized}"
-    }
-    val className = if ( async ) asyncClassName else baseClassName
+
+    val className = if ( async ) asyncClassName( baseClassName ) else baseClassName
 
     val stubUtilitiesClass = stubUtilitiesClassName( baseClassName )
 
