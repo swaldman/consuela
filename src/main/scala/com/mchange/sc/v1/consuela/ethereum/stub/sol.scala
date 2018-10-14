@@ -2,6 +2,7 @@ package com.mchange.sc.v1.consuela.ethereum.stub
 
 import scala.collection._
 
+import com.mchange.sc.v1.consuela._
 import com.mchange.sc.v1.consuela.ethereum.EthAddress
 import com.mchange.sc.v1.consuela.ethereum.specification.Types
 import Types._
@@ -305,7 +306,19 @@ object sol {
   val  Int256 = Types.Int256
   type Int256 = Types.Int256
 
+  final object Bytes {
+    def apply( bytes : Seq[Byte] ) : Bytes = {
+      bytes match {
+        case ibytes : immutable.Seq[Byte] => ibytes
+        case mbytes                       => mbytes.toImmutableSeq
+      }
+    }
+    def apply( bytes : Array[Byte] ) : Bytes = bytes.toImmutableSeq
+  }
   type Bytes = immutable.Seq[Byte]
 
+  final object String {
+    def apply( text : java.lang.String ) : String = text
+  }
   type String = java.lang.String
 }
