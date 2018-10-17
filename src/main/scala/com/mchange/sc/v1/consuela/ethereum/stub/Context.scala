@@ -4,6 +4,7 @@ import scala.collection._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.Duration
 
+import com.mchange.sc.v1.consuela.ethereum.EthChainId
 import com.mchange.sc.v1.consuela.ethereum.jsonrpc.{Client,Invoker}
 import com.mchange.sc.v2.jsonrpc.Exchanger
 import com.mchange.sc.v2.concurrent.{Poller, Scheduler}
@@ -17,6 +18,7 @@ object Context {
 
   def fromUrl[ U : URLSource ](
     jsonRpcUrl          : U,
+    chainId             : Option[EthChainId]   = Default.ChainId,
     gasPriceTweak       : MarkupOrOverride     = Default.GasPriceTweak,
     gasLimitTweak       : MarkupOrOverride     = Default.GasLimitTweak,
     pollPeriod          : Duration             = Default.PollPeriod,
@@ -28,6 +30,7 @@ object Context {
   )( implicit efactory  : Exchanger.Factory = Default.ExchangerFactory, poller : Poller = Default.Poller, scheduler : Scheduler = Default.Scheduler, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
     val icontext = Invoker.Context.fromUrl (
       jsonRpcUrl          = jsonRpcUrl,
+      chainId             = chainId,
       gasPriceTweak       = gasPriceTweak,
       gasLimitTweak       = gasLimitTweak,
       pollPeriod          = pollPeriod,
@@ -40,6 +43,7 @@ object Context {
   }
   def fromUrls[ U : URLSource ](
     jsonRpcUrls          : immutable.Iterable[U],
+    chainId              : Option[EthChainId]  = Default.ChainId,
     gasPriceTweak        : MarkupOrOverride    = Default.GasPriceTweak,
     gasLimitTweak        : MarkupOrOverride    = Default.GasLimitTweak,
     pollPeriod           : Duration            = Default.PollPeriod,
@@ -51,6 +55,7 @@ object Context {
   )( implicit efactory : Exchanger.Factory = Default.ExchangerFactory, poller : Poller = Default.Poller, scheduler : Scheduler = Default.Scheduler, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
     val icontext = Invoker.Context.fromUrls (
       jsonRpcUrls         = jsonRpcUrls,
+      chainId             = chainId,
       gasPriceTweak       = gasPriceTweak,
       gasLimitTweak       = gasLimitTweak,
       pollPeriod          = pollPeriod,
@@ -63,6 +68,7 @@ object Context {
   }
   def fromLoadBalancer (
     loadBalancer        : LoadBalancer,
+    chainId             : Option[EthChainId]  = Default.ChainId,
     gasPriceTweak       : MarkupOrOverride    = Default.GasPriceTweak,
     gasLimitTweak       : MarkupOrOverride    = Default.GasLimitTweak,
     pollPeriod          : Duration            = Default.PollPeriod,
@@ -74,6 +80,7 @@ object Context {
   )( implicit efactory : Exchanger.Factory = Default.ExchangerFactory, poller : Poller = Default.Poller, scheduler : Scheduler = Default.Scheduler, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
     val icontext = Invoker.Context.fromLoadBalancer (
       loadBalancer        = loadBalancer,
+      chainId             = chainId,
       gasPriceTweak       = gasPriceTweak,
       gasLimitTweak       = gasLimitTweak,
       pollPeriod          = pollPeriod,

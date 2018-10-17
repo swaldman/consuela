@@ -48,7 +48,7 @@ object Generator {
     "com.mchange.sc.v2.net.{LoadBalancer,URLSource}",
     "com.mchange.sc.v1.consuela._",
     "com.mchange.sc.v1.log.MLevel._",
-    "com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthHash,EthLogEntry}",
+    "com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthChainId,EthHash,EthLogEntry}",
     "com.mchange.sc.v1.consuela.ethereum.ethabi",
     "com.mchange.sc.v1.consuela.ethereum.ethabi.{Decoded,SolidityEvent}",
     "com.mchange.sc.v1.consuela.ethereum.stub",
@@ -93,6 +93,7 @@ object Generator {
     iw.upIndent()
     iw.println( "jsonRpcUrl : U,")
     iw.println( "contractAddress : T," )
+    iw.println( "chainId : Option[EthChainId] = stub.Context.Default.ChainId," )
     iw.println( "gasPriceTweak : stub.MarkupOrOverride = stub.Context.Default.GasPriceTweak," )
     iw.println( "gasLimitTweak : stub.MarkupOrOverride = stub.Context.Default.GasLimitTweak," )
     iw.println( "pollPeriod : Duration = stub.Context.Default.PollPeriod," )
@@ -115,6 +116,7 @@ object Generator {
     iw.upIndent()
     iw.println( "loadBalancer = LoadBalancer.Single( jsonRpcUrl )," )
     iw.println( "contractAddress = contractAddress," )
+    iw.println( "chainId = chainId," )
     iw.println( "gasPriceTweak = gasPriceTweak," )
     iw.println( "gasLimitTweak = gasLimitTweak," )
     iw.println( "pollPeriod = pollPeriod," )
@@ -133,6 +135,7 @@ object Generator {
     iw.upIndent()
     iw.println( "loadBalancer : LoadBalancer,")
     iw.println( "contractAddress : T," )
+    iw.println( "chainId : Option[EthChainId] = stub.Context.Default.ChainId," )
     iw.println( "gasPriceTweak : stub.MarkupOrOverride = stub.Context.Default.GasPriceTweak," )
     iw.println( "gasLimitTweak : stub.MarkupOrOverride = stub.Context.Default.GasLimitTweak," )
     iw.println( "pollPeriod : Duration = stub.Context.Default.PollPeriod," )
@@ -156,6 +159,7 @@ object Generator {
     iw.println( "stub.Context.fromLoadBalancer(" )
     iw.upIndent()
     iw.println( "loadBalancer = loadBalancer," )
+    iw.println( "chainId = chainId," )
     iw.println( "gasPriceTweak = gasPriceTweak," )
     iw.println( "gasLimitTweak = gasLimitTweak," )
     iw.println( "pollPeriod = pollPeriod," )
@@ -311,6 +315,7 @@ object Generator {
       iw.println( s"final class $className( val contractAddress : EthAddress )( implicit scontext : stub.Context )${mbExtends} {" )
       iw.upIndent()
       iw.println()
+      iw.println( "val chainId             : Option[EthChainId]       = scontext.icontext.chainId" )
       iw.println( "val gasPriceTweak       : stub.MarkupOrOverride    = scontext.icontext.gasPriceTweak" )
       iw.println( "val gasLimitTweak       : stub.MarkupOrOverride    = scontext.icontext.gasLimitTweak" )
       iw.println( "val pollPeriod          : Duration                 = scontext.icontext.pollPeriod" )
