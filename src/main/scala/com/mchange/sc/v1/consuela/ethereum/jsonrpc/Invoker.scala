@@ -1,6 +1,6 @@
 package com.mchange.sc.v1.consuela.ethereum.jsonrpc
 
-import com.mchange.sc.v1.consuela.ethereum.{EthAddress, EthHash, EthSigner, EthTransaction, EthereumException}
+import com.mchange.sc.v1.consuela.ethereum.{EthAddress, EthChainId, EthHash, EthSigner, EthTransaction, EthereumException}
 import com.mchange.sc.v1.consuela.ethereum.specification.Types._
 
 import com.mchange.sc.v2.lang.borrow
@@ -90,6 +90,7 @@ object Invoker {
   object Context {
     // we define these in a trait so that e.g. stub.Context can easily steal them
     trait Default {
+      val ChainId             : Option[EthChainId]  = None
       val GasPriceTweak       : MarkupOrOverride    = Markup(0)
       val GasLimitTweak       : MarkupOrOverride    = Markup(0.2)
       val PollPeriod          : Duration            = 3.seconds
@@ -97,7 +98,7 @@ object Invoker {
       val HttpTimeout         : Duration            = Duration.Inf
       val TransactionApprover : TransactionApprover = AlwaysApprover
       val TransactionLogger   : TransactionLogger   = Invoker.TransactionLogger.None
-      val ExchangerFactory       : Exchanger.Factory      = Exchanger.Factory.Default
+      val ExchangerFactory    : Exchanger.Factory   = Exchanger.Factory.Default
       val Poller              : Poller              = com.mchange.sc.v2.concurrent.Poller.Default
       val ExecutionContext    : ExecutionContext    = scala.concurrent.ExecutionContext.global
     }
@@ -105,6 +106,7 @@ object Invoker {
 
     def fromUrl[ U : URLSource ](
       jsonRpcUrl          : U,
+      chainId             : Option[EthChainId]  = Default.ChainId,
       gasPriceTweak       : MarkupOrOverride    = Default.GasPriceTweak,
       gasLimitTweak       : MarkupOrOverride    = Default.GasLimitTweak,
       pollPeriod          : Duration            = Default.PollPeriod, 
@@ -113,10 +115,11 @@ object Invoker {
       transactionApprover : TransactionApprover = Default.TransactionApprover,
       transactionLogger   : TransactionLogger   = Default.TransactionLogger
     )( implicit efactory : Exchanger.Factory = Default.ExchangerFactory, poller : Poller = Default.Poller, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
-      Context( LoadBalancer.Single( jsonRpcUrl ), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, httpTimeout, transactionApprover, transactionLogger, efactory, poller, econtext )
+      Context( LoadBalancer.Single( jsonRpcUrl ), chainId, gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, httpTimeout, transactionApprover, transactionLogger, efactory, poller, econtext )
     }
     def fromUrls[ U : URLSource ](
       jsonRpcUrls         : immutable.Iterable[U],
+      chainId             : Option[EthChainId]  = Default.ChainId,
       gasPriceTweak       : MarkupOrOverride    = Default.GasPriceTweak,
       gasLimitTweak       : MarkupOrOverride    = Default.GasLimitTweak,
       pollPeriod          : Duration            = Default.PollPeriod, 
@@ -125,10 +128,11 @@ object Invoker {
       transactionApprover : TransactionApprover = Default.TransactionApprover, 
       transactionLogger   : TransactionLogger = Default.TransactionLogger
     )( implicit efactory : Exchanger.Factory = Default.ExchangerFactory, poller : Poller = Default.Poller, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
-      Context( LoadBalancer.RoundRobin( jsonRpcUrls ), gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, httpTimeout, transactionApprover, transactionLogger, efactory, poller, econtext )
+      Context( LoadBalancer.RoundRobin( jsonRpcUrls ), chainId, gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, httpTimeout, transactionApprover, transactionLogger, efactory, poller, econtext )
     }
     def fromLoadBalancer (
       loadBalancer        : LoadBalancer,
+      chainId             : Option[EthChainId]  = Default.ChainId,
       gasPriceTweak       : MarkupOrOverride    = Default.GasPriceTweak,
       gasLimitTweak       : MarkupOrOverride    = Default.GasLimitTweak,
       pollPeriod          : Duration            = Default.PollPeriod, 
@@ -137,11 +141,12 @@ object Invoker {
       transactionApprover : TransactionApprover = Default.TransactionApprover, 
       transactionLogger   : TransactionLogger   = Default.TransactionLogger
     )( implicit efactory : Exchanger.Factory = Default.ExchangerFactory, poller : Poller = Default.Poller, econtext : ExecutionContext = Default.ExecutionContext ) : Context = {
-      Context( loadBalancer, gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, httpTimeout, transactionApprover, transactionLogger, efactory, poller, econtext )
+      Context( loadBalancer, chainId, gasPriceTweak, gasLimitTweak, pollPeriod, pollTimeout, httpTimeout, transactionApprover, transactionLogger, efactory, poller, econtext )
     }
   }
   final case class Context(
     val loadBalancer        : LoadBalancer,
+    val chainId             : Option[EthChainId],
     val gasPriceTweak       : MarkupOrOverride,
     val gasLimitTweak       : MarkupOrOverride,
     val pollPeriod          : Duration,
@@ -280,7 +285,7 @@ object Invoker {
           cg <- fComputedGas
           nextNonce <- fNextNonce
           unsigned = TRACE.logEval( "Message transaction" )( EthTransaction.Unsigned.Message( nextNonce, Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), to, valueInWei, data ) )
-          signed = unsigned.sign( senderSigner )
+          signed = unsigned.sign( senderSigner, icontext.chainId )
           _ <- icontext.transactionApprover( signed )
           hash <- client.eth.sendSignedTransaction( signed )
         } yield {
@@ -307,7 +312,7 @@ object Invoker {
           cg <- fComputedGas
           nextNonce <- fNextNonce
           unsigned = TRACE.logEval("Contract creation transaction")( EthTransaction.Unsigned.ContractCreation( Unsigned256(nextNonce), Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), valueInWei, init ) )
-          signed = unsigned.sign( creatorSigner )
+          signed = unsigned.sign( creatorSigner, icontext.chainId )
           _ <- icontext.transactionApprover( signed )
           hash <- client.eth.sendSignedTransaction( signed )
         } yield {
