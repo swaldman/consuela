@@ -86,6 +86,13 @@ object EthTransaction {
     def sign( signer : EthSigner ) : Signed.NoChainId;
     def sign( signer : EthSigner, chainId : EthChainId ) : Signed.WithChainId;
     def sign( signer : EthSigner, chainId : Long ) : Signed.WithChainId = sign( signer, EthChainId( chainId ) )
+
+    def sign( signer : EthSigner, chainId : Option[EthChainId] ) : Signed = {
+      chainId match {
+        case Some( eci ) => sign( signer, eci )
+        case None        => sign( signer )
+      }
+    }
   }
   final object Signed {
     def apply( unsignedTransaction : Unsigned, sig : EthSignature.Base ) : Signed = {
