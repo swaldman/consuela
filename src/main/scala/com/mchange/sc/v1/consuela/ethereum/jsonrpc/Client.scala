@@ -214,6 +214,8 @@ object Client {
     transactionIndex  : Unsigned256,
     blockHash         : EthHash,
     blockNumber       : Unsigned256,
+    from              : EthAddress,
+    to                : EthAddress,
     cumulativeGasUsed : Unsigned256,
     gasUsed           : Unsigned256,
     contractAddress   : Option[EthAddress],
