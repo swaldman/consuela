@@ -32,6 +32,18 @@ final object Abi {
     val `type`  : String
     def tpe = `type`
   }
+
+  private final object StandardSort {
+    import Ordering.Implicits._
+    implicit val Ordering_FunctionParameter = Ordering.by( (fp : Function.Parameter) => (fp.name, fp.`type`) )
+    implicit val Ordering_ConstructorParameter = Ordering.by( (cp : Constructor.Parameter) => (cp.name, cp.`type`) )
+    implicit val Ordering_EventParameter = Ordering.by( (ep : Event.Parameter) => (ep.name, ep.`type`, ep.indexed) )
+    implicit val Ordering_Function = Ordering.by( (fcn : Function) => ( fcn.name, fcn.inputs, fcn.outputs, fcn.constant, fcn.payable, fcn.stateMutability ) )
+    implicit val Ordering_Constructor = Ordering.by( (ctor : Constructor) => ( ctor.inputs, ctor.payable, ctor.stateMutability ) )
+    implicit val Ordering_Event = Ordering.by( (ev : Event) => ( ev.name, ev.inputs, ev.anonymous ) )
+
+    def apply( abi : Abi ) : Abi = Abi( abi.functions.sorted, abi.events.sorted, abi.constructors.sorted, abi.fallback )
+  }
 }
 final case class Abi(
   functions : immutable.Seq[Abi.Function],
@@ -40,5 +52,6 @@ final case class Abi(
   fallback : Option[Abi.Fallback]
 ) extends MaybeEmpty {
   def isEmpty : Boolean = functions.isEmpty && events.isEmpty && constructors.isEmpty
+  def withStandardSort : Abi = Abi.StandardSort.apply( this )
 }
 
