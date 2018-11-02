@@ -92,6 +92,7 @@ package object jsonrpc {
         userDoc         : Option[Doc.User],
         developerDoc    : Option[Doc.Developer],
         metadata        : Option[String],
+        ast             : Option[String],
         sourceTimestamp : Option[Long]
       ) {
         def mbSource               = source.flatMap( opt )
@@ -106,6 +107,7 @@ package object jsonrpc {
         def mbDeveloperDoc         = developerDoc.flatMap( opt[Doc.Developer] )
         def mbDeveloperDocAsString = developerDoc.flatMap( optStr[Doc.Developer] )
         def mbMetadata             = metadata.flatMap( opt )
+        def mbAst                  = ast.flatMap( opt )
         def mbSourceTimestamp      = sourceTimestamp
       }
     }
