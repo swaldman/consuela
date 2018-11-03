@@ -19,6 +19,8 @@ package object ethabi {
 
   val IdentifierLength = 4
 
+  def identifierForAbiFunction( function : Abi.Function ) : immutable.Seq[Byte] = identifierForSignature( signatureForAbiFunction( function ) )
+
   def identifierForFunctionNameAndTypes( functionName : String, functionTypes : Seq[String], abi : Abi ) : Failable[immutable.Seq[Byte]] = {
     signatureForFunctionNameAndTypes( functionName, functionTypes, abi ).map( identifierForSignature )
   }
@@ -142,6 +144,24 @@ package object ethabi {
         asFunctionCallData.drop( IdentifierLength )
       }
     }
+  }
+
+  def decodeFunctionCall( abi : Abi, encodedMessage : immutable.Seq[Byte] ) : Failable[ ( Abi.Function, immutable.Seq[Decoded.Value] ) ] = Failable {
+    val identifiersMap = {
+      abi.functions.map { fcn =>
+        ( identifierForAbiFunction( fcn ), fcn )
+      }.toMap
+    }
+    val ( identifier, paramBytes ) = encodedMessage.splitAt( IdentifierLength )
+    val fcn = identifiersMap( identifier )
+
+    val f_decoded = decodeParameters( fcn.inputs, paramBytes )
+    f_decoded.map( values => ( fcn, values ) )
+  }.flatten
+
+  def decodeParameters( params : immutable.Seq[Abi.Parameter], encodedParamBytes : immutable.Seq[Byte] ) : Failable[immutable.Seq[Decoded.Value]] = {
+    val encoders = encodersForAbiParameters( params )
+    decodeOutValues( params, encoders )( encodedParamBytes )
   }
 
   def decodeConstructorArgs( constructorArgHex : immutable.Seq[Byte], constructor : Abi.Constructor ) : Failable[immutable.Seq[Decoded.Value]] = {
