@@ -6,11 +6,11 @@ organization := "com.mchange"
 
 name := "consuela"
 
-version := "0.0.9-SNAPSHOT"
+version := "0.0.9"
 
-scalaVersion := "2.12.6"
+scalaVersion := "2.12.7"
 
-crossScalaVersions := Seq("2.10.7", "2.11.12", "2.12.6")
+crossScalaVersions := Seq("2.10.7", "2.11.12", "2.12.7")
 
 scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked" /*, "-Xlog-implicits" */)
 
