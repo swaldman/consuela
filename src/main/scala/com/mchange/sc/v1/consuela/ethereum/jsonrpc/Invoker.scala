@@ -268,64 +268,143 @@ object Invoker {
       data          : immutable.Seq[Byte],
       forceNonce    : Option[Unsigned256] = None
     )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
-      implicit val ( poller, econtext ) = ( icontext.poller, icontext.econtext )
+      implicit val econtext = icontext.econtext
 
       borrow( newClient( icontext ) ) { case NewClient(client, url) =>
-
-        val from = senderSigner.address
-
-        val fComputedGas = computedGas( client, from, Some(to), valueInWei, data )
-        val fNextNonce = {
-          forceNonce match {
-            case Some( nonce ) => Future.successful( nonce )
-            case None          => client.eth.getTransactionCount( from, Client.BlockNumber.Pending ).map( Unsigned256.apply )
-          }
-        }
-
         for {
-          cg <- fComputedGas
-          nextNonce <- fNextNonce
-          unsigned = TRACE.logEval( "Message transaction" )( EthTransaction.Unsigned.Message( nextNonce, Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), to, valueInWei, data ) )
-          signed = unsigned.sign( senderSigner, icontext.chainId )
-          _ <- icontext.transactionApprover( signed )
-          hash <- client.eth.sendSignedTransaction( signed )
-        } yield {
-          TransactionLogger.log( icontext.transactionLogger, hash, signed, url.toExternalForm )
+          signed <- _exportSendMessage( client, url )( senderSigner, to, valueInWei, data, forceNonce )( icontext )
+          hash   <- _sendSignedTransaction( client, url )( signed )( icontext )
+        }
+        yield {
           hash
         }
       }
     }
+
     def createContract(
       creatorSigner : EthSigner,
       valueInWei    : Unsigned256,
       init          : immutable.Seq[Byte],
       forceNonce    : Option[Unsigned256] = None
     )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
-      implicit val ( poller, econtext ) = ( icontext.poller, icontext.econtext )
+
+      implicit val econtext = icontext.econtext
 
       borrow( newClient( icontext ) ) { case NewClient(client, url) =>
-
-        val from = creatorSigner.address
-
-        val fComputedGas = computedGas( client, from, None, valueInWei, init )
-        val fNextNonce = {
-          forceNonce match {
-            case Some( nonce ) => Future.successful( nonce )
-            case None          => client.eth.getTransactionCount( from, Client.BlockNumber.Pending ).map( Unsigned256.apply )
-          }
-        }
-
         for {
-          cg <- fComputedGas
-          nextNonce <- fNextNonce
-          unsigned = TRACE.logEval("Contract creation transaction")( EthTransaction.Unsigned.ContractCreation( nextNonce, Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), valueInWei, init ) )
-          signed = unsigned.sign( creatorSigner, icontext.chainId )
-          _ <- icontext.transactionApprover( signed )
-          hash <- client.eth.sendSignedTransaction( signed )
-        } yield {
-          TransactionLogger.log( icontext.transactionLogger, hash, signed, url.toExternalForm )
+          signed <- _exportCreateContract( client, url )( creatorSigner, valueInWei, init, forceNonce )( icontext )
+          hash   <- _sendSignedTransaction( client, url )( signed )( icontext )
+        }
+        yield {
           hash
         }
+      }
+    }
+
+    def sendSignedTransaction( signed : EthTransaction.Signed )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
+      borrow( newClient( icontext ) ) { case NewClient(client, url) =>
+        _sendSignedTransaction( client, url)( signed )( icontext )
+      }
+    }
+
+    def exportSendWei(
+      senderSigner  : EthSigner,
+      to            : EthAddress,
+      valueInWei    : Unsigned256,
+      forceNonce    : Option[Unsigned256] = None
+    )( implicit icontext : Invoker.Context ) : Future[EthTransaction.Signed] = {
+      exportSendMessage( senderSigner, to, valueInWei, immutable.Seq.empty[Byte], forceNonce)( icontext )
+    }
+
+    def exportSendMessage(
+      senderSigner  : EthSigner,
+      to            : EthAddress,
+      valueInWei    : Unsigned256,
+      data          : immutable.Seq[Byte],
+      forceNonce    : Option[Unsigned256] = None
+    )(implicit icontext : Invoker.Context ) : Future[EthTransaction.Signed] = {
+      borrow( newClient( icontext ) ) { case NewClient(client, url) =>
+        _exportSendMessage( client, url )( senderSigner, to, valueInWei, data, forceNonce )( icontext )        
+      }
+    }
+
+    def exportCreateContract(
+      creatorSigner : EthSigner,
+      valueInWei    : Unsigned256,
+      init          : immutable.Seq[Byte],
+      forceNonce    : Option[Unsigned256] = None
+    )(implicit icontext : Invoker.Context ) : Future[EthTransaction.Signed] = {
+      borrow( newClient( icontext ) ) { case NewClient(client, url) =>
+        _exportCreateContract( client, url )( creatorSigner, valueInWei, init, forceNonce )
+      }
+    }
+
+    private def _exportSendMessage( client : Client, url : URL )(
+      senderSigner  : EthSigner,
+      to            : EthAddress,
+      valueInWei    : Unsigned256,
+      data          : immutable.Seq[Byte],
+      forceNonce    : Option[Unsigned256] = None
+    )(implicit icontext : Invoker.Context ) : Future[EthTransaction.Signed] = {
+
+      implicit val econtext = icontext.econtext
+
+      val from = senderSigner.address
+
+      val fComputedGas = computedGas( client, from, Some(to), valueInWei, data )
+      val fNextNonce = {
+        forceNonce match {
+          case Some( nonce ) => Future.successful( nonce )
+          case None          => client.eth.getTransactionCount( from, Client.BlockNumber.Pending ).map( Unsigned256.apply )
+        }
+      }
+
+      for {
+        cg <- fComputedGas
+        nextNonce <- fNextNonce
+        unsigned = TRACE.logEval( "Message transaction" )( EthTransaction.Unsigned.Message( nextNonce, Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), to, valueInWei, data ) )
+      }
+      yield {
+        unsigned.sign( senderSigner, icontext.chainId )
+      }
+    }
+
+    private def _exportCreateContract( client : Client, url : URL )(
+      creatorSigner : EthSigner,
+      valueInWei    : Unsigned256,
+      init          : immutable.Seq[Byte],
+      forceNonce    : Option[Unsigned256] = None
+    )(implicit icontext : Invoker.Context ) : Future[EthTransaction.Signed] = {
+      implicit val econtext = icontext.econtext
+
+      val from = creatorSigner.address
+
+      val fComputedGas = computedGas( client, from, None, valueInWei, init )
+      val fNextNonce = {
+        forceNonce match {
+          case Some( nonce ) => Future.successful( nonce )
+          case None          => client.eth.getTransactionCount( from, Client.BlockNumber.Pending ).map( Unsigned256.apply )
+        }
+      }
+
+      for {
+        cg <- fComputedGas
+        nextNonce <- fNextNonce
+        unsigned = TRACE.logEval("Contract creation transaction")( EthTransaction.Unsigned.ContractCreation( nextNonce, Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), valueInWei, init ) )
+      }
+      yield {
+        unsigned.sign( creatorSigner, icontext.chainId )
+      }
+    }
+
+    private def _sendSignedTransaction( client : Client, url : URL )( signed : EthTransaction.Signed )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
+      implicit val econtext = icontext.econtext
+      for {
+        _ <- icontext.transactionApprover( signed )
+        hash <- client.eth.sendSignedTransaction( signed )
+      } yield {
+        TransactionLogger.log( icontext.transactionLogger, hash, signed, url.toExternalForm )
+        hash
       }
     }
   }
