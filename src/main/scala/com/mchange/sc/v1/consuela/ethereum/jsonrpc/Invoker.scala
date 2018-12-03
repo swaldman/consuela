@@ -255,9 +255,10 @@ object Invoker {
     def sendWei(
       senderSigner  : EthSigner,
       to            : EthAddress,
-      valueInWei    : Unsigned256
+      valueInWei    : Unsigned256,
+      forceNonce    : Option[Unsigned256] = None
     )( implicit icontext : Invoker.Context ) : Future[EthHash] = {
-      sendMessage( senderSigner, to, valueInWei, immutable.Seq.empty[Byte])( icontext )
+      sendMessage( senderSigner, to, valueInWei, immutable.Seq.empty[Byte], forceNonce)( icontext )
     }
 
     def sendMessage(
@@ -297,7 +298,8 @@ object Invoker {
     def createContract(
       creatorSigner : EthSigner,
       valueInWei    : Unsigned256,
-      init          : immutable.Seq[Byte]
+      init          : immutable.Seq[Byte],
+      forceNonce    : Option[Unsigned256] = None
     )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
       implicit val ( poller, econtext ) = ( icontext.poller, icontext.econtext )
 
@@ -306,12 +308,17 @@ object Invoker {
         val from = creatorSigner.address
 
         val fComputedGas = computedGas( client, from, None, valueInWei, init )
-        val fNextNonce = client.eth.getTransactionCount( from, Client.BlockNumber.Pending )
+        val fNextNonce = {
+          forceNonce match {
+            case Some( nonce ) => Future.successful( nonce )
+            case None          => client.eth.getTransactionCount( from, Client.BlockNumber.Pending ).map( Unsigned256.apply )
+          }
+        }
 
         for {
           cg <- fComputedGas
           nextNonce <- fNextNonce
-          unsigned = TRACE.logEval("Contract creation transaction")( EthTransaction.Unsigned.ContractCreation( Unsigned256(nextNonce), Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), valueInWei, init ) )
+          unsigned = TRACE.logEval("Contract creation transaction")( EthTransaction.Unsigned.ContractCreation( nextNonce, Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), valueInWei, init ) )
           signed = unsigned.sign( creatorSigner, icontext.chainId )
           _ <- icontext.transactionApprover( signed )
           hash <- client.eth.sendSignedTransaction( signed )
