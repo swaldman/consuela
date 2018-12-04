@@ -325,6 +325,8 @@ object Generator {
       iw.println( "val transactionLogger   : stub.TransactionLogger   = scontext.icontext.transactionLogger" )
       iw.println( "val eventConfirmations  : Int                      = scontext.eventConfirmations" )
       iw.println()
+      iw.println( "def address = contractAddress" )
+      iw.println()
       iw.println( "// Conservatively ensure the desired implicit environment" ) // Conservatively ensure the desired implicit environment
       iw.println( "implicit val efactory  : Exchanger.Factory        = scontext.icontext.efactory" )
       iw.println( "implicit val poller    : Poller                   = scontext.icontext.poller" )
