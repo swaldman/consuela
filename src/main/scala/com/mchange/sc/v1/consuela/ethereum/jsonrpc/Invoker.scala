@@ -59,9 +59,11 @@ object Invoker {
 
   final case class ComputedGas( gasPrice : BigInt, gasLimit : BigInt )
 
-  def throwDisapproved( signed : EthTransaction.Signed, message : String ) : Nothing = throw new TransactionDisapprovedException( signed, message )
-  def throwDisapproved( signed : EthTransaction.Signed )                   : Nothing = throwDisapproved( signed, "Transaction aborted." )
-
+  def throwDisapproved( signed : EthTransaction.Signed, message : String = "Transaction aborted.", keepStackTrace : Boolean = true ) : Nothing = {
+    val e = new TransactionDisapprovedException( signed, message )
+    if ( !keepStackTrace ) e.setStackTrace( Array.empty )
+    throw e
+  }
 
   type TransactionApprover = EthTransaction.Signed => Future[Unit] // a failure, usually a TransactionDisapprovedException, signifies disapproval
 
@@ -272,7 +274,7 @@ object Invoker {
 
       borrow( newClient( icontext ) ) { case NewClient(client, url) =>
         for {
-          signed <- _exportSendMessage( client, url )( senderSigner, to, valueInWei, data, forceNonce )( icontext )
+          signed <- _prepareSendMessage( client, url )( senderSigner, to, valueInWei, data, forceNonce )( icontext )
           hash   <- _sendSignedTransaction( client, url )( signed )( icontext )
         }
         yield {
@@ -292,7 +294,7 @@ object Invoker {
 
       borrow( newClient( icontext ) ) { case NewClient(client, url) =>
         for {
-          signed <- _exportCreateContract( client, url )( creatorSigner, valueInWei, init, forceNonce )( icontext )
+          signed <- _prepareCreateContract( client, url )( creatorSigner, valueInWei, init, forceNonce )( icontext )
           hash   <- _sendSignedTransaction( client, url )( signed )( icontext )
         }
         yield {
@@ -307,16 +309,16 @@ object Invoker {
       }
     }
 
-    def exportSendWei(
+    def prepareSendWei(
       senderSigner  : EthSigner,
       to            : EthAddress,
       valueInWei    : Unsigned256,
       forceNonce    : Option[Unsigned256] = None
     )( implicit icontext : Invoker.Context ) : Future[EthTransaction.Signed] = {
-      exportSendMessage( senderSigner, to, valueInWei, immutable.Seq.empty[Byte], forceNonce)( icontext )
+      prepareSendMessage( senderSigner, to, valueInWei, immutable.Seq.empty[Byte], forceNonce)( icontext )
     }
 
-    def exportSendMessage(
+    def prepareSendMessage(
       senderSigner  : EthSigner,
       to            : EthAddress,
       valueInWei    : Unsigned256,
@@ -324,22 +326,22 @@ object Invoker {
       forceNonce    : Option[Unsigned256] = None
     )(implicit icontext : Invoker.Context ) : Future[EthTransaction.Signed] = {
       borrow( newClient( icontext ) ) { case NewClient(client, url) =>
-        _exportSendMessage( client, url )( senderSigner, to, valueInWei, data, forceNonce )( icontext )        
+        _prepareSendMessage( client, url )( senderSigner, to, valueInWei, data, forceNonce )( icontext )        
       }
     }
 
-    def exportCreateContract(
+    def prepareCreateContract(
       creatorSigner : EthSigner,
       valueInWei    : Unsigned256,
       init          : immutable.Seq[Byte],
       forceNonce    : Option[Unsigned256] = None
     )(implicit icontext : Invoker.Context ) : Future[EthTransaction.Signed] = {
       borrow( newClient( icontext ) ) { case NewClient(client, url) =>
-        _exportCreateContract( client, url )( creatorSigner, valueInWei, init, forceNonce )
+        _prepareCreateContract( client, url )( creatorSigner, valueInWei, init, forceNonce )
       }
     }
 
-    private def _exportSendMessage( client : Client, url : URL )(
+    private def _prepareSendMessage( client : Client, url : URL )(
       senderSigner  : EthSigner,
       to            : EthAddress,
       valueInWei    : Unsigned256,
@@ -369,7 +371,7 @@ object Invoker {
       }
     }
 
-    private def _exportCreateContract( client : Client, url : URL )(
+    private def _prepareCreateContract( client : Client, url : URL )(
       creatorSigner : EthSigner,
       valueInWei    : Unsigned256,
       init          : immutable.Seq[Byte],
