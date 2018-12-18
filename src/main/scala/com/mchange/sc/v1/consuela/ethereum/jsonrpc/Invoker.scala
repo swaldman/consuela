@@ -252,6 +252,22 @@ object Invoker {
     }
   }
 
+  def withClient[T]( op : Client => T )( implicit icontext : Invoker.Context ) = {
+    implicit val econtext = icontext.econtext
+
+    borrow( newClient( icontext ) ) { case NewClient(client, url) =>
+      op(client)
+    }
+  }
+
+  def withClient[T]( op : (Client,URL) => T )( implicit icontext : Invoker.Context ) = {
+    implicit val econtext = icontext.econtext
+
+    borrow( newClient( icontext ) ) { case NewClient(client, url) =>
+      op(client, url)
+    }
+  }
+
   final object transaction {
 
     def sendWei(
