@@ -35,22 +35,37 @@ object EthSigner {
   }
 }
 /**
-  * For now, the only implementation is EthPrivateKey.
+  * For now with consuela, the only implementation is EthPrivateKey.
   * 
   * But we define the trait exists so that more elaborate / secure / decoupled
   * signing services could be supported.
+  * 
+  * ( sbt-ethereum now includes and implementation, SbtEthereumPlugin.CautiousSigner )
   */
 trait EthSigner {
 
-  def sign( document : Array[Byte] )                       : EthSignature
+  /*
+   *  Abstract methods
+   */ 
+  def sign( document : Array[Byte] ) : EthSignature
+  def sign( document : Seq[Byte] )   : EthSignature
+
+  def signPrehashed( documentHash : EthHash ) : EthSignature
+
+  /*
+   *  Implemented variations for EIP-155 chain ID
+   */ 
   def sign( document : Array[Byte], chainId : EthChainId ) : EthSignature.WithChainId = EthSignature.WithChainId( sign( document ), chainId )
   def sign( document : Array[Byte], chainId : BigInt )     : EthSignature.WithChainId = sign( document, EthChainId( UnsignedBigInt( chainId ) ) )
   def sign( document : Array[Byte], chainId : Long )       : EthSignature.WithChainId = sign( document, chainId )
 
-  def sign( document : Seq[Byte] )                       : EthSignature
   def sign( document : Seq[Byte], chainId : EthChainId ) : EthSignature.WithChainId = EthSignature.WithChainId( sign( document ), chainId )
   def sign( document : Seq[Byte], chainId : BigInt )     : EthSignature.WithChainId = sign( document, EthChainId( UnsignedBigInt( chainId ) ) )
   def sign( document : Seq[Byte], chainId : Long )       : EthSignature.WithChainId = sign( document, chainId )
 
+  def signPrehashed( documentHash : EthHash, chainId : EthChainId ) : EthSignature.WithChainId = EthSignature.WithChainId( signPrehashed( documentHash ), chainId )
+  def signPrehashed( documentHash : EthHash, chainId : BigInt )     : EthSignature.WithChainId = signPrehashed( documentHash, EthChainId( UnsignedBigInt( chainId ) ) )
+  def signPrehashed( documentHash : EthHash, chainId : Long )       : EthSignature.WithChainId = signPrehashed( documentHash, chainId )
+  
   def address : EthAddress
 }

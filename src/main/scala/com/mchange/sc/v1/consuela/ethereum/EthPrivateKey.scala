@@ -102,6 +102,7 @@ final case class EthPrivateKey( val bytes : ByteSeqExact32 ) extends EthSigner {
   // for EthSigner trait
 
   def sign( document : Seq[Byte] ) : EthSignature = this.sign( document.toArray )
+  def signPrehashed( documentHash : EthHash ) : EthSignature = this.signEthHash( documentHash )
 
   lazy val address = toPublicKey.toAddress
 
