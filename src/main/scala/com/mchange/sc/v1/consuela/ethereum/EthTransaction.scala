@@ -56,7 +56,7 @@ object EthTransaction {
     private val ZeroElem = RLP.Element.UnsignedInt(0)
 
     // make sure any changes here track signableBytes(...) below
-    def areSignableBytesForChainId( bytes : Seq[Byte], mbChainId : Option[EthChainId] ) : Option[EthTransaction.Unsigned] = {
+    def areSignableBytesForChainId( bytes : scala.Seq[Byte], mbChainId : Option[EthChainId] ) : Option[EthTransaction.Unsigned] = {
       try {
         RLP.Element.decodeComplete( bytes ) match {
           case RLP.Element.Seq.of( nonceE, gasPriceE, gasLimitE, mbToE, valueE, payloadE, rest @ _* ) => {
