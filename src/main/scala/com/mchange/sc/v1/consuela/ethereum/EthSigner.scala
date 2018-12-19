@@ -55,17 +55,17 @@ trait EthSigner {
   /*
    *  Implemented variations for EIP-155 chain ID
    */ 
-  def sign( document : Array[Byte], chainId : EthChainId ) : EthSignature.WithChainId = EthSignature.WithChainId( sign( document ), chainId )
-  def sign( document : Array[Byte], chainId : BigInt )     : EthSignature.WithChainId = sign( document, EthChainId( UnsignedBigInt( chainId ) ) )
-  def sign( document : Array[Byte], chainId : Long )       : EthSignature.WithChainId = sign( document, chainId )
+  def sign( document : Array[Byte], chainId : EthChainId )   : EthSignature.WithChainId = EthSignature.WithChainId( sign( document ), chainId )
+  final def sign( document : Array[Byte], chainId : BigInt ) : EthSignature.WithChainId = sign( document, EthChainId( UnsignedBigInt( chainId ) ) )
+  final def sign( document : Array[Byte], chainId : Long )   : EthSignature.WithChainId = sign( document, chainId )
 
-  def sign( document : Seq[Byte], chainId : EthChainId ) : EthSignature.WithChainId = EthSignature.WithChainId( sign( document ), chainId )
-  def sign( document : Seq[Byte], chainId : BigInt )     : EthSignature.WithChainId = sign( document, EthChainId( UnsignedBigInt( chainId ) ) )
-  def sign( document : Seq[Byte], chainId : Long )       : EthSignature.WithChainId = sign( document, chainId )
+  def sign( document : Seq[Byte], chainId : EthChainId )   : EthSignature.WithChainId = EthSignature.WithChainId( sign( document ), chainId )
+  final def sign( document : Seq[Byte], chainId : BigInt ) : EthSignature.WithChainId = sign( document, EthChainId( UnsignedBigInt( chainId ) ) )
+  final def sign( document : Seq[Byte], chainId : Long )   : EthSignature.WithChainId = sign( document, chainId )
 
-  def signPrehashed( documentHash : EthHash, chainId : EthChainId ) : EthSignature.WithChainId = EthSignature.WithChainId( signPrehashed( documentHash ), chainId )
-  def signPrehashed( documentHash : EthHash, chainId : BigInt )     : EthSignature.WithChainId = signPrehashed( documentHash, EthChainId( UnsignedBigInt( chainId ) ) )
-  def signPrehashed( documentHash : EthHash, chainId : Long )       : EthSignature.WithChainId = signPrehashed( documentHash, chainId )
+  def signPrehashed( documentHash : EthHash, chainId : EthChainId )   : EthSignature.WithChainId = EthSignature.WithChainId( signPrehashed( documentHash ), chainId )
+  final def signPrehashed( documentHash : EthHash, chainId : BigInt ) : EthSignature.WithChainId = signPrehashed( documentHash, EthChainId( UnsignedBigInt( chainId ) ) )
+  final def signPrehashed( documentHash : EthHash, chainId : Long )   : EthSignature.WithChainId = signPrehashed( documentHash, chainId )
   
   def address : EthAddress
 }

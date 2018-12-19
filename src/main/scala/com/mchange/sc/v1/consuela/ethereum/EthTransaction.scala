@@ -42,14 +42,63 @@ import scala.collection.immutable.Vector;
 import scala.collection.immutable.Seq;
 
 import java.util.Arrays;
+import scala.util.control.NonFatal;
 import scala.util.hashing.MurmurHash3;
 
 import encoding.{RLP, RLPSerializing};
 import specification.Types.{ByteSeqExact64, SignatureWithChainIdV, SignatureV, SignatureR, SignatureS, Unsigned256, UnsignedBigInt};
 
+import com.mchange.sc.v1.log.MLevel._
+
 object EthTransaction {
+  implicit lazy val logger = mlogger( this )
   final object Unsigned {
     private val ZeroElem = RLP.Element.UnsignedInt(0)
+
+    // make sure any changes here track signableBytes(...) below
+    def areSignableBytesForChainId( bytes : Seq[Byte], mbChainId : Option[EthChainId] ) : Option[EthTransaction.Unsigned] = {
+      try {
+        RLP.Element.decodeComplete( bytes ) match {
+          case RLP.Element.Seq.of( nonceE, gasPriceE, gasLimitE, mbToE, valueE, payloadE, rest @ _* ) => {
+            mbChainId match {
+              case Some( chainId ) => { // we expect EIP-155 version of signable bytes
+                rest match {
+                  case Seq( vE, rE, sE ) => {
+                    val f_utxn = {
+                      for {
+                        untypedV <- RLP.fromElement[UnsignedBigInt]( vE.simplify )
+                        r        <- RLP.fromElement[SignatureR]( rE.simplify )
+                        s        <- RLP.fromElement[SignatureS]( sE.simplify )
+                        if ( untypedV.widen == chainId.value.widen && r.widen == 0 && s.widen == 0 )
+                        txn     <- RLP.fromElement[EthTransaction]( RLP.Element.Seq.of( nonceE, gasPriceE, gasLimitE, mbToE, valueE, payloadE ) )
+                      }
+                      yield {
+                        txn match {
+                          case utxn : EthTransaction.Unsigned => utxn
+                          case stxn : EthTransaction.Signed => throw new EthereumException( s"Expected unsigned transaction, found signed? ${stxn}" )
+                        }
+                      }
+                    }
+                    Some( f_utxn.assert )
+                  }
+                  case _ => None
+                }
+              }
+              case None => {
+                Some( RLP.decodeComplete[EthTransaction]( bytes ).map( _.asInstanceOf[EthTransaction.Unsigned] ).assert )
+              }
+            }
+          }
+          case _ => None
+        }
+      }
+      catch {
+        case NonFatal( e ) => {
+          DEBUG.log( "Exception presumably indicating that bytes do not conform to shape of signable bytes.", e )
+          None
+        }
+      }
+    }
 
     final case class Message( nonce : Unsigned256, gasPrice : Unsigned256, gasLimit : Unsigned256, to : EthAddress, value : Unsigned256, data : immutable.Seq[Byte] )
         extends Unsigned with EthTransaction.Message {
@@ -68,6 +117,7 @@ object EthTransaction {
 
     override def signed = false;
 
+    // make sure any changes here track matchSignableBytes(...) above
     def signableBytes( mbChainId : Option[EthChainId] ) : immutable.Seq[Byte] = {
       mbChainId match {
         case Some( chainId ) => {
