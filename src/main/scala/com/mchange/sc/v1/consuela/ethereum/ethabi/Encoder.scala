@@ -287,6 +287,7 @@ object Encoder {
         val capped  = -1 :: tcs ::: -1 :: Nil
         val grouped = capped.sliding(2)
         grouped.map {
+          case         -1 ::       -1 :: Nil                                          => uncapped.trim // single element array, no commas
           case         -1 :: endComma :: Nil                                          => uncapped.substring( 0, endComma ).trim
           case startComma ::       -1 :: Nil if ( startComma + 1 == uncapped.length ) => ""
           case startComma ::       -1 :: Nil                                          => uncapped.substring( startComma + 1 ).trim
@@ -295,7 +296,14 @@ object Encoder {
       }
     }.map( _.toList )
 
-    elements.flatMap { list => Failable( ArrayRep( elementTypeName, list.map( inner.parse ).map( _.get ).toVector ) ) }
+    elements.flatMap { list =>
+      if (list.length == 1 && list.head == "") { // empty array, special case
+        Failable( ArrayRep( elementTypeName, Vector.empty[Any] ) )
+      }
+      else {
+        Failable( ArrayRep( elementTypeName, list.map( inner.parse ).map( _.get ).toVector ) )
+      }
+    }
   }
   private def formatArray( inner : Encoder[_] )( representation : ArrayRep ) : Failable[String] = {
     Failable.sequence( representation.items.map( inner.formatUntyped ) ).map( _.mkString("[",",","]") )
