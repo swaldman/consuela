@@ -69,8 +69,8 @@ object EthTransaction {
                     val f_utxn = {
                       for {
                         untypedV <- RLP.fromElement[UnsignedBigInt]( vE.simplify )
-                        r        <- RLP.fromElement[SignatureR]( rE.simplify )
-                        s        <- RLP.fromElement[SignatureS]( sE.simplify )
+                        r        <- RLP.fromElement[UnsignedBigInt]( rE.simplify ) // can't use signature r & s types, as zero would be disalloed
+                        s        <- RLP.fromElement[UnsignedBigInt]( sE.simplify ) // can't use signature r & s types, as zero would be disalloed
                         if ( untypedV.widen == chainId.value.widen && r.widen == 0 && s.widen == 0 )
                         txn     <- RLP.fromElement[EthTransaction]( RLP.Element.Seq.of( nonceE, gasPriceE, gasLimitE, mbToE, valueE, payloadE ) )
                       }
@@ -81,9 +81,13 @@ object EthTransaction {
                         }
                       }
                     }
+                    DEBUG.log( s"areSignableBytesForChainId: Good EIP-155 transaction with Chain ID ${chainId}" )
                     Some( f_utxn.assert )
                   }
-                  case _ => None
+                  case _ => {
+                    DEBUG.log( s"areSignableBytesForChainId: Fails to match EIP-155 quasi-signature in putative transaction with Chain ID ${chainId}. Not a match." )
+                    None
+                  }
                 }
               }
               case None => {
