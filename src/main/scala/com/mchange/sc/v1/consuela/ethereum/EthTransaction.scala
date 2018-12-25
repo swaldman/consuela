@@ -60,8 +60,10 @@ object EthTransaction {
       try {
         RLP.Element.decodeComplete( bytes ) match {
           case RLP.Element.Seq.of( nonceE, gasPriceE, gasLimitE, mbToE, valueE, payloadE, rest @ _* ) => {
+            DEBUG.log( "areSignableBytesForChainId: Matches basic sequence (RLP sequence of sufficient length )" )
             mbChainId match {
               case Some( chainId ) => { // we expect EIP-155 version of signable bytes
+                DEBUG.log( s"areSignableBytesForChainId: Checking EIP-155 transaction with Chain ID ${chainId}" )
                 rest match {
                   case Seq( vE, rE, sE ) => {
                     val f_utxn = {
@@ -85,16 +87,20 @@ object EthTransaction {
                 }
               }
               case None => {
+                DEBUG.log( s"areSignableBytesForChainId: Checking no Chain ID transaction." )
                 Some( RLP.decodeComplete[EthTransaction]( bytes ).map( _.asInstanceOf[EthTransaction.Unsigned] ).assert )
               }
             }
           }
-          case _ => None
+          case _ => {
+            DEBUG.log( "areSignableBytesForChainId: Fails to matches basic sequence (RLP sequence of sufficient length )" )
+            None
+          }
         }
       }
       catch {
         case NonFatal( e ) => {
-          DEBUG.log( "Exception presumably indicating that bytes do not conform to shape of signable bytes.", e )
+          DEBUG.log( "areSignableBytesForChainId: Exception presumably indicating that bytes do not conform to shape of signable bytes.", e )
           None
         }
       }
