@@ -13,16 +13,27 @@ import com.mchange.sc.v1.consuela.ethereum.specification.Types.Unsigned256
 
 
 object Sender {
-  final case class WalletV3( w : wallet.V3, passphraseFinder : () => String )( implicit provider : jce.Provider ) extends Sender {
+  trait Signing extends Sender {
+    def findSigner() : EthSigner
+
+    def sendWei( to : EthAddress, valueInWei : Unsigned256 )(implicit scontext : stub.Context ) : Future[EthHash] = {
+      jsonrpc.Invoker.transaction.sendWei( this.findSigner(), to, valueInWei )( scontext.icontext )
+    }
+    def sendMessage( to : EthAddress, valueInWei : Unsigned256, data : immutable.Seq[Byte] )(implicit scontext : stub.Context ) : Future[EthHash] = {
+      jsonrpc.Invoker.transaction.sendMessage( this.findSigner(), to, valueInWei, data )( scontext.icontext )
+    }
+  }
+  final case class WalletV3( w : wallet.V3, passphraseFinder : () => String )( implicit provider : jce.Provider ) extends stub.Sender.Signing {
 
     def address : EthAddress = w.address
 
     def findSigner() : EthSigner = w.decode( passphraseFinder() )
   }
-  final case class Basic( signer : EthSigner ) extends Sender {
+  final case class Basic( signer : EthSigner ) extends stub.Sender.Signing {
     def address = signer.address
     def findSigner = signer
   }
+  final case class View( val address : EthAddress ) extends stub.Sender
 
   /**
     * This is just a conventional account to use as an Ether fountain in testing environments
@@ -37,16 +48,8 @@ object Sender {
 trait Sender {
   def address : EthAddress
 
-  def findSigner() : EthSigner
-
   def getBalance()(implicit scontext : stub.Context ) : Future[BigInt] = {
     jsonrpc.Invoker.getBalance( address )( scontext.icontext )
-  }
-  def sendWei( to : EthAddress, valueInWei : Unsigned256 )(implicit scontext : stub.Context ) : Future[EthHash] = {
-    jsonrpc.Invoker.transaction.sendWei( this.findSigner(), to, valueInWei )( scontext.icontext )
-  }
-  def sendMessage( to : EthAddress, valueInWei : Unsigned256, data : immutable.Seq[Byte] )(implicit scontext : stub.Context ) : Future[EthHash] = {
-    jsonrpc.Invoker.transaction.sendMessage( this.findSigner(), to, valueInWei, data )( scontext.icontext )
   }
   def contractAddress( nonce : BigInt ) : EthAddress = EthAddress.forContract( address, Unsigned256(nonce) )
 }

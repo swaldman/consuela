@@ -874,8 +874,10 @@ object Generator {
     def paymentArg = "optionalPaymentInWei : Option[sol.UInt256] = None"
 
     val params = fcn.inputs.map( scalaSignatureParam ) ++ ( if ( fcn.payable ) immutable.Seq( paymentArg ) else immutable.Seq.empty[String] )
+
+    val senderPart = if ( constantSection ) "( implicit sender : stub.Sender )" else "( implicit sender : stub.Sender.Signing )"
     
-    val prereturn = s"""def ${fcn.name}( ${params.mkString(", ")} )( implicit sender : stub.Sender )"""
+    val prereturn = s"""def ${fcn.name}( ${params.mkString(", ")} )${senderPart}"""
 
     val post = {
       val raw = {
