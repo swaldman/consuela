@@ -208,7 +208,7 @@ object Encoder {
 
     def parse( str : String ) : Failable[immutable.Seq[Byte]] = parseByteArrayInArrayFormat( str ) orElse Failable( str.decodeHexAsSeq ) orElse parseOneByteCharQuotedString( str )
 
-    def format( representation : immutable.Seq[Byte] ) : Failable[String] = formatOneByteCharQuotedString( representation )
+    def format( representation : immutable.Seq[Byte] ) : Failable[String] = Failable( s"0x${representation.hex}" )
   }
 
   private def parseOneByteCharQuotedString( quotedString : String ) : Failable[immutable.Seq[Byte]] = {
@@ -535,7 +535,7 @@ object Encoder {
     def parse( str : String ) : Failable[immutable.Seq[Byte]] = parseAsArray( str ) orElse parseAsHex( str ) orElse parseOneByteCharQuotedString( str )
 
     def format( representation : immutable.Seq[Byte] ) : Failable[String] = {
-      checkLen( representation ).flatMap( _ =>  formatOneByteCharQuotedString( representation ) )
+      checkLen( representation ).flatMap( _ =>  Failable( s"0x${representation.hex}" ) )
     }
     def encode( representation : immutable.Seq[Byte] ) : Failable[immutable.Seq[Byte]] = {
       val padLength = 32 - len
