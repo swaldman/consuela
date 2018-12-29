@@ -16,9 +16,11 @@ object EthChainId {
   val EtcMainnet = EthChainId(61, Some("eth-classic-mainnet"))
   val EtcTestnet = EthChainId(62, Some("eth-classic-testnet"))
 
-  val Known = Mainnet :: Ropsten :: Rinkeby :: Kovan :: EtcMainnet :: EtcTestnet :: Nil
+  val Known = Mainnet :: Ropsten :: Rinkeby :: Kovan :: EtcMainnet :: EtcTestnet :: Nil // all elements of Known should have 'name' defined
 
   def findKnown( value : UnsignedBigInt ) : Option[EthChainId] = Known.find( _.value.widen == value.widen )
+
+  def findKnown( name : String ) : Option[EthChainId] = Known.find( _.name.get == name.toLowerCase() ) // relies on fact that all elements of Known should have 'name' defined
 
   def apply( value : UnsignedBigInt, name : Option[String] = None ) : EthChainId = {
     name match {
