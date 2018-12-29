@@ -11,5 +11,5 @@ object Test {
     */
   val PrivateKey : IndexedSeq[EthPrivateKey] = (0x7e57 to 0x7e5c).map( i => EthPrivateKey( BigInt(i) ) )
 
-  val Sender : IndexedSeq[Sender] = PrivateKey.map( pvt => stub.Sender.Basic( pvt ) )
+  val Sender : IndexedSeq[stub.Sender.Signing] = PrivateKey.map( pvt => stub.Sender.Basic( pvt ) )
 }
