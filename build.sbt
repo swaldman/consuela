@@ -2,11 +2,13 @@ val nexus = "https://oss.sonatype.org/"
 val nexusSnapshots = nexus + "content/repositories/snapshots";
 val nexusReleases = nexus + "service/local/staging/deploy/maven2";
 
+enablePlugins(ParadoxPlugin)
+
 organization := "com.mchange"
 
 name := "consuela"
 
-version := "0.0.11-SNAPSHOT"
+version := "0.0.11"
 
 scalaVersion := "2.12.7"
 
@@ -33,7 +35,7 @@ publishTo := {
 }
 
 val restrictedTypeVersion = "0.0.5"
-val failableVersion       = "0.0.2-SNAPSHOT"
+val failableVersion       = "0.0.2"
 
 libraryDependencies ++= Seq(
   "com.mchange"             %% "mlog-scala"                      % "0.3.10",
@@ -41,10 +43,10 @@ libraryDependencies ++= Seq(
   "com.mchange"             %% "failable-logging"                % failableVersion,
   "com.mchange"             %% "restricted-type"                 % restrictedTypeVersion,
   "com.mchange"             %% "yinyang"                         % "0.0.2",
-  "com.mchange"             %% "mchange-commons-scala"           % "0.4.8-SNAPSHOT" changing(),
+  "com.mchange"             %% "mchange-commons-scala"           % "0.4.8",
   "com.mchange"             %% "literal"                         % "0.0.2",
   "com.mchange"             %% "mchange-play-json-util"          % "0.0.2",
-  "com.mchange"             %% "jsonrpc-client"                  % "0.0.4-SNAPSHOT" changing(),
+  "com.mchange"             %% "jsonrpc-client"                  % "0.0.4",
   "com.mchange"             %  "mchange-commons-java"            % "0.2.15",
   "org.reactivestreams"     %  "reactive-streams"                % "1.0.1",
   "com.typesafe"            %  "config"                          % "1.2.1",
@@ -101,3 +103,23 @@ pomExtra := {
 }
 
 
+val updateSite = taskKey[Unit]("Updates the project website on tickle")
+
+updateSite := {
+  import scala.sys.process._
+
+  val dummy1 = (Compile / paradox).value // force a build of the site
+
+  val localDir1 = target.value / "paradox" / "site" / "main"
+
+  val local1 = localDir1.listFiles.map( _.getPath ).mkString(" ")
+  val remote1 = s"tickle.mchange.com:/home/web/public/www.mchange.com/projects/${name.value}/version/${version.value}/"
+  s"rsync -avz ${local1} ${remote1}"!
+
+  val dummy2 = (Compile / doc).value // force scaladocs
+
+  val localDir2 = target.value / "scala-2.12" / "api"
+  val local2 = localDir2.listFiles.map( _.getPath ).mkString(" ")
+  val remote2 = s"tickle.mchange.com:/home/web/public/www.mchange.com/projects/${name.value}/version/${version.value}/apidocs"
+  s"rsync -avz ${local2} ${remote2}"!
+}
