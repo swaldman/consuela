@@ -290,7 +290,8 @@ object Invoker {
 
       borrow( newClient( icontext ) ) { case NewClient(client, url) =>
         for {
-          signed <- _prepareSendMessage( client, url )( senderSigner, to, valueInWei, data, forceNonce )( icontext )
+          unsigned <- _prepareSendMessage( client, url )( senderSigner.address, to, valueInWei, data, forceNonce )( icontext )
+          signed = unsigned.sign( senderSigner, icontext.chainId )
           hash   <- _sendSignedTransaction( client, url )( signed )( icontext )
         }
         yield {
@@ -310,7 +311,8 @@ object Invoker {
 
       borrow( newClient( icontext ) ) { case NewClient(client, url) =>
         for {
-          signed <- _prepareCreateContract( client, url )( creatorSigner, valueInWei, init, forceNonce )( icontext )
+          unsigned <- _prepareCreateContract( client, url )( creatorSigner.address, valueInWei, init, forceNonce )( icontext )
+          signed = unsigned.sign( creatorSigner, icontext.chainId )
           hash   <- _sendSignedTransaction( client, url )( signed )( icontext )
         }
         yield {
@@ -326,48 +328,46 @@ object Invoker {
     }
 
     def prepareSendWei(
-      senderSigner  : EthSigner,
+      sender        : EthAddress,
       to            : EthAddress,
       valueInWei    : Unsigned256,
       forceNonce    : Option[Unsigned256] = None
-    )( implicit icontext : Invoker.Context ) : Future[EthTransaction.Signed] = {
-      prepareSendMessage( senderSigner, to, valueInWei, immutable.Seq.empty[Byte], forceNonce)( icontext )
+    )( implicit icontext : Invoker.Context ) : Future[EthTransaction.Unsigned] = {
+      prepareSendMessage( sender, to, valueInWei, immutable.Seq.empty[Byte], forceNonce)( icontext )
     }
 
     def prepareSendMessage(
-      senderSigner  : EthSigner,
+      sender        : EthAddress,
       to            : EthAddress,
       valueInWei    : Unsigned256,
       data          : immutable.Seq[Byte],
       forceNonce    : Option[Unsigned256] = None
-    )(implicit icontext : Invoker.Context ) : Future[EthTransaction.Signed] = {
+    )(implicit icontext : Invoker.Context ) : Future[EthTransaction.Unsigned] = {
       borrow( newClient( icontext ) ) { case NewClient(client, url) =>
-        _prepareSendMessage( client, url )( senderSigner, to, valueInWei, data, forceNonce )( icontext )        
+        _prepareSendMessage( client, url )( sender, to, valueInWei, data, forceNonce )( icontext )
       }
     }
 
     def prepareCreateContract(
-      creatorSigner : EthSigner,
+      creator       : EthAddress,
       valueInWei    : Unsigned256,
       init          : immutable.Seq[Byte],
       forceNonce    : Option[Unsigned256] = None
-    )(implicit icontext : Invoker.Context ) : Future[EthTransaction.Signed] = {
+    )(implicit icontext : Invoker.Context ) : Future[EthTransaction.Unsigned] = {
       borrow( newClient( icontext ) ) { case NewClient(client, url) =>
-        _prepareCreateContract( client, url )( creatorSigner, valueInWei, init, forceNonce )
+        _prepareCreateContract( client, url )( creator, valueInWei, init, forceNonce )
       }
     }
 
     private def _prepareSendMessage( client : Client, url : URL )(
-      senderSigner  : EthSigner,
+      from          : EthAddress,
       to            : EthAddress,
       valueInWei    : Unsigned256,
       data          : immutable.Seq[Byte],
       forceNonce    : Option[Unsigned256] = None
-    )(implicit icontext : Invoker.Context ) : Future[EthTransaction.Signed] = {
+    )(implicit icontext : Invoker.Context ) : Future[EthTransaction.Unsigned] = {
 
       implicit val econtext = icontext.econtext
-
-      val from = senderSigner.address
 
       val fComputedGas = computedGas( client, from, Some(to), valueInWei, data )
       val fNextNonce = {
@@ -380,22 +380,21 @@ object Invoker {
       for {
         cg <- fComputedGas
         nextNonce <- fNextNonce
-        unsigned = TRACE.logEval( "Message transaction" )( EthTransaction.Unsigned.Message( nextNonce, Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), to, valueInWei, data ) )
       }
       yield {
-        unsigned.sign( senderSigner, icontext.chainId )
+        TRACE.logEval( "Message transaction" )( EthTransaction.Unsigned.Message( nextNonce, Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), to, valueInWei, data ) )
       }
     }
 
     private def _prepareCreateContract( client : Client, url : URL )(
-      creatorSigner : EthSigner,
+      creator       : EthAddress,
       valueInWei    : Unsigned256,
       init          : immutable.Seq[Byte],
       forceNonce    : Option[Unsigned256] = None
-    )(implicit icontext : Invoker.Context ) : Future[EthTransaction.Signed] = {
+    )(implicit icontext : Invoker.Context ) : Future[EthTransaction.Unsigned] = {
       implicit val econtext = icontext.econtext
 
-      val from = creatorSigner.address
+      val from = creator
 
       val fComputedGas = computedGas( client, from, None, valueInWei, init )
       val fNextNonce = {
@@ -408,10 +407,9 @@ object Invoker {
       for {
         cg <- fComputedGas
         nextNonce <- fNextNonce
-        unsigned = TRACE.logEval("Contract creation transaction")( EthTransaction.Unsigned.ContractCreation( nextNonce, Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), valueInWei, init ) )
       }
       yield {
-        unsigned.sign( creatorSigner, icontext.chainId )
+        TRACE.logEval("Contract creation transaction")( EthTransaction.Unsigned.ContractCreation( nextNonce, Unsigned256(cg.gasPrice), Unsigned256(cg.gasLimit), valueInWei, init ) )
       }
     }
 
