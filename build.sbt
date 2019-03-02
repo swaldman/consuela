@@ -43,7 +43,7 @@ libraryDependencies ++= Seq(
   "com.mchange"             %% "failable-logging"                % failableVersion,
   "com.mchange"             %% "restricted-type"                 % restrictedTypeVersion,
   "com.mchange"             %% "yinyang"                         % "0.0.2",
-  "com.mchange"             %% "mchange-commons-scala"           % "0.4.8",
+  "com.mchange"             %% "mchange-commons-scala"           % "0.4.9-SNAPSHOT",
   "com.mchange"             %% "literal"                         % "0.0.2",
   "com.mchange"             %% "mchange-play-json-util"          % "0.0.2",
   "com.mchange"             %% "jsonrpc-client"                  % "0.0.4",
