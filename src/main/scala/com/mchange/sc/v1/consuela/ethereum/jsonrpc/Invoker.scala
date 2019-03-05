@@ -244,6 +244,14 @@ object Invoker {
     }
   }
 
+  def nextNonce( address : EthAddress )( implicit icontext : Invoker.Context ) : Future[BigInt] = {
+    implicit val econtext = icontext.econtext
+
+    borrow( newClient( icontext ) ) { case NewClient(client, url) =>
+      client.eth.getTransactionCount( address, Client.BlockNumber.Pending )
+    }
+  }
+
   def getLogs( query : Client.Log.Filter.Query )( implicit icontext : Invoker.Context ) : Future[immutable.Seq[Client.Log]] = {
     implicit val econtext = icontext.econtext
 
