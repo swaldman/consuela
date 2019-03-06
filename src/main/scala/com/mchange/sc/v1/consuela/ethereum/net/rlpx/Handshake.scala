@@ -158,7 +158,7 @@ object Handshake {
       }
     }
     final case class Initiator (
-      signature          : EthSignature,
+      signature          : EthSignature.Basic,
       ephemeralKeyMac    : EthHash, // hash of the 64-byte encoded public key (without the 0x04 "decompressed" header)
       permanentPublicKey : EthPublicKey,
       initiatorNonce     : ByteSeqExact32,

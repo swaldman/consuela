@@ -83,15 +83,15 @@ final case class EthPublicKey( val bytes : ByteSeqExact64 ) {
   def matches( priv : EthPrivateKey ) : Boolean = Arrays.equals( _arr, EthPublicKey.computeBytes( priv ) );
 
   // default scheme
-  def verify( document : Array[Byte], signature : EthSignature ) : Boolean = {
-    def verifyRawBytes( rawBytes : Array[Byte], signature : EthSignature ) : Boolean = {
+  def verify( document : Array[Byte], signature : EthSignature.Basic ) : Boolean = {
+    def verifyRawBytes( rawBytes : Array[Byte], signature : EthSignature.Basic ) : Boolean = {
       val _signature = crypto.secp256k1.Signature( signature.r.widen.bigInteger, signature.s.widen.bigInteger )
       crypto.secp256k1.verifySignature( rawBytes, _signature, this.x.bigInteger, this.y.bigInteger )
     }
-    def verifyEthHash( hash : EthHash, signature : EthSignature ) : Boolean = {
+    def verifyEthHash( hash : EthHash, signature : EthSignature.Basic ) : Boolean = {
       verifyRawBytes( hash.toByteArray, signature );
     }
-    def verifyHashedDocument( document : Array[Byte], signature : EthSignature ) : Boolean = {
+    def verifyHashedDocument( document : Array[Byte], signature : EthSignature.Basic ) : Boolean = {
       verifyEthHash( EthHash.hash( document ), signature );
     }
 

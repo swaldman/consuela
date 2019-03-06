@@ -43,7 +43,7 @@ import specification.Types.{ByteSeqExact64, ByteSeqExact65, SignatureV, Signatur
 
 // what should I name 32 so that I don't keep retyping 32?
 object EthSignature {
-  private def fromBytesVRS( arr : Array[Byte], offset : Int, vAsRecId : Boolean ) : EthSignature = {
+  private def fromBytesVRS( arr : Array[Byte], offset : Int, vAsRecId : Boolean ) : EthSignature.Basic = {
     val v = {
       val b = arr( offset )
       SignatureV( if ( vAsRecId ) crypto.secp256k1.vFromRecId(b) else b )
@@ -58,9 +58,9 @@ object EthSignature {
       Array.copy( arr, offset+33, tmp, 0, 32 );
       SignatureS( BigInt(1, tmp) )
     }
-    EthSignature( v, r, s )
+    Basic( v, r, s )
   }
-  private def fromBytesRSV( arr : Array[Byte], offset : Int, vAsRecId : Boolean ) : EthSignature = {
+  private def fromBytesRSV( arr : Array[Byte], offset : Int, vAsRecId : Boolean ) : EthSignature.Basic = {
     val r = {
       val tmp = Array.ofDim[Byte](32)
       Array.copy( arr, offset, tmp, 0, 32 )
@@ -75,25 +75,25 @@ object EthSignature {
       val b = arr( offset+64 )
       SignatureV( if ( vAsRecId ) crypto.secp256k1.vFromRecId(b) else b )
     }
-    EthSignature( v, r, s )
+    Basic( v, r, s )
   }
-  def fromBytesVRS( arr : Array[Byte], offset : Int ) : EthSignature = fromBytesVRS( arr, offset, false )
-  def fromBytesVRS( arr : Array[Byte] ) : EthSignature = fromBytesVRS( arr, 0 )
-  def fromBytesVRS( seq : Seq[Byte] )   : EthSignature = fromBytesVRS( seq.toArray )
-  def fromBytesRSV( arr : Array[Byte], offset : Int ) : EthSignature = fromBytesRSV( arr, offset, false )
-  def fromBytesRSV( arr : Array[Byte] ) : EthSignature = fromBytesRSV( arr, 0 )
-  def fromBytesRSV( seq : Seq[Byte] )   : EthSignature = fromBytesRSV( seq.toArray )
-  def fromBytesIRS( arr : Array[Byte], offset : Int ) : EthSignature = fromBytesVRS( arr, offset, true )
-  def fromBytesIRS( arr : Array[Byte] ) : EthSignature = fromBytesIRS( arr, 0 )
-  def fromBytesIRS( seq : Seq[Byte] )   : EthSignature = fromBytesIRS( seq.toArray )
-  def fromBytesRSI( arr : Array[Byte], offset : Int ) : EthSignature = fromBytesRSV( arr, offset, true )
-  def fromBytesRSI( arr : Array[Byte] ) : EthSignature = fromBytesRSI( arr, 0 )
-  def fromBytesRSI( seq : Seq[Byte] )   : EthSignature = fromBytesRSI( seq.toArray )
+  def fromBytesVRS( arr : Array[Byte], offset : Int ) : EthSignature.Basic = fromBytesVRS( arr, offset, false )
+  def fromBytesVRS( arr : Array[Byte] ) : EthSignature.Basic = fromBytesVRS( arr, 0 )
+  def fromBytesVRS( seq : Seq[Byte] )   : EthSignature.Basic = fromBytesVRS( seq.toArray )
+  def fromBytesRSV( arr : Array[Byte], offset : Int ) : EthSignature.Basic = fromBytesRSV( arr, offset, false )
+  def fromBytesRSV( arr : Array[Byte] ) : EthSignature.Basic = fromBytesRSV( arr, 0 )
+  def fromBytesRSV( seq : Seq[Byte] )   : EthSignature.Basic = fromBytesRSV( seq.toArray )
+  def fromBytesIRS( arr : Array[Byte], offset : Int ) : EthSignature.Basic = fromBytesVRS( arr, offset, true )
+  def fromBytesIRS( arr : Array[Byte] ) : EthSignature.Basic = fromBytesIRS( arr, 0 )
+  def fromBytesIRS( seq : Seq[Byte] )   : EthSignature.Basic = fromBytesIRS( seq.toArray )
+  def fromBytesRSI( arr : Array[Byte], offset : Int ) : EthSignature.Basic = fromBytesRSV( arr, offset, true )
+  def fromBytesRSI( arr : Array[Byte] ) : EthSignature.Basic = fromBytesRSI( arr, 0 )
+  def fromBytesRSI( seq : Seq[Byte] )   : EthSignature.Basic = fromBytesRSI( seq.toArray )
 
-  object Base {
-    def apply( v : UnsignedBigInt, r : SignatureR, s : SignatureS ) : Base = {
+  object Abstract {
+    def apply( v : UnsignedBigInt, r : SignatureR, s : SignatureS ) : Abstract = {
       if ( v.widen.isValidByte && SignatureV.contains( v.widen.toByte ) ) {
-        EthSignature( SignatureV( v.widen.toByte ), r, s )
+        Basic( SignatureV( v.widen.toByte ), r, s )
       }
       else if (SignatureWithChainIdV.contains(v.widen)) {
         EthSignature.WithChainId( SignatureWithChainIdV(v.widen), r, s )
@@ -103,7 +103,7 @@ object EthSignature {
       }
     }
   }
-  sealed trait Base {
+  sealed trait Abstract {
     def r : SignatureR
     def s : SignatureS
 
@@ -120,19 +120,19 @@ object EthSignature {
     * See https://eips.ethereum.org/EIPS/eip-155
     */
   object WithChainId {
-    def apply( simple : EthSignature, chainId : EthChainId ) : WithChainId = {
+    def apply( simple : EthSignature.Basic, chainId : EthChainId ) : WithChainId = {
       val v = chainId.signatureWithChainIdV( simple.v )
       val r = simple.r
       val s = simple.s
       apply( v, r, s )
     }
   }
-  final case class WithChainId( val v : SignatureWithChainIdV, val r : SignatureR, val s : SignatureS ) extends Base {
+  final case class WithChainId( val v : SignatureWithChainIdV, val r : SignatureR, val s : SignatureS ) extends EthSignature.Abstract {
     private lazy val extracted = EthChainId.extract( v )
-    def ethSignature : EthSignature = EthSignature( extracted._1, r, s ) 
-    def chainId      : EthChainId   = extracted._2
+    def asBasic : EthSignature.Basic = Basic( extracted._1, r, s ) 
+    def chainId : EthChainId   = extracted._2
 
-    def wasSigned( document : Array[Byte] ) : Option[EthPublicKey] = ethSignature.wasSigned( document )
+    def wasSigned( document : Array[Byte] ) : Option[EthPublicKey] = asBasic.wasSigned( document )
 
     def wasSigned( document : Array[Byte], forChainId : EthChainId ) : Option[EthPublicKey] = if ( forChainId == chainId ) wasSigned( document ) else None
 
@@ -140,28 +140,28 @@ object EthSignature {
 
     lazy val untypedV : UnsignedBigInt = UnsignedBigInt(v.widen)
   }
-}
+  final case class Basic( val v : SignatureV, val r : SignatureR, val s : SignatureS ) extends EthSignature.Abstract {
 
-final case class EthSignature( val v : SignatureV, val r : SignatureR, val s : SignatureS ) extends EthSignature.Base {
+    private def rawBytesWereSigned( bytes : Array[Byte] ) : Option[EthPublicKey] = {
+      crypto.secp256k1.recoverPublicKeyBytesV( v.widen, r.widen.bigInteger, s.widen.bigInteger, bytes ).map( bytes => EthPublicKey( ByteSeqExact64( bytes ) ) )
+    }
 
-  private def rawBytesWereSigned( bytes : Array[Byte] ) : Option[EthPublicKey] = {
-    crypto.secp256k1.recoverPublicKeyBytesV( v.widen, r.widen.bigInteger, s.widen.bigInteger, bytes ).map( bytes => EthPublicKey( ByteSeqExact64( bytes ) ) )
+    def ethHashWasSigned( hash : EthHash )         : Option[EthPublicKey] = rawBytesWereSigned( hash.toByteArray );
+    private def ethHashOfDocumentWasSigned( document : Array[Byte] ) : Option[EthPublicKey] = ethHashWasSigned( EthHash.hash( document ) );
+
+    // default
+    def wasSigned( document : Array[Byte] ) : Option[EthPublicKey] = this.ethHashOfDocumentWasSigned( document );
+
+    lazy val untypedV : UnsignedBigInt = UnsignedBigInt(v.widen)
+
+    lazy val exportBytesVRS : ByteSeqExact65 = ByteSeqExact65.assert( v.widen +: Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) : _* ) );
+    lazy val exportBytesRSV : ByteSeqExact65 = ByteSeqExact65.assert( Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) :+ v.widen : _* ) );
+    lazy val exportBytesIRS : ByteSeqExact65 = ByteSeqExact65.assert( recId.widen +: Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) : _* ) );
+    lazy val exportBytesRSI : ByteSeqExact65 = ByteSeqExact65.assert( Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) :+ recId.widen : _* ) );
+
+    val recId : SignatureRecId = SignatureRecId( crypto.secp256k1.recIdFromV( v.widen ) )
+
+    val isHomesteadCompatible = (s.widen < Homestead.LimitSignatureS)
   }
-
-  def ethHashWasSigned( hash : EthHash )         : Option[EthPublicKey] = rawBytesWereSigned( hash.toByteArray );
-  private def ethHashOfDocumentWasSigned( document : Array[Byte] ) : Option[EthPublicKey] = ethHashWasSigned( EthHash.hash( document ) );
-
-  // default
-  def wasSigned( document : Array[Byte] ) : Option[EthPublicKey] = this.ethHashOfDocumentWasSigned( document );
-
-  lazy val untypedV : UnsignedBigInt = UnsignedBigInt(v.widen)
-
-  lazy val exportBytesVRS : ByteSeqExact65 = ByteSeqExact65.assert( v.widen +: Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) : _* ) );
-  lazy val exportBytesRSV : ByteSeqExact65 = ByteSeqExact65.assert( Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) :+ v.widen : _* ) );
-  lazy val exportBytesIRS : ByteSeqExact65 = ByteSeqExact65.assert( recId.widen +: Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) : _* ) );
-  lazy val exportBytesRSI : ByteSeqExact65 = ByteSeqExact65.assert( Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) :+ recId.widen : _* ) );
-
-  val recId : SignatureRecId = SignatureRecId( crypto.secp256k1.recIdFromV( v.widen ) )
-
-  val isHomesteadCompatible = (s.widen < Homestead.LimitSignatureS)
 }
+

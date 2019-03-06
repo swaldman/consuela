@@ -75,25 +75,25 @@ final case class EthPrivateKey( val bytes : ByteSeqExact32 ) extends EthSigner {
   lazy val s = bytes.widen.toUnsignedBigInt
 
   // default signing scheme
-  def sign( document : Array[Byte] ) : EthSignature = signHashedDocument( document );
+  def sign( document : Array[Byte] ) : EthSignature.Basic = signHashedDocument( document );
 
-  private def internalSignRawBytes( rawBytes : Array[Byte] ) : EthSignature = {
+  private def internalSignRawBytes( rawBytes : Array[Byte] ) : EthSignature.Basic = {
     import crypto.secp256k1._;
     recoverableCompleteSignature( s.bigInteger, rawBytes ) match {
       case Left( badbytes )                              => throw new UnexpectedSignatureFormatException( badbytes.hex );
-      case Right( Signature( r, s, Some( v ) ) )         => EthSignature( SignatureV( v ), SignatureR( BigInt(r) ), SignatureS( BigInt(s) ) );
+      case Right( Signature( r, s, Some( v ) ) )         => EthSignature.Basic( SignatureV( v ), SignatureR( BigInt(r) ), SignatureS( BigInt(s) ) );
       case Right( incomplete @ Signature( r, s, None ) ) => throw new UnexpectedSignatureFormatException( s"We expect a complete signature. Missing v: ${incomplete}" );
     }
   }
 
   // restrict to Homestead compatible signatures
   @tailrec
-  def signRawBytes( rawBytes : Array[Byte] ) : EthSignature = {
+  def signRawBytes( rawBytes : Array[Byte] ) : EthSignature.Basic = {
     val check = internalSignRawBytes( rawBytes )
     if ( check.isHomesteadCompatible ) check else signRawBytes( rawBytes )
   }
   def signEthHash( hash : EthHash ) = signRawBytes( hash.toByteArray );
-  def signHashedDocument( document : Array[Byte] ) : EthSignature = signEthHash( EthHash.hash( document ) );
+  def signHashedDocument( document : Array[Byte] ) : EthSignature.Basic = signEthHash( EthHash.hash( document ) );
 
   lazy val toPublicKey = EthPublicKey( this );
 
@@ -101,8 +101,8 @@ final case class EthPrivateKey( val bytes : ByteSeqExact32 ) extends EthSigner {
 
   // for EthSigner trait
 
-  def sign( document : Seq[Byte] ) : EthSignature = this.sign( document.toArray )
-  def signPrehashed( documentHash : EthHash ) : EthSignature = this.signEthHash( documentHash )
+  def sign( document : Seq[Byte] ) : EthSignature.Basic = this.sign( document.toArray )
+  def signPrehashed( documentHash : EthHash ) : EthSignature.Basic = this.signEthHash( documentHash )
 
   lazy val address = toPublicKey.toAddress
 

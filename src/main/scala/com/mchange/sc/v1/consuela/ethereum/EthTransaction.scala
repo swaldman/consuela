@@ -155,21 +155,21 @@ object EthTransaction {
     }
   }
   final object Signed {
-    def apply( unsignedTransaction : Unsigned, sig : EthSignature.Base ) : Signed = {
+    def apply( unsignedTransaction : Unsigned, sig : EthSignature.Abstract ) : Signed = {
       sig match {
-        case simple : EthSignature             => NoChainId  ( unsignedTransaction, simple )
+        case simple : EthSignature.Basic             => NoChainId  ( unsignedTransaction, simple )
         case wci    : EthSignature.WithChainId => WithChainId( unsignedTransaction, wci    )
       }
     }
 
     final object NoChainId {
-      def apply( unsignedTransaction : Unsigned, sig : EthSignature ) : NoChainId = {
+      def apply( unsignedTransaction : Unsigned, sig : EthSignature.Basic ) : NoChainId = {
         unsignedTransaction match {
           case msg : Unsigned.Message          => Message( msg, sig );
           case cc  : Unsigned.ContractCreation => ContractCreation( cc, sig );
         }
       }
-      final case class Message( unsignedTransaction : Unsigned.Message, val signature : EthSignature ) extends Signed.NoChainId with EthTransaction.Message {
+      final case class Message( unsignedTransaction : Unsigned.Message, val signature : EthSignature.Basic ) extends Signed.NoChainId with EthTransaction.Message {
         def nonce    : Unsigned256         = unsignedTransaction.nonce;
         def gasPrice : Unsigned256         = unsignedTransaction.gasPrice;
         def gasLimit : Unsigned256         = unsignedTransaction.gasLimit;
@@ -179,7 +179,7 @@ object EthTransaction {
 
         override def toString() = s"Signed.NoChainId.Message(nonce=${nonce},gasPrice=${gasPrice},gasLimit=${gasLimit},to=${to},value=${value},data=${data},signature=${signature})"
       }
-      final case class ContractCreation( unsignedTransaction : Unsigned.ContractCreation, val signature : EthSignature ) extends Signed.NoChainId with EthTransaction.ContractCreation {
+      final case class ContractCreation( unsignedTransaction : Unsigned.ContractCreation, val signature : EthSignature.Basic ) extends Signed.NoChainId with EthTransaction.ContractCreation {
         def nonce    : Unsigned256         = unsignedTransaction.nonce;
         def gasPrice : Unsigned256         = unsignedTransaction.gasPrice;
         def gasLimit : Unsigned256         = unsignedTransaction.gasLimit;
@@ -190,7 +190,7 @@ object EthTransaction {
       }
     }
     sealed trait NoChainId extends Signed {
-      val signature : EthSignature
+      val signature : EthSignature.Basic
       lazy val signedBytes = unsignedTransaction.signableBytes( None )
 
       def v : SignatureV = signature.v;
@@ -233,7 +233,7 @@ object EthTransaction {
     }
   }
   sealed trait Signed extends EthTransaction{
-    val signature           : EthSignature.Base
+    val signature           : EthSignature.Abstract
 
     def signedBytes : immutable.Seq[Byte]
 

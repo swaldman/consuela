@@ -47,10 +47,10 @@ trait EthSigner {
   /*
    *  Abstract methods
    */ 
-  def sign( document : Array[Byte] ) : EthSignature
-  def sign( document : Seq[Byte] )   : EthSignature
+  def sign( document : Array[Byte] ) : EthSignature.Basic
+  def sign( document : Seq[Byte] )   : EthSignature.Basic
 
-  def signPrehashed( documentHash : EthHash ) : EthSignature
+  def signPrehashed( documentHash : EthHash ) : EthSignature.Basic
 
   /*
    *  Implemented variations for EIP-155 chain ID

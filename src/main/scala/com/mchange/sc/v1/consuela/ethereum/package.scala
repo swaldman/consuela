@@ -161,7 +161,7 @@ package object ethereum {
                   untypedV <- RLP.fromElement[UnsignedBigInt]( vE.simplify );
                   r        <- RLP.fromElement[SignatureR]( rE.simplify );
                   s        <- RLP.fromElement[SignatureS]( sE.simplify );
-                  sig      <- Try( EthSignature.Base( untypedV, r, s ) ).toFailable
+                  sig      <- Try( EthSignature.Abstract( untypedV, r, s ) ).toFailable
                 } yield {
                   Signed( b, sig )
                 }
