@@ -237,8 +237,8 @@ package object ethabi {
   }
 
   private [ethabi] val TypeAliases : Map[String,String] = Map (
-    "uint"   -> "uint32",
-    "int"    -> "int32",
+    "uint"   -> "uint256",
+    "int"    -> "int256",
     "fixed"  -> "fixed128x128",
     "ufixed" -> "ufixed128x128"
   )
@@ -283,6 +283,9 @@ package object ethabi {
     } else {
       val canonicalDesired  = desiredTypes.map( canonicalizeTypeName )
       val canonicalRequired = function.inputs.map( f => canonicalizeTypeName( f.`type` ) )
+      // println( s"desired:  ${canonicalDesired}" )
+      // println( s"required: ${canonicalRequired}" )
+      // println(  "-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-" )
       canonicalDesired.zip( canonicalRequired ).forall { case ( des, req ) => des == req }
     }
   }
