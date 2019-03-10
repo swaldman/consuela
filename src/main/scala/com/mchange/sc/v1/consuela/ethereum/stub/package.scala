@@ -35,6 +35,8 @@ package object stub {
   val  BlockNumber = Client.BlockNumber
   type BlockNumber = Client.BlockNumber
 
+  private [stub] val Zero256 = sol.UInt256(0)
+
   final object ScalaParameterHelper {
     def apply( scalaTypeName : String ) : ScalaParameterHelper = this.apply( scalaTypeName, identity, name => s"${name}.asInstanceOf[${scalaTypeName}]" )
   }

@@ -52,7 +52,7 @@ object Generator {
     "com.mchange.sc.v1.consuela.ethereum.ethabi",
     "com.mchange.sc.v1.consuela.ethereum.ethabi.{Decoded,SolidityEvent}",
     "com.mchange.sc.v1.consuela.ethereum.stub",
-    "com.mchange.sc.v1.consuela.ethereum.stub.sol",
+    "com.mchange.sc.v1.consuela.ethereum.stub.{sol,Nonce,Payment}",
     "com.mchange.sc.v1.consuela.ethereum.stub.Utilities._",
     "com.mchange.sc.v1.consuela.ethereum.jsonrpc",
     "com.mchange.sc.v1.consuela.ethereum.jsonrpc.{Abi,Client}",
@@ -814,7 +814,7 @@ object Generator {
     iw.upIndent()
 
     if (! fcn.payable) {
-      iw.println("val optionalPaymentInWei : Option[sol.UInt256] = None")
+      iw.println("val payment : Payment = Payment.None")
       iw.println()
     }
     iw.println( s"""val fcn = ${stubUtilitiesClassName}.${functionValName(fcn)}""" )
@@ -822,7 +822,7 @@ object Generator {
     iw.println( s"""val callData = ethabi.callDataForAbiFunctionFromEncoderRepresentations( reps, fcn ).get""" )
 
     if ( constantSection ) {
-      iw.println( s"""val futRetBytes = jsonrpc.Invoker.constant.sendMessage( sender.address, contractAddress, optionalPaymentInWei.getOrElse( Zero ), callData )""" )
+      iw.println( s"""val futRetBytes = jsonrpc.Invoker.constant.sendMessage( sender.address, contractAddress, payment.amountInWei, callData )""" )
       iw.println( s"""val futDecodedReturnValues = futRetBytes.map( bytes => ethabi.decodeReturnValuesForFunction( bytes, fcn ) )""" )
       iw.println( s"""val futDecodedReps = futDecodedReturnValues.map( _.get.map( _.value  ).toVector )""" )
 
@@ -850,7 +850,7 @@ object Generator {
         iw.println( s"""Await.result( futOut, Duration.Inf )""" )
       }
     } else {
-      iw.println( s"""val futHash = jsonrpc.Invoker.transaction.sendMessage( sender.findSigner(), contractAddress, optionalPaymentInWei.getOrElse( Zero ), callData )""" )
+      iw.println( s"""val futHash = jsonrpc.Invoker.transaction.sendMessage( sender.findSigner(), contractAddress, payment.amountInWei, callData, nonce.toOption )""" )
       iw.println( s"""val futTransactionInfoAsync = futHash.map( hash => stub.TransactionInfo.Async.fromClientTransactionReceipt( hash, jsonrpc.Invoker.futureTransactionReceipt( hash ) ) )""" )
       if ( async ) {
         iw.println( "futTransactionInfoAsync" )
@@ -865,15 +865,29 @@ object Generator {
   }
 
   private def functionSignature( fcn : Abi.Function, constantSection : Boolean, async : Boolean ) : String = {
+    val syntheticArgs : immutable.Seq[String] = {
+      val paymentArg = "payment : Payment = Payment.None"
+      val nonceArg   = "nonce : Nonce = Nonce.Auto"
+
+      ( fcn.payable, constantSection ) match {
+        case ( true, true )   => immutable.Seq( paymentArg )
+        case ( false, true )  => immutable.Seq.empty[String]
+        case ( true, false )  => immutable.Seq( paymentArg, nonceArg )
+        case ( false, false ) => immutable.Seq( nonceArg )
+      }
+    }
+
+    functionSignatureForSyntheticArgs( fcn, constantSection, async, syntheticArgs )
+  }
+
+  private def functionSignatureForSyntheticArgs( fcn : Abi.Function, constantSection : Boolean, async : Boolean, syntheticArgs : immutable.Seq[String] ) : String = {
     def scalaType( param : Abi.Function.Parameter ) : String = {
       val tpe = param.`type`
       val helper = forceHelper( tpe )
       s"${helper.scalaTypeName}"
     }
 
-    def paymentArg = "optionalPaymentInWei : Option[sol.UInt256] = None"
-
-    val params = fcn.inputs.map( scalaSignatureParam ) ++ ( if ( fcn.payable ) immutable.Seq( paymentArg ) else immutable.Seq.empty[String] )
+    val params = fcn.inputs.map( scalaSignatureParam ) ++ syntheticArgs
 
     val senderPart = if ( constantSection ) "( implicit sender : stub.Sender )" else "( implicit sender : stub.Sender.Signing )"
     
