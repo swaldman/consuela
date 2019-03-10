@@ -206,7 +206,7 @@ object Encoder {
 
   object Bytes extends Encoder.AbstractByteString {
 
-    def parse( str : String ) : Failable[immutable.Seq[Byte]] = parseByteArrayInArrayFormat( str ) orElse Failable( str.decodeHexAsSeq ) orElse parseOneByteCharQuotedString( str )
+    def parse( str : String ) : Failable[immutable.Seq[Byte]] = parseByteArrayInArrayFormat( str ) orElse Failable( str.decodeHexAsSeq )
 
     def format( representation : immutable.Seq[Byte] ) : Failable[String] = Failable( s"0x${representation.hex}" )
   }
@@ -532,7 +532,7 @@ object Encoder {
       }
     }
 
-    def parse( str : String ) : Failable[immutable.Seq[Byte]] = parseAsArray( str ) orElse parseAsHex( str ) orElse parseOneByteCharQuotedString( str )
+    def parse( str : String ) : Failable[immutable.Seq[Byte]] = parseAsArray( str ) orElse parseAsHex( str )
 
     def format( representation : immutable.Seq[Byte] ) : Failable[String] = {
       checkLen( representation ).flatMap( _ =>  Failable( s"0x${representation.hex}" ) )
