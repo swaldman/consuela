@@ -337,16 +337,20 @@ object Generator {
       iw.println( s"final object transaction {" )
       iw.upIndent()
       abi.functions.foreach { fcn =>
-        writeFunction( className, stubUtilitiesClass, fillInputs(fcn), false, async, iw )
-        iw.println()
+        val sas = syntheticArgSet( fcn, false )
+        val fi_fcn = fillInputs(fcn)
+        writeFunction( className, stubUtilitiesClass, fi_fcn, false, async, sas, iw )
+        writeSyntheticArgumentFunctionOverloads( sas, fi_fcn, false, async, iw )
       }
       iw.downIndent()
       iw.println( "}" )
       iw.println( s"final object constant {" )
       iw.upIndent()
       abi.functions.filter( _.constant ).foreach { fcn =>
-        writeFunction( className, stubUtilitiesClass, fillInputs(fcn), true, async, iw )
-        iw.println()
+        val sas = syntheticArgSet( fcn, true )
+        val fi_fcn = fillInputs(fcn)
+        writeFunction( className, stubUtilitiesClass, fi_fcn, true, async, sas, iw )
+        writeSyntheticArgumentFunctionOverloads( sas, fi_fcn, true, async, iw )
       }
       iw.downIndent()
       iw.println( "}" )
@@ -803,14 +807,14 @@ object Generator {
     iw.println()
   }
 
-  private def writeFunction( className : String, stubUtilitiesClassName : String, fcn : Abi.Function, constantSection : Boolean, async : Boolean, iw : IndentedWriter ) : Unit = {
+  private def writeFunction( className : String, stubUtilitiesClassName : String, fcn : Abi.Function, constantSection : Boolean, async : Boolean, syntheticArgs : immutable.SortedSet[SyntheticArg], iw : IndentedWriter ) : Unit = {
     def toRepLambda( param : Abi.Function.Parameter ) : String = {
       val tpe = param.`type`
       val helper = forceHelper( tpe )
       helper.inConversionGen( param.name )
     }
 
-    iw.println( functionSignature( fcn, constantSection, async ) + " = {" )
+    iw.println( functionSignature( fcn, constantSection, async, syntheticArgs ) + " = {" )
     iw.upIndent()
 
     if (! fcn.payable) {
@@ -864,30 +868,72 @@ object Generator {
     iw.println( "}")
   }
 
-  private def functionSignature( fcn : Abi.Function, constantSection : Boolean, async : Boolean ) : String = {
-    val syntheticArgs : immutable.Seq[String] = {
-      val paymentArg = "payment : Payment = Payment.None"
-      val nonceArg   = "nonce : Nonce = Nonce.Auto"
+  private object SyntheticArg {
+    val Payment = SyntheticArg( 0, "payment : Payment", "payment", "Payment.None" )
+    val Nonce   = SyntheticArg( 1, "nonce : Nonce", "nonce", "Nonce.Auto" )
 
-      ( fcn.payable, constantSection ) match {
-        case ( true, true )   => immutable.Seq( paymentArg )
-        case ( false, true )  => immutable.Seq.empty[String]
-        case ( true, false )  => immutable.Seq( paymentArg, nonceArg )
-        case ( false, false ) => immutable.Seq( nonceArg )
-      }
+    implicit val IndexOrdering : Ordering[SyntheticArg] = Ordering.by( _.index )
+    
+  }
+  private case class SyntheticArg( index : Int, inSignature : String, inCall : String, defaultValue : String )
+
+  private def syntheticArgSet( fcn : Abi.Function, constantSection : Boolean ) : immutable.SortedSet[SyntheticArg] = {
+    ( fcn.payable, constantSection ) match {
+      case ( true, true )   => immutable.SortedSet( SyntheticArg.Payment )
+      case ( false, true )  => immutable.SortedSet.empty[SyntheticArg]
+      case ( true, false )  => immutable.SortedSet( SyntheticArg.Payment, SyntheticArg.Nonce )
+      case ( false, false ) => immutable.SortedSet( SyntheticArg.Nonce )
     }
-
-    functionSignatureForSyntheticArgs( fcn, constantSection, async, syntheticArgs )
   }
 
-  private def functionSignatureForSyntheticArgs( fcn : Abi.Function, constantSection : Boolean, async : Boolean, syntheticArgs : immutable.Seq[String] ) : String = {
+  private def overloadArgSets( mainArgSet : immutable.SortedSet[SyntheticArg] ) : immutable.Set[immutable.SortedSet[SyntheticArg]] = mainArgSet.subsets.toSet - mainArgSet
+
+  /*
+   * Initially we used default arguments to make provision of the synthetic arguments optional
+   * but that won't be robust to smart contracts with overloaded solidity functions.
+   * 
+   * (In Scala mixing default arguments and function overloads is fragile.)
+   * 
+   */ 
+  private def writeSyntheticArgumentFunctionOverloads( mainArgSet : immutable.SortedSet[SyntheticArg], fcn : Abi.Function, constantSection : Boolean, async : Boolean, iw : IndentedWriter ) : Unit = {
+    overloadArgSets( mainArgSet ).foreach { overloadArgSet =>
+      writeSyntheticArgumentFunctionOverload( fcn, constantSection, async, mainArgSet, overloadArgSet, iw )
+    }
+  }
+
+  private def writeSyntheticArgumentFunctionOverload(
+    fcn : Abi.Function,
+    constantSection : Boolean,
+    async : Boolean,
+    mainArgSet : immutable.SortedSet[SyntheticArg],
+    overloadArgSet : immutable.SortedSet[SyntheticArg],
+    iw : IndentedWriter
+  ) : Unit = {
+    val sig = functionSignature( fcn, constantSection, async, overloadArgSet )
+
+    def findCallValue( arg : SyntheticArg ) = if ( overloadArgSet( arg ) ) arg.inCall else arg.defaultValue
+
+    val synthCallArgs = mainArgSet.toSeq.map( findCallValue ) // if we don't "toSeq" it first, it re-sorts by a String ordering... grrrr.
+    val callArgs = fcn.inputs.map( _.name ) ++ synthCallArgs
+    val callArgsStr = callArgs.mkString( ", " )
+    val call = s"${fcn.name}( ${callArgsStr} )( sender )"
+
+    iw.println( s"${sig} = {" )
+    iw.upIndent()
+    iw.println( call )
+    iw.downIndent()
+    iw.println(  "}")
+  }
+
+  private def functionSignature( fcn : Abi.Function, constantSection : Boolean, async : Boolean, syntheticArgs : immutable.SortedSet[SyntheticArg] ) : String = {
     def scalaType( param : Abi.Function.Parameter ) : String = {
       val tpe = param.`type`
       val helper = forceHelper( tpe )
       s"${helper.scalaTypeName}"
     }
 
-    val params = fcn.inputs.map( scalaSignatureParam ) ++ syntheticArgs
+    // the toSeq is important, otherwise the synthetic args re-sort by some String ordering
+    val params = fcn.inputs.map( scalaSignatureParam ) ++ syntheticArgs.toSeq.map( _.inSignature )
 
     val senderPart = if ( constantSection ) "( implicit sender : stub.Sender )" else "( implicit sender : stub.Sender.Signing )"
     
