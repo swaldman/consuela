@@ -2,13 +2,11 @@ val nexus = "https://oss.sonatype.org/"
 val nexusSnapshots = nexus + "content/repositories/snapshots";
 val nexusReleases = nexus + "service/local/staging/deploy/maven2";
 
-enablePlugins(ParadoxPlugin)
-
 organization := "com.mchange"
 
 name := "consuela"
 
-version := "0.0.12-SNAPSHOT"
+version := "0.0.12"
 
 scalaVersion := "2.12.7"
 
@@ -43,7 +41,7 @@ libraryDependencies ++= Seq(
   "com.mchange"             %% "failable-logging"                % failableVersion,
   "com.mchange"             %% "restricted-type"                 % restrictedTypeVersion,
   "com.mchange"             %% "yinyang"                         % "0.0.2",
-  "com.mchange"             %% "mchange-commons-scala"           % "0.4.9-SNAPSHOT",
+  "com.mchange"             %% "mchange-commons-scala"           % "0.4.9",
   "com.mchange"             %% "literal"                         % "0.0.2",
   "com.mchange"             %% "mchange-play-json-util"          % "0.0.2",
   "com.mchange"             %% "jsonrpc-client"                  % "0.0.4",
@@ -102,6 +100,7 @@ pomExtra := {
     </developers>
 }
 
+enablePlugins(ParadoxPlugin)
 
 val updateSite = taskKey[Unit]("Updates the project website on tickle")
 
