@@ -112,13 +112,13 @@ updateSite := {
   val localDir1 = target.value / "paradox" / "site" / "main"
 
   val local1 = localDir1.listFiles.map( _.getPath ).mkString(" ")
-  val remote1 = s"tickle.mchange.com:/home/web/public/www.mchange.com/projects/${name.value}/version/${version.value}/"
+  val remote1 = s"tickle.mchange.com:/home/web/public/www.mchange.com/projects/${name.value}-versions/${version.value}/"
   s"rsync -avz ${local1} ${remote1}"!
 
   val dummy2 = (Compile / doc).value // force scaladocs
 
   val localDir2 = target.value / "scala-2.12" / "api"
   val local2 = localDir2.listFiles.map( _.getPath ).mkString(" ")
-  val remote2 = s"tickle.mchange.com:/home/web/public/www.mchange.com/projects/${name.value}/version/${version.value}/apidocs"
+  val remote2 = s"tickle.mchange.com:/home/web/public/www.mchange.com/projects/${name.value}-versions/${version.value}/apidocs"
   s"rsync -avz ${local2} ${remote2}"!
 }
