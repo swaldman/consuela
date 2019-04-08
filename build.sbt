@@ -6,11 +6,11 @@ organization := "com.mchange"
 
 name := "consuela"
 
-version := "0.0.12"
+version := "0.0.13"
 
 scalaVersion := "2.12.7"
 
-crossScalaVersions := Seq("2.10.7", "2.11.12", "2.12.7")
+crossScalaVersions := Seq("2.10.7", "2.11.12", "2.12.8")
 
 scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked" /*, "-Xlog-implicits" */)
 
@@ -33,21 +33,21 @@ publishTo := {
 }
 
 val restrictedTypeVersion = "0.0.5"
-val failableVersion       = "0.0.2"
+val failableVersion       = "0.0.3"
 
 libraryDependencies ++= Seq(
-  "com.mchange"             %% "mlog-scala"                      % "0.3.10",
+  "com.mchange"             %% "mlog-scala"                      % "0.3.11",
   "com.mchange"             %% "failable"                        % failableVersion,
   "com.mchange"             %% "failable-logging"                % failableVersion,
   "com.mchange"             %% "restricted-type"                 % restrictedTypeVersion,
   "com.mchange"             %% "yinyang"                         % "0.0.2",
   "com.mchange"             %% "mchange-commons-scala"           % "0.4.9",
   "com.mchange"             %% "literal"                         % "0.0.2",
-  "com.mchange"             %% "mchange-play-json-util"          % "0.0.2",
-  "com.mchange"             %% "jsonrpc-client"                  % "0.0.4",
+  "com.mchange"             %% "mchange-play-json-util"          % "0.0.3",
+  "com.mchange"             %% "jsonrpc-client"                  % "0.0.5",
   "com.mchange"             %  "mchange-commons-java"            % "0.2.15",
   "org.reactivestreams"     %  "reactive-streams"                % "1.0.1",
-  "com.typesafe"            %  "config"                          % "1.2.1",
+  "com.typesafe"            %  "config"                          % "1.3.0",
   "org.bouncycastle"        %  "bcprov-jdk15on"                  % "1.54",
   "com.madgag.spongycastle" %  "prov"                            % "1.54.0.0"            % "compile,optional", //only necessary on android
   "com.mchange"             %% "restricted-type-scalacheck-util" % restrictedTypeVersion % "test",
@@ -58,7 +58,7 @@ libraryDependencies ++= Seq(
 libraryDependencies += {
   CrossVersion.partialVersion(Keys.scalaVersion.value) match {
     case Some((2, 12)) => {
-      "com.typesafe.play" %% "play-json" % "2.6.9"
+      "com.typesafe.play" %% "play-json" % "2.6.13"
     }
     case Some((2, 11)) => {
       "com.typesafe.play" %% "play-json" % "2.5.18"
