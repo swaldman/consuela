@@ -29,6 +29,27 @@ object ConfirmedLogPublisher {
    *  different block containing the transaction.
    */ 
   private val LogOrdering = Ordering.by( (l : Client.Log.Recorded) => (l.blockNumber, l.blockHash.hex, l.transactionIndex, l.logIndex) )
+
+  // we just need an identifier consistent between
+  // Log.Recorded and Log.Removed for a hash key
+  private object LogIdentifier {
+    def apply( recordedOrRemoved : Client.Log.Full ) : LogIdentifier = LogIdentifier (
+      logIndex         = recordedOrRemoved.logIndex,
+      transactionIndex = recordedOrRemoved.transactionIndex,
+      transactionHash  = recordedOrRemoved.transactionHash,
+      blockHash        = recordedOrRemoved.blockHash,
+      blockNumber      = recordedOrRemoved.blockNumber,
+      ethLogEntry      = recordedOrRemoved.ethLogEntry
+    )
+  }
+  private final case class LogIdentifier (
+    val logIndex         : Unsigned256,
+    val transactionIndex : Unsigned256,
+    val transactionHash  : EthHash,
+    val blockHash        : EthHash,
+    val blockNumber      : Unsigned256,
+    val ethLogEntry      : EthLogEntry
+  ) 
 }
 class ConfirmedLogPublisher( ethJsonRpcUrl : String, query : Client.Log.Filter.Query, numConfirmations : Int, blockPollDelay : Duration = 3.seconds, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
   efactory                 : Exchanger.Factory = Exchanger.Factory.Default,
@@ -38,8 +59,8 @@ class ConfirmedLogPublisher( ethJsonRpcUrl : String, query : Client.Log.Filter.Q
 
   import ConfirmedLogPublisher._
 
-  private val logPublisher = new LogPublisher( ethJsonRpcUrl, query, blockPollDelay, subscriptionUpdateDelay )
-  private val numPublisher = new BlockNumberPublisher( ethJsonRpcUrl, blockPollDelay, subscriptionUpdateDelay )
+  private val logPublisher = new LogNoFilterPublisher( ethJsonRpcUrl, query, blockPollDelay, subscriptionUpdateDelay )
+  private val numPublisher = new BlockNumberNoFilterPublisher( ethJsonRpcUrl, blockPollDelay, subscriptionUpdateDelay )
 
   //MT: protected by this' lock
   private val pendingConfirmation = createPendingConfirmations 
@@ -63,28 +84,6 @@ class ConfirmedLogPublisher( ethJsonRpcUrl : String, query : Client.Log.Filter.Q
     val jmap = new java.util.TreeMap[BigInt,mutable.HashMap[LogIdentifier,Client.Log.Recorded]]( comparator )
     jmap.asScala
   }
-
-  // we just need an identifier consistent between
-  // Log.Recorded and Log.Removed for a hash key
-  private object LogIdentifier {
-    def apply( recordedOrRemoved : Client.Log.Full ) : LogIdentifier = LogIdentifier (
-      logIndex         = recordedOrRemoved.logIndex,
-      transactionIndex = recordedOrRemoved.transactionIndex,
-      transactionHash  = recordedOrRemoved.transactionHash,
-      blockHash        = recordedOrRemoved.blockHash,
-      blockNumber      = recordedOrRemoved.blockNumber,
-      ethLogEntry      = recordedOrRemoved.ethLogEntry
-    )
-  }
-  private final case class LogIdentifier (
-    val logIndex         : Unsigned256,
-    val transactionIndex : Unsigned256,
-    val transactionHash  : EthHash,
-    val blockHash        : EthHash,
-    val blockNumber      : Unsigned256,
-    val ethLogEntry      : EthLogEntry
-  ) 
-
 
   def subscribe( subscriber : RxSubscriber[_ >: Client.Log.Recorded] ) : Unit = {
     val subscription = this.synchronized {

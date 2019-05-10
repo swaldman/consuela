@@ -13,19 +13,18 @@ import scala.collection._
 import scala.concurrent.{ExecutionContext,Future}
 import scala.concurrent.duration._
 
-import SimplePublisher.Transformed
+import NoFilterPublisher.Transformed
 
-object LogPublisher {
-  private [LogPublisher] implicit lazy val logger = mlogger( this )
+object LogNoFilterPublisher {
+  private [LogNoFilterPublisher] implicit lazy val logger = mlogger( this )
 }
-@deprecated("Use LogNoFilterPublisher, avoid iffily supported JSON-RPC filter ops.", "0.0.14")
-class LogPublisher( ethJsonRpcUrl : String, query : Client.Log.Filter.Query,  blockPollDelay : Duration = 3.seconds, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
+class LogNoFilterPublisher( ethJsonRpcUrl : String, query : Client.Log.Filter.Query,  blockPollDelay : Duration = 3.seconds, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
   efactory                 : Exchanger.Factory = Exchanger.Factory.Default,
   scheduler                : Scheduler         = Scheduler.Default,
   executionContext         : ExecutionContext  = ExecutionContext.global
-) extends SimplePublisher[Client.Log,Client.Log,Client.Log.Filter]( ethJsonRpcUrl, blockPollDelay, subscriptionUpdateDelay )( efactory, scheduler, executionContext ) {
+) extends NoFilterPublisher[Client.Log,Client.Log]( ethJsonRpcUrl, blockPollDelay, subscriptionUpdateDelay )( efactory, scheduler, executionContext ) {
 
-  import LogPublisher.logger
+  import LogNoFilterPublisher.logger
 
   val mbEndBlock : Option[BigInt] = {
     val raw = query.toBlock
@@ -35,10 +34,24 @@ class LogPublisher( ethJsonRpcUrl : String, query : Client.Log.Filter.Query,  bl
     }
   }
 
-  protected def acquireFilter( client : Client ) : Future[Client.Log.Filter] = client.eth.newLogFilter( query )
+  protected def getChanges( client : Client, fromBlock : BigInt, toBlock : BigInt ) : Future[immutable.Seq[Client.Log]] = {
+    assert( fromBlock <= toBlock, s"fromBlock must be less than or equal to toBlock, isn't -- fromBlock: ${fromBlock}, toBlock: ${toBlock}" )
 
-  protected def getChanges( client : Client, filter : Client.Log.Filter ) : Future[immutable.Seq[Client.Log]] = {
-    client.eth.getNewLogs( filter )
+    mbEndBlock match {
+      case Some( maxValue ) => {
+        if (fromBlock > maxValue ) {
+          Future.successful( immutable.Seq.empty )
+        }
+        else {
+          val currentQuery = query.copy( fromBlock=Some( Client.BlockNumber.Quantity( fromBlock ) ), toBlock=Some( Client.BlockNumber.Quantity( toBlock.min(maxValue) ) ) )
+          client.eth.getLogs( currentQuery )
+        }
+      }
+      case None => {
+        val currentQuery = query.copy( fromBlock=Some( Client.BlockNumber.Quantity( fromBlock ) ), toBlock=Some( Client.BlockNumber.Quantity( toBlock ) ) )
+        client.eth.getLogs( currentQuery )
+      }
+    }
   }
 
   override protected def transformTerminate( client : Client, items : immutable.Seq[Client.Log] ) : Future[Transformed[Client.Log]] = {

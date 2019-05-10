@@ -5,7 +5,6 @@ import com.mchange.sc.v1.log.MLevel._
 import com.mchange.sc.v2.jsonrpc.Exchanger
 
 import com.mchange.sc.v1.consuela.ethereum.jsonrpc.Client
-import Client.Filter
 
 import com.mchange.sc.v2.concurrent.Scheduler
 import com.mchange.sc.v2.lang._
@@ -19,6 +18,8 @@ import scala.collection._
 import scala.concurrent.{ExecutionContext,Future}
 import scala.concurrent.duration._
 import scala.util.Failure
+
+import java.util.concurrent.atomic.AtomicReference
 
 /**
   * Unless the chosen filter supports a "fromBlock", there is no way to control precisely at what
@@ -37,22 +38,24 @@ import scala.util.Failure
   * F is the Client.Filter type of the object usually used to specify the items that will get
   *   published. (Filter.Dummy can be acquired and left unused if no filter is necessary.)
   */
-object SimplePublisher {
-  private [SimplePublisher] implicit lazy val logger = mlogger( this )
+object NoFilterPublisher {
+  private [NoFilterPublisher] implicit lazy val logger = mlogger( this )
 
   final case class Transformed[T]( items : immutable.Seq[T], shouldTerminate : Boolean ) // we don't make inner because of annoying outer reference issues and warnings
+
+  private final val Zero = BigInt(0)
 }
-@deprecated("Use NoFilterPublisher, avoid iffily supported JSON-RPC filter ops.", "0.0.14")
-abstract class SimplePublisher[T, S, F <: Filter]( ethJsonRpcUrl : String, blockPollDelay : Duration = 3.seconds, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
+abstract class NoFilterPublisher[T, S]( ethJsonRpcUrl : String, blockPollDelay : Duration = 3.seconds, subscriptionUpdateDelay : Duration = 3.seconds )( implicit
   efactory                 : Exchanger.Factory = Exchanger.Factory.Default,
   scheduler                : Scheduler         = Scheduler.Default,
   executionContext         : ExecutionContext  = ExecutionContext.global // XXX: SHould we reorganize so that by default we use the Scheduler's thread pool?
 ) extends RxPublisher[T] with SimpleSubscription.Parent[T] {
 
-  import SimplePublisher.{logger, Transformed}
+  import NoFilterPublisher.{logger, Transformed, Zero}
 
-  protected def acquireFilter( client : Client )          : Future[F]
-  protected def getChanges( client : Client, filter : F ) : Future[immutable.Seq[S]]
+  private val lastCheckedBlockNumber = new AtomicReference[BigInt]( BigInt(-1) )
+
+  protected def getChanges( client : Client, fromBlock : BigInt, toBlock : BigInt ) : Future[immutable.Seq[S]]
 
   /**
     * This is an opportunity to transform acquired items -- to filter items that should not be published, to map items into something else
@@ -71,14 +74,6 @@ abstract class SimplePublisher[T, S, F <: Filter]( ethJsonRpcUrl : String, block
     */ 
   protected def transformTerminate( client : Client, items : immutable.Seq[S] ) : Future[Transformed[T]]
 
-  protected def cancelFilter( client : Client, filter : F ) : Future[_] = {
-    if ( filter != Client.Filter.Dummy ) {
-      client.eth.uninstallFilter( filter )
-    } else {
-      Future.successful( () )
-    }
-  }
-
   def subscribe( subscriber : RxSubscriber[_ >: T] ) : Unit = {
     val subscription = this.synchronized {
       val s = new SimpleSubscription[T]( this, subscriber )
@@ -96,7 +91,6 @@ abstract class SimplePublisher[T, S, F <: Filter]( ethJsonRpcUrl : String, block
   private val subscriptions : mutable.Set[SimpleSubscription[T]] = mutable.HashSet.empty[SimpleSubscription[T]]
   private var scheduled     : Scheduler.Scheduled[Unit] = null
   private var _client       : Client                    = null
-  private var f_filter      : Future[F]                 = null
 
   private [rxblocks] def removeSubscription( subscription : SimpleSubscription[T] ) = this.synchronized {
     subscriptions -= subscription
@@ -107,7 +101,6 @@ abstract class SimplePublisher[T, S, F <: Filter]( ethJsonRpcUrl : String, block
   private def startupPolling() = {
     try {
       this._client = Client.forExchanger( efactory( ethJsonRpcUrl ) )
-      this.f_filter = acquireFilter( this._client )
       this.scheduled = scheduler.scheduleWithFixedDelay( doPoll _, 0.seconds, blockPollDelay )
     }
     catch {
@@ -118,22 +111,40 @@ abstract class SimplePublisher[T, S, F <: Filter]( ethJsonRpcUrl : String, block
     }
   }
 
-  private def doPoll() : Unit= {
-    val ( c, ff, sl ) = this.synchronized { (_client, f_filter, subscriptions.toList) }
-    val pollFuture = {
-      for {
-        filter <- ff
-        items <- getChanges( c, filter )
-        transformed <- transformTerminate( c, items )
-      } yield {
-        sl.foreach( _.enqueue( transformed.items, transformed.shouldTerminate ) )
+  private def doPoll() : Unit = {
+    val ( c, sl ) = this.synchronized { (_client, subscriptions.toList) }
+    val lastChecked = lastCheckedBlockNumber.get()
+    val f_blockNumber = c.eth.blockNumber();
+    f_blockNumber map { curBlockNumber  =>
+      TRACE.log( s"Current block number: ${curBlockNumber}, lastChecked: ${lastChecked}" )
+      if ( lastChecked >= 0 && curBlockNumber >= lastChecked ) {
+        if ( curBlockNumber > lastChecked ) { // only actually repoll if the block number has advanced
+          val f_broadcast = {
+            for {
+              items <- getChanges( c, lastChecked + 1, curBlockNumber ) // getChanges(...) is inclusive, don't include the block we've already seen.
+              transformed <- transformTerminate( c, items )
+            } yield {
+              sl.foreach( _.enqueue( transformed.items, transformed.shouldTerminate ) )
+            }
+          } recover { case t =>
+              SEVERE.log("An error occured while trying to poll for items to publish!", t )
+              sl.foreach( _.break( t ) )
+              SEVERE.log( s"${this} shutting down due to error." )
+              shutdownPolling()
+          } onComplete { _=>
+            TRACE.log( s"Setting last checked to ${curBlockNumber}." )
+            lastCheckedBlockNumber.set( curBlockNumber )
+          }
+        }
+        else {
+          TRACE.log( "Nothing to update!" )
+        }
       }
-    }
-    pollFuture recover { case t =>
-      SEVERE.log("An error occured while trying to poll for items to publish!", t )
-      sl.foreach( _.break( t ) )
-      SEVERE.log( s"${this} shutting down due to error." )
-      shutdownPolling()
+      else {
+        val setTo = Zero.max(curBlockNumber - 1) // we want to see events fron the upon-initiaization current block
+        TRACE.log( s"Setting first-to-check to ${curBlockNumber} (last checked to ${setTo})." )
+        lastCheckedBlockNumber.set( setTo )
+      }
     }
   }
 
@@ -141,20 +152,7 @@ abstract class SimplePublisher[T, S, F <: Filter]( ethJsonRpcUrl : String, block
     if ( scheduled != null ) {
       Failable( scheduled.attemptCancel() ).xwarn("Exception while canceling polling")
     }
-    if ( this._client != null ) {
-      Failable {
-        try {
-          if ( this.f_filter != null) {
-            f_filter flatMap ( filter => cancelFilter( this._client, filter ) )
-          }
-        }
-        finally {
-          attemptClose( this._client )
-        }
-      }.xwarn("Exception while uninstalling filter")
-    }
     this.scheduled = null
     this._client = null
-    this.f_filter = null
   }
 }
