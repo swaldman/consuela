@@ -13,6 +13,8 @@ import scala.collection._
 import scala.io.Codec
 
 final object SolidityEvent {
+  private implicit lazy val logger = mlogger(this)
+
   private def decodeIndexed( params : immutable.Seq[Abi.Parameter], encoders : immutable.Seq[Encoder[_]], topics : immutable.Seq[EthLogEntry.Topic] ) : Failable[immutable.Seq[Decoded]] = {
     def decode( param : Abi.Parameter, encoder : Encoder[_], topic : EthLogEntry.Topic ) : Failable[Decoded] = {
       if ( encoder.encodesDynamicType ) {

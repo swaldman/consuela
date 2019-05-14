@@ -52,7 +52,7 @@ object Generator {
     "com.mchange.sc.v1.consuela.ethereum.ethabi",
     "com.mchange.sc.v1.consuela.ethereum.ethabi.{Decoded,SolidityEvent}",
     "com.mchange.sc.v1.consuela.ethereum.stub",
-    "com.mchange.sc.v1.consuela.ethereum.stub.{sol,Nonce,Payment}",
+    "com.mchange.sc.v1.consuela.ethereum.stub.{sol,Nonce,Payment,UnexpectedEventException}",
     "com.mchange.sc.v1.consuela.ethereum.stub.Utilities._",
     "com.mchange.sc.v1.consuela.ethereum.jsonrpc",
     "com.mchange.sc.v1.consuela.ethereum.jsonrpc.{Abi,Client}",
@@ -427,7 +427,7 @@ object Generator {
     iw.println( s"class Processor()(implicit scheduler : Scheduler, executionContext : ExecutionContext) extends SimpleProcessor[(SolidityEvent, stub.Event.Metadata ), Event.${resolvedName}]()(scheduler, executionContext) {" )
     iw.upIndent()
 
-    iw.println( s"override def ftransform( pair : (SolidityEvent, stub.Event.Metadata) ) : Failable[Event.${resolvedName}] = Failable.succeed( Event.${resolvedName}.apply( pair._1.asInstanceOf[SolidityEvent.Named], pair._2 ) )" )
+    iw.println( s"override def ftransform( pair : (SolidityEvent, stub.Event.Metadata) ) : Failable[Event.${resolvedName}] = Failable.succeed( Event.${resolvedName}.apply( assertNamedEvent(pair._1, pair._2), pair._2 ) )" )
 
     iw.downIndent()
     iw.println( "}" )
@@ -499,7 +499,7 @@ object Generator {
       generateNamedAnonymousEventSwitch( overloadedEvents, abi, iw )
     }
     else {
-      iw.println( "val named = solidityEvent.asInstanceOf[SolidityEvent.Named]" )
+      iw.println( "val named = assertNamedEvent( solidityEvent, metadata )" )
       generateNamedEventSwitch( overloadedEvents, abi, iw )
     }
     iw.downIndent()
@@ -539,6 +539,7 @@ object Generator {
         iw.println( s"""case \042${name}\042 if (named.signatureTopic == ${overloadedEventSignatureTopicValName(event)}) => Event.${resolvedName}( named, metadata )""" )
       }
     }
+    iw.println( """case unexpected => throw new UnexpectedEventException( named, metadata, s"Event with unexpected name (or, if overloaded, unexpected signature): ${named}" )""" )
 
     iw.downIndent()
     iw.println( "}" )
@@ -792,7 +793,7 @@ object Generator {
       iw.println(  "}" )
       iw.println()
       iw.println( s"def collect( info : stub.TransactionInfo.Async )( implicit ec : ExecutionContext ) : Future[immutable.Seq[${resolvedEventName}]] = info.future.map( collect )" )
-
+      iw.println()
       generateNamedEventSpecializedPublisher( resolvedEventName, overloadedEvents, event, iw  )
     }
     iw.downIndent()
