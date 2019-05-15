@@ -43,52 +43,34 @@ import specification.Types.{ByteSeqExact64, ByteSeqExact65, SignatureV, Signatur
 
 // what should I name 32 so that I don't keep retyping 32?
 object EthSignature {
-  private def fromBytesVRS( arr : Array[Byte], offset : Int, vAsRecId : Boolean ) : EthSignature.Basic = {
-    val v = {
-      val b = arr( offset )
-      SignatureV( if ( vAsRecId ) crypto.secp256k1.vFromRecId(b) else b )
+  /**
+    * Determines whether this is a signature with or without EIP-155 Chain ID,
+    * and parses accordingly. Since in general (including those with EIP-155 Chain IDs)
+    * signatures are not fixed length, the entire array is interpreted as the signature.
+    * 
+    * For more general parsing of fixed-length signatures without Chain IDs, see the methods
+    * of EthSignature.Basic
+    */ 
+  def fromBytesRSV( arr : Array[Byte] ) : EthSignature.Abstract = {
+    if ( arr.length == 65 && (arr(64) elem_: SignatureV) ) {
+      EthSignature.Basic.fromBytesRSV( arr )
     }
-    val r = {
-      val tmp = Array.ofDim[Byte](32)
-      Array.copy( arr, offset+1, tmp, 0, 32 )
-      SignatureR( BigInt(1, tmp) )
+    else {
+      EthSignature.WithChainId.fromBytesRSV( arr )
     }
-    val s = {
-      val tmp = Array.ofDim[Byte](32);
-      Array.copy( arr, offset+33, tmp, 0, 32 );
-      SignatureS( BigInt(1, tmp) )
-    }
-    Basic( v, r, s )
   }
-  private def fromBytesRSV( arr : Array[Byte], offset : Int, vAsRecId : Boolean ) : EthSignature.Basic = {
-    val r = {
-      val tmp = Array.ofDim[Byte](32)
-      Array.copy( arr, offset, tmp, 0, 32 )
-      SignatureR( BigInt(1, tmp) )
-    }
-    val s = {
-      val tmp = Array.ofDim[Byte](32);
-      Array.copy( arr, offset+32, tmp, 0, 32 );
-      SignatureS( BigInt(1, tmp) )
-    }
-    val v = {
-      val b = arr( offset+64 )
-      SignatureV( if ( vAsRecId ) crypto.secp256k1.vFromRecId(b) else b )
-    }
-    Basic( v, r, s )
+
+  /**
+    * Determines whether this is a signature with or without EIP-155 Chain ID,
+    * and parses accordingly. Since in general (including those with EIP-155 Chain IDs)
+    * signatures are not fixed length, the entire array is interpreted as the signature.
+    * 
+    * For more general parsing of fixed-length signatures without Chain IDs, see the methods
+    * of EthSignature.Basic
+    */ 
+  def fromBytesRSV( seq : immutable.Seq[Byte] ) : EthSignature.Abstract = {
+    this.fromBytesRSV( seq.toArray )
   }
-  def fromBytesVRS( arr : Array[Byte], offset : Int ) : EthSignature.Basic = fromBytesVRS( arr, offset, false )
-  def fromBytesVRS( arr : Array[Byte] ) : EthSignature.Basic = fromBytesVRS( arr, 0 )
-  def fromBytesVRS( seq : Seq[Byte] )   : EthSignature.Basic = fromBytesVRS( seq.toArray )
-  def fromBytesRSV( arr : Array[Byte], offset : Int ) : EthSignature.Basic = fromBytesRSV( arr, offset, false )
-  def fromBytesRSV( arr : Array[Byte] ) : EthSignature.Basic = fromBytesRSV( arr, 0 )
-  def fromBytesRSV( seq : Seq[Byte] )   : EthSignature.Basic = fromBytesRSV( seq.toArray )
-  def fromBytesIRS( arr : Array[Byte], offset : Int ) : EthSignature.Basic = fromBytesVRS( arr, offset, true )
-  def fromBytesIRS( arr : Array[Byte] ) : EthSignature.Basic = fromBytesIRS( arr, 0 )
-  def fromBytesIRS( seq : Seq[Byte] )   : EthSignature.Basic = fromBytesIRS( seq.toArray )
-  def fromBytesRSI( arr : Array[Byte], offset : Int ) : EthSignature.Basic = fromBytesRSV( arr, offset, true )
-  def fromBytesRSI( arr : Array[Byte] ) : EthSignature.Basic = fromBytesRSI( arr, 0 )
-  def fromBytesRSI( seq : Seq[Byte] )   : EthSignature.Basic = fromBytesRSI( seq.toArray )
 
   object Abstract {
     def apply( v : UnsignedBigInt, r : SignatureR, s : SignatureS ) : Abstract = {
@@ -117,9 +99,35 @@ object EthSignature {
   /**
     * Represents an EIP 155 signature with embedded Chain ID
     * 
+    * There is no byte-length limit on Vs with Chain IDs, so these cannot be parsed as fixed-length objects, and 
+    * can only be parsed in RSV format (interpreting all bytes after the first 64 as Chain-ID-embedding V values).
+    * If such a signature is embedded in a longer byte string, you'll have to slice it out first.
+    * 
     * See https://eips.ethereum.org/EIPS/eip-155
     */
   object WithChainId {
+    private def fromBytesChainIdRSV( arr : Array[Byte] ) : EthSignature.WithChainId = {
+      val r = {
+        val tmp = Array.ofDim[Byte](32)
+        Array.copy( arr, 0, tmp, 0, 32 )
+        SignatureR( BigInt(1, tmp) )
+      }
+      val s = {
+        val tmp = Array.ofDim[Byte](32);
+        Array.copy( arr, 32, tmp, 0, 32 );
+        SignatureS( BigInt(1, tmp) )
+      }
+      val v = {
+        val len = arr.length - 64
+        val tmp = Array.ofDim[Byte]( arr.length - 64 )
+        Array.copy( arr, 64, tmp, 0, len )
+        SignatureWithChainIdV( BigInt(1, tmp) )
+      }
+      WithChainId( v, r, s )
+    }
+    def fromBytesRSV( arr : Array[Byte] )         : EthSignature.WithChainId = this.fromBytesChainIdRSV( arr )
+    def fromBytesRSV( seq : immutable.Seq[Byte] ) : EthSignature.WithChainId = this.fromBytesRSV( seq.toArray )
+
     def apply( simple : EthSignature.Basic, chainId : EthChainId ) : WithChainId = {
       val v = chainId.signatureWithChainIdV( simple.v )
       val r = simple.r
@@ -139,6 +147,54 @@ object EthSignature {
     def signsForAddress( document : Array[Byte], address : EthAddress, forChainId : EthChainId ) : Boolean = forChainId == chainId && signsForAddress( document, address )
 
     lazy val untypedV : UnsignedBigInt = UnsignedBigInt(v.widen)
+  }
+  object Basic {
+    private def fromBytesVRS( arr : Array[Byte], offset : Int, vAsRecId : Boolean ) : EthSignature.Basic = {
+      val v = {
+        val b = arr( offset )
+        SignatureV( if ( vAsRecId ) crypto.secp256k1.vFromRecId(b) else b )
+      }
+      val r = {
+        val tmp = Array.ofDim[Byte](32)
+        Array.copy( arr, offset+1, tmp, 0, 32 )
+        SignatureR( BigInt(1, tmp) )
+      }
+      val s = {
+        val tmp = Array.ofDim[Byte](32);
+        Array.copy( arr, offset+33, tmp, 0, 32 );
+        SignatureS( BigInt(1, tmp) )
+      }
+      Basic( v, r, s )
+    }
+    private def fromBytesRSV( arr : Array[Byte], offset : Int, vAsRecId : Boolean ) : EthSignature.Basic = {
+      val r = {
+        val tmp = Array.ofDim[Byte](32)
+        Array.copy( arr, offset, tmp, 0, 32 )
+        SignatureR( BigInt(1, tmp) )
+      }
+      val s = {
+        val tmp = Array.ofDim[Byte](32);
+        Array.copy( arr, offset+32, tmp, 0, 32 );
+        SignatureS( BigInt(1, tmp) )
+      }
+      val v = {
+        val b = arr( offset+64 )
+        SignatureV( if ( vAsRecId ) crypto.secp256k1.vFromRecId(b) else b )
+      }
+      Basic( v, r, s )
+    }
+    def fromBytesVRS( arr : Array[Byte], offset : Int ) : EthSignature.Basic = fromBytesVRS( arr, offset, false )
+    def fromBytesVRS( arr : Array[Byte] ) : EthSignature.Basic = fromBytesVRS( arr, 0 )
+    def fromBytesVRS( seq : Seq[Byte] )   : EthSignature.Basic = fromBytesVRS( seq.toArray )
+    def fromBytesRSV( arr : Array[Byte], offset : Int ) : EthSignature.Basic = fromBytesRSV( arr, offset, false )
+    def fromBytesRSV( arr : Array[Byte] ) : EthSignature.Basic = fromBytesRSV( arr, 0 )
+    def fromBytesRSV( seq : Seq[Byte] )   : EthSignature.Basic = fromBytesRSV( seq.toArray )
+    def fromBytesIRS( arr : Array[Byte], offset : Int ) : EthSignature.Basic = fromBytesVRS( arr, offset, true )
+    def fromBytesIRS( arr : Array[Byte] ) : EthSignature.Basic = fromBytesIRS( arr, 0 )
+    def fromBytesIRS( seq : Seq[Byte] )   : EthSignature.Basic = fromBytesIRS( seq.toArray )
+    def fromBytesRSI( arr : Array[Byte], offset : Int ) : EthSignature.Basic = fromBytesRSV( arr, offset, true )
+    def fromBytesRSI( arr : Array[Byte] ) : EthSignature.Basic = fromBytesRSI( arr, 0 )
+    def fromBytesRSI( seq : Seq[Byte] )   : EthSignature.Basic = fromBytesRSI( seq.toArray )
   }
   final case class Basic( val v : SignatureV, val r : SignatureR, val s : SignatureS ) extends EthSignature.Abstract {
 

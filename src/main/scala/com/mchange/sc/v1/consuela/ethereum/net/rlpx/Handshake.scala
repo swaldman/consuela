@@ -141,7 +141,7 @@ object Handshake {
       def apply( bytes : ByteSeqExact194 ) : Initiator = _apply( bytes.widen.toArray )
 
       private[Handshake] def _apply( arr : Array[Byte] ) : Initiator = {
-        val sig   = EthSignature.fromBytesRSI( arr, 0 )                    // 65 bytes, indices  0 thru 64
+        val sig   = EthSignature.Basic.fromBytesRSI( arr, 0 )              // 65 bytes, indices  0 thru 64
         val ekm   = EthHash.withBytes( arr, 65, 32 )                       // 32 bytes, indices 65 thru 96
         val ppk   = EthPublicKey( ByteSeqExact64( arr.slice( 97, 161 ) ) ) // 64 bytes, indices 97 thru 160
         val nonce = ByteSeqExact32( arr.slice( 161, 193 ) )                // 32 bytes, indices 161 thru 192
