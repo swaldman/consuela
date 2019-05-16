@@ -2,7 +2,7 @@ package com.mchange.sc.v1.consuela.ethereum.stub
 
 import scala.collection._
 import scala.concurrent.{ExecutionContext,Future}
-import com.mchange.sc.v1.consuela.ethereum.{ethabi,jsonrpc,EthHash,EthLogEntry}
+import com.mchange.sc.v1.consuela.ethereum.{ethabi,jsonrpc,EthAddress,EthHash,EthLogEntry}
 import com.mchange.sc.v1.consuela.ethereum.specification.Types.Unsigned256
 import jsonrpc.Client
 import ethabi.SolidityEvent
@@ -65,4 +65,6 @@ object Event {
 trait Event {
   def metadata : Event.Metadata
   def logEntry : EthLogEntry
+
+  def sourceAddress : EthAddress = logEntry.address
 }
