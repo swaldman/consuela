@@ -94,6 +94,8 @@ object EthSignature {
     def wasSigned( document : Array[Byte] ) : Option[EthPublicKey]
 
     def signsForAddress( document : Array[Byte], address : EthAddress ) : Boolean = wasSigned( document ).map( _.toAddress ).fold( false )( _ == address )
+
+    def rsvBytes : immutable.Seq[Byte]
   }
 
   /**
@@ -147,6 +149,15 @@ object EthSignature {
     def signsForAddress( document : Array[Byte], address : EthAddress, forChainId : EthChainId ) : Boolean = forChainId == chainId && signsForAddress( document, address )
 
     lazy val untypedV : UnsignedBigInt = UnsignedBigInt(v.widen)
+
+    lazy val exportBytesRSV : immutable.Seq[Byte] = {
+      val vw = v.widen 
+      assert( vw.signum > 0, s"Unexpected negative value of SignatureWithChainIdV?!? ${vw}" )
+      val vBytes = vw.toByteArray
+      (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32) ++ vBytes).toImmutableSeq
+    }
+
+    def rsvBytes : immutable.Seq[Byte] = exportBytesRSV
   }
   object Basic {
     private def fromBytesVRS( arr : Array[Byte], offset : Int, vAsRecId : Boolean ) : EthSignature.Basic = {
@@ -214,6 +225,8 @@ object EthSignature {
     lazy val exportBytesRSV : ByteSeqExact65 = ByteSeqExact65.assert( Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) :+ v.widen : _* ) );
     lazy val exportBytesIRS : ByteSeqExact65 = ByteSeqExact65.assert( recId.widen +: Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) : _* ) );
     lazy val exportBytesRSI : ByteSeqExact65 = ByteSeqExact65.assert( Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) :+ recId.widen : _* ) );
+
+    def rsvBytes : immutable.Seq[Byte] = exportBytesRSV.widen
 
     val recId : SignatureRecId = SignatureRecId( crypto.secp256k1.recIdFromV( v.widen ) )
 
