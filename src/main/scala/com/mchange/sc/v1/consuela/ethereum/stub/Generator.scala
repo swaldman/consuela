@@ -743,9 +743,19 @@ object Generator {
     }
     iw.println( "this.apply (" )
     iw.upIndent()
-    extractedParamValues.foreach { epv =>
-      iw.println( epv + "," )
+    extractedParamValues.length match {
+      case 0 => /* ignore */
+      case 1 => iw.println( extractedParamValues.head )
+      case _ => {
+        extractedParamValues.init.foreach { epv =>
+          iw.println( epv + "," )
+        }
+        iw.println( extractedParamValues.last )
+      }
     }
+    iw.downIndent()
+    iw.println(")(")
+    iw.upIndent()
     iw.println( "metadata," )
     iw.println( "solidityEvent.logEntry" )
     iw.downIndent()
@@ -800,9 +810,20 @@ object Generator {
     iw.println(  "}" )
     iw.println( s"final case class ${ resolvedEventName } (" )
     iw.upIndent()
-    event.inputs.map( eventScalaSignatureParam ).map( _ + "," ).foreach( iw.println )
-    iw.println( "metadata : stub.Event.Metadata," )
-    iw.println( "logEntry : EthLogEntry" )
+    val signatureParams = event.inputs.map( eventScalaSignatureParam )
+    signatureParams.length match {
+      case 0 => /* ignore */
+      case 1 => iw.println( signatureParams.head )
+      case _ => {
+        signatureParams.init.map( _ + "," ).foreach( iw.println )
+        iw.println( signatureParams.last )
+      }
+    }
+    iw.downIndent()
+    iw.println( ")(" )
+    iw.upIndent()
+    iw.println( "val metadata : stub.Event.Metadata," )
+    iw.println( "val logEntry : EthLogEntry" )
     iw.downIndent()
     iw.println( s") extends ${stubUtilitiesClassName}.this.Event" )
     iw.println()
