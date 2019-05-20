@@ -51,7 +51,7 @@ object EthSignature {
     * For more general parsing of fixed-length signatures without Chain IDs, see the methods
     * of EthSignature.Basic
     */ 
-  def fromBytesRSV( arr : Array[Byte] ) : EthSignature.Abstract = {
+  def fromBytesRSV( arr : Array[Byte] ) : EthSignature = {
     if ( arr.length == 65 && (arr(64) elem_: SignatureV) ) {
       EthSignature.Basic.fromBytesRSV( arr )
     }
@@ -68,34 +68,20 @@ object EthSignature {
     * For more general parsing of fixed-length signatures without Chain IDs, see the methods
     * of EthSignature.Basic
     */ 
-  def fromBytesRSV( seq : immutable.Seq[Byte] ) : EthSignature.Abstract = {
+  def fromBytesRSV( seq : immutable.Seq[Byte] ) : EthSignature = {
     this.fromBytesRSV( seq.toArray )
   }
 
-  object Abstract {
-    def apply( v : UnsignedBigInt, r : SignatureR, s : SignatureS ) : Abstract = {
-      if ( v.widen.isValidByte && SignatureV.contains( v.widen.toByte ) ) {
-        Basic( SignatureV( v.widen.toByte ), r, s )
-      }
-      else if (SignatureWithChainIdV.contains(v.widen)) {
-        EthSignature.WithChainId( SignatureWithChainIdV(v.widen), r, s )
-      }
-      else {
-        throw new IllegalArgumentException( s"${v.widen} is not a valid value for a signature v, with or without an encode EIP-155 Chain ID." )
-      }
+  def apply( v : UnsignedBigInt, r : SignatureR, s : SignatureS ) : EthSignature = {
+    if ( v.widen.isValidByte && SignatureV.contains( v.widen.toByte ) ) {
+      Basic( SignatureV( v.widen.toByte ), r, s )
     }
-  }
-  sealed trait Abstract {
-    def r : SignatureR
-    def s : SignatureS
-
-    def untypedV : UnsignedBigInt
-
-    def wasSigned( document : Array[Byte] ) : Option[EthPublicKey]
-
-    def signsForAddress( document : Array[Byte], address : EthAddress ) : Boolean = wasSigned( document ).map( _.toAddress ).fold( false )( _ == address )
-
-    def rsvBytes : immutable.Seq[Byte]
+    else if (SignatureWithChainIdV.contains(v.widen)) {
+      EthSignature.WithChainId( SignatureWithChainIdV(v.widen), r, s )
+    }
+    else {
+      throw new IllegalArgumentException( s"${v.widen} is not a valid value for a signature v, with or without an encode EIP-155 Chain ID." )
+    }
   }
 
   /**
@@ -137,7 +123,7 @@ object EthSignature {
       apply( v, r, s )
     }
   }
-  final case class WithChainId( val v : SignatureWithChainIdV, val r : SignatureR, val s : SignatureS ) extends EthSignature.Abstract {
+  final case class WithChainId( val v : SignatureWithChainIdV, val r : SignatureR, val s : SignatureS ) extends EthSignature {
     private lazy val extracted = EthChainId.extract( v )
     def asBasic : EthSignature.Basic = Basic( extracted._1, r, s ) 
     def chainId : EthChainId   = extracted._2
@@ -207,7 +193,7 @@ object EthSignature {
     def fromBytesRSI( arr : Array[Byte] ) : EthSignature.Basic = fromBytesRSI( arr, 0 )
     def fromBytesRSI( seq : Seq[Byte] )   : EthSignature.Basic = fromBytesRSI( seq.toArray )
   }
-  final case class Basic( val v : SignatureV, val r : SignatureR, val s : SignatureS ) extends EthSignature.Abstract {
+  final case class Basic( val v : SignatureV, val r : SignatureR, val s : SignatureS ) extends EthSignature {
 
     private def rawBytesWereSigned( bytes : Array[Byte] ) : Option[EthPublicKey] = {
       crypto.secp256k1.recoverPublicKeyBytesV( v.widen, r.widen.bigInteger, s.widen.bigInteger, bytes ).map( bytes => EthPublicKey( ByteSeqExact64( bytes ) ) )
@@ -232,5 +218,17 @@ object EthSignature {
 
     val isHomesteadCompatible = (s.widen < Homestead.LimitSignatureS)
   }
+}
+sealed trait EthSignature {
+  def r : SignatureR
+  def s : SignatureS
+
+  def untypedV : UnsignedBigInt
+
+  def wasSigned( document : Array[Byte] ) : Option[EthPublicKey]
+
+  def signsForAddress( document : Array[Byte], address : EthAddress ) : Boolean = wasSigned( document ).map( _.toAddress ).fold( false )( _ == address )
+
+  def rsvBytes : immutable.Seq[Byte]
 }
 

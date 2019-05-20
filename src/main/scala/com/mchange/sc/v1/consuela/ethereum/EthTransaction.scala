@@ -155,7 +155,7 @@ object EthTransaction {
     }
   }
   final object Signed {
-    def apply( unsignedTransaction : Unsigned, sig : EthSignature.Abstract ) : Signed = {
+    def apply( unsignedTransaction : Unsigned, sig : EthSignature ) : Signed = {
       sig match {
         case simple : EthSignature.Basic             => NoChainId  ( unsignedTransaction, simple )
         case wci    : EthSignature.WithChainId => WithChainId( unsignedTransaction, wci    )
@@ -233,7 +233,7 @@ object EthTransaction {
     }
   }
   sealed trait Signed extends EthTransaction{
-    val signature           : EthSignature.Abstract
+    val signature           : EthSignature
 
     def signedBytes : immutable.Seq[Byte]
 
