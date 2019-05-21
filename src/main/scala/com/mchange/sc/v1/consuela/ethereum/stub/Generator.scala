@@ -358,6 +358,10 @@ object Generator {
       ifEvents(abi) {
         writeEventsPublisher( className, stubUtilitiesClass, abi, iw )
       }
+      iw.println()
+      iw.println("// subobject aliases")
+      iw.println("val view = constant")
+      iw.println("val txn  = transaction")
       iw.downIndent()
       iw.println( "}" )
     }
