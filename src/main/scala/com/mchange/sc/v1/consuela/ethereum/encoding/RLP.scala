@@ -162,7 +162,15 @@ object RLP {
     // long sequence could overflow the capacity of the first byte to encode the length of its
     // length.
 
-    def decodeComplete( bytes : scala.Seq[Byte] ) : Element.Basic = decode( bytes ).ensuring( _._2.isEmpty )._1
+    def decodeComplete( bytes : scala.Seq[Byte] ) : Element.Basic = {
+      val ( elem, rest ) = decode( bytes )
+      if (! rest.isEmpty ) {
+        throw new IllegalArgumentException( s"The provided encoded RLP failed to consume all bytes on decoding, as required for decodeComplete(...) [decoded=${elem}, bytes remaining: ${rest.length}]" )
+      }
+      else {
+        elem
+      }
+    }
 
     /**
      *  @return a pair, decoded Element and unconsumed bytes
