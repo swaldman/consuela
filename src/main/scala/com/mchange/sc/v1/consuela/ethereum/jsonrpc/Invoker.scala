@@ -179,16 +179,29 @@ object Invoker {
 
     implicit val econtext = icontext.econtext
 
-    val fDefaultGasPrice = client.eth.gasPrice()
-    val fDefaultGas      = client.eth.estimateGas( Some( from ), to, None, None, Some( valueInWei.widen ), Some ( data ) );
+    def fDefaultGasPrice = client.eth.gasPrice()
+    def fDefaultGasLimit = client.eth.estimateGas( Some( from ), to, None, None, Some( valueInWei.widen ), Some ( data ) );
+
+    val fEffectiveGasPrice : Future[BigInt] = {
+      icontext.gasPriceTweak match {
+        case Override( amount ) => Future.successful( amount )
+        case _                  => fDefaultGasPrice.map( icontext.gasPriceTweak.compute )
+      }
+    }
+
+    val fEffectiveGasLimit : Future[BigInt] = {
+      icontext.gasLimitTweak match {
+        case Override( amount ) => Future.successful( amount )
+        case _                  => fDefaultGasLimit.map( icontext.gasLimitTweak.compute )
+      }
+    }
 
     for {
-      defaultGasPrice <- fDefaultGasPrice
-      effectiveGasPrice = icontext.gasPriceTweak.compute( defaultGasPrice )
-      defaultGas <- fDefaultGas
-      effectiveGas = icontext.gasLimitTweak.compute( defaultGas )
+      egp <- fEffectiveGasPrice
+      egl <- fEffectiveGasLimit
+
     } yield {
-      ComputedGas( effectiveGasPrice, effectiveGas )
+      ComputedGas( egp, egl )
     }
   }
 
