@@ -6,9 +6,9 @@ organization := "com.mchange"
 
 name := "consuela"
 
-version := "0.0.15-SNAPSHOT"
+version := "0.0.15"
 
-scalaVersion := "2.12.7"
+scalaVersion := "2.12.8"
 
 crossScalaVersions := Seq("2.10.7", "2.11.12", "2.12.8")
 
@@ -32,7 +32,7 @@ publishTo := {
   }
 }
 
-val restrictedTypeVersion = "0.0.5"
+val restrictedTypeVersion = "0.0.6"
 val failableVersion       = "0.0.3"
 
 libraryDependencies ++= Seq(
@@ -41,11 +41,11 @@ libraryDependencies ++= Seq(
   "com.mchange"             %% "failable-logging"                % failableVersion,
   "com.mchange"             %% "restricted-type"                 % restrictedTypeVersion,
   "com.mchange"             %% "yinyang"                         % "0.0.2",
-  "com.mchange"             %% "mchange-commons-scala"           % "0.4.10-SNAPSHOT" changing(),
+  "com.mchange"             %% "mchange-commons-scala"           % "0.4.10",
   "com.mchange"             %% "literal"                         % "0.0.2",
-  "com.mchange"             %% "mchange-play-json-util"          % "0.0.3",
-  "com.mchange"             %% "jsonrpc-client"                  % "0.0.5",
-  "com.mchange"             %  "mchange-commons-java"            % "0.2.15",
+  "com.mchange"             %% "mchange-play-json-util"          % "0.0.4",
+  "com.mchange"             %% "jsonrpc-client"                  % "0.0.6",
+  "com.mchange"             %  "mchange-commons-java"            % "0.2.16",
   "org.reactivestreams"     %  "reactive-streams"                % "1.0.1",
   "com.typesafe"            %  "config"                          % "1.3.0",
   "org.bouncycastle"        %  "bcprov-jdk15on"                  % "1.54",
