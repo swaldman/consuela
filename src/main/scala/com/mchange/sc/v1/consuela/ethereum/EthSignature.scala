@@ -128,6 +128,8 @@ object EthSignature {
     def asBasic : EthSignature.Basic = Basic( extracted._1, r, s ) 
     def chainId : EthChainId   = extracted._2
 
+    def mbChainId : Option[EthChainId] = Some( chainId )
+
     def wasSigned( document : Array[Byte] ) : Option[EthPublicKey] = asBasic.wasSigned( document )
 
     def wasSigned( document : Array[Byte], forChainId : EthChainId ) : Option[EthPublicKey] = if ( forChainId == chainId ) wasSigned( document ) else None
@@ -217,6 +219,8 @@ object EthSignature {
     val recId : SignatureRecId = SignatureRecId( crypto.secp256k1.recIdFromV( v.widen ) )
 
     val isHomesteadCompatible = (s.widen < Homestead.LimitSignatureS)
+
+    val mbChainId : Option[EthChainId] = None
   }
 }
 sealed trait EthSignature {
@@ -230,5 +234,7 @@ sealed trait EthSignature {
   def signsForAddress( document : Array[Byte], address : EthAddress ) : Boolean = wasSigned( document ).map( _.toAddress ).fold( false )( _ == address )
 
   def rsvBytes : immutable.Seq[Byte]
+
+  def mbChainId : Option[EthChainId]
 }
 

@@ -255,10 +255,14 @@ object EthTransaction {
     def to   : EthAddress; // not optional once we know we are a message
     def data : immutable.Seq[Byte];
 
+    def payload  : immutable.Seq[Byte] = data
+
     def isMessage = true;
   }
   sealed trait ContractCreation extends EthTransaction {
     def init : immutable.Seq[Byte];
+
+    def payload  : immutable.Seq[Byte] = init
 
     def isMessage = false;
   }
@@ -268,6 +272,8 @@ sealed trait EthTransaction {
   def gasPrice : Unsigned256;
   def gasLimit : Unsigned256;
   def value    : Unsigned256;
+
+  def payload : immutable.Seq[Byte]
 
   def signed   : Boolean;
 

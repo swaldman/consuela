@@ -1,5 +1,6 @@
 package com.mchange.sc.v1.consuela.ethereum.jsonrpc
 
+import com.mchange.sc.v1.consuela.ScalaVersionSpecificUtils.futureUnit
 import com.mchange.sc.v1.consuela.ethereum.{EthAddress, EthChainId, EthHash, EthSigner, EthTransaction, EthereumException}
 import com.mchange.sc.v1.consuela.ethereum.specification.Types._
 
@@ -32,8 +33,20 @@ object Invoker {
 
   class InvokerException( message : String, cause : Throwable = null ) extends EthereumException( message, cause )
   final class TimeoutException( transactionHash : EthHash, timeout : Duration ) extends InvokerException( s"Could not retrieve receipt for transaction '0x${transactionHash.hex}' within ${timeout}" )
-  final class TransactionDisapprovedException( val transaction : EthTransaction.Signed, message : String )
-      extends InvokerException( message + s" [Disapproved: gasPrice -> ${transaction.gasPrice}, gasLimit -> ${transaction.gasLimit}, valueInWei -> ${transaction.value}]" )
+  final class TransactionDisapprovedException( val utxn : EthTransaction.Unsigned, proposedSigner : EthAddress, mbChainId : Option[EthChainId], message : String )
+      extends InvokerException (
+    message                                          +
+      " [Disapproved: "                              +
+      s"payload.size -> ${utxn.payload.size}, "      +
+      s"nonce -> ${utxn.nonce.widen}, "              +
+      s"gasPrice -> ${utxn.gasPrice.widen}, "        +
+      s"gasLimit -> ${utxn.gasLimit.widen}, "        +
+      s"value -> ${utxn.value.widen}, "              +
+      s"proposedSigner -> 0x${proposedSigner.hex}, " +
+      s"chainId -> ${mbChainId}]"
+  ) {
+    def this( inputs : TransactionApprover.Inputs, message : String ) = this( inputs.utxn, inputs.signerAddress, inputs.mbChainId, message )
+  }
 
   private def rounded( bd : BigDecimal ) = bd.round( bd.mc ) // work around absence of default rounded method in scala 2.10 BigDecimal
 
@@ -61,15 +74,32 @@ object Invoker {
 
   final case class ComputedGas( gasPrice : BigInt, gasLimit : BigInt )
 
-  def throwDisapproved( signed : EthTransaction.Signed, message : String = "Transaction aborted.", keepStackTrace : Boolean = true ) : Nothing = {
-    val e = new TransactionDisapprovedException( signed, message )
+  def throwDisapproved( inputs : TransactionApprover.Inputs, message : String = "Transaction aborted.", keepStackTrace : Boolean = true ) : Nothing = {
+    val e = new TransactionDisapprovedException( inputs, message )
     if ( !keepStackTrace ) e.setStackTrace( Array.empty )
     throw e
   }
 
-  type TransactionApprover = EthTransaction.Signed => Future[Unit] // a failure, usually a TransactionDisapprovedException, signifies disapproval
+  final object TransactionApprover {
+    final case class Inputs( utxn : EthTransaction.Unsigned, signerAddress : EthAddress, mbChainId : Option[EthChainId] )
+  }
+  type TransactionApprover = TransactionApprover.Inputs => Future[Unit] // a failure, usually a TransactionDisapprovedException, signifies disapproval
 
   val AlwaysApprover : TransactionApprover = _ => Future.successful( () )
+
+  private def approveSign(
+    transactionApprover : TransactionApprover,
+    utxn                : EthTransaction.Unsigned,
+    signer              : EthSigner,
+    mbChainId           : Option[EthChainId],
+    preapproved         : immutable.Set[TransactionApprover.Inputs] = immutable.Set.empty
+  )( implicit ec : ExecutionContext ) : Future[Tuple2[EthTransaction.Signed,immutable.Set[TransactionApprover.Inputs]]] = {
+    val taInputs = TransactionApprover.Inputs( utxn, signer.address, mbChainId )
+    val fut = {
+      if ( preapproved( taInputs ) ) futureUnit else transactionApprover( taInputs )
+    }
+    fut.map( _ => Tuple2( utxn.sign( signer, mbChainId ), preapproved + taInputs ) )
+  }
 
   final case class TransactionLogEntry( transactionHash : EthHash, transaction : EthTransaction.Signed, jsonRpcUrl : String )
 
@@ -314,8 +344,8 @@ object Invoker {
       borrow( newClient( icontext ) ) { case NewClient(client, url) =>
         for {
           unsigned <- _prepareSendMessage( client, url )( senderSigner.address, to, valueInWei, data, forceNonce )( icontext )
-          signed = unsigned.sign( senderSigner, icontext.chainId )
-          hash   <- _sendSignedTransaction( client, url )( signed )( icontext )
+          ( signed, preapproved ) <- approveSign( icontext.transactionApprover, unsigned, senderSigner, icontext.chainId )
+          hash   <- _sendSignedTransaction( client, url )( signed, preapproved )( icontext )
         }
         yield {
           hash
@@ -335,8 +365,8 @@ object Invoker {
       borrow( newClient( icontext ) ) { case NewClient(client, url) =>
         for {
           unsigned <- _prepareCreateContract( client, url )( creatorSigner.address, valueInWei, init, forceNonce )( icontext )
-          signed = unsigned.sign( creatorSigner, icontext.chainId )
-          hash   <- _sendSignedTransaction( client, url )( signed )( icontext )
+          ( signed, preapproved ) <- approveSign( icontext.transactionApprover, unsigned, creatorSigner, icontext.chainId )
+          hash   <- _sendSignedTransaction( client, url )( signed, preapproved )( icontext )
         }
         yield {
           hash
@@ -346,7 +376,7 @@ object Invoker {
 
     def sendSignedTransaction( signed : EthTransaction.Signed )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
       borrow( newClient( icontext ) ) { case NewClient(client, url) =>
-        _sendSignedTransaction( client, url)( signed )( icontext )
+        _sendSignedTransaction( client, url )( signed, immutable.Set.empty )( icontext )
       }
     }
 
@@ -436,10 +466,15 @@ object Invoker {
       }
     }
 
-    private def _sendSignedTransaction( client : Client, url : URL )( signed : EthTransaction.Signed )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
+    private def _sendSignedTransaction( client : Client, url : URL )( signed : EthTransaction.Signed, preapproved : immutable.Set[TransactionApprover.Inputs] )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
       implicit val econtext = icontext.econtext
+
+      val taInputs = TransactionApprover.Inputs( signed.unsignedTransaction, signed.sender, signed.signature.mbChainId )
+
+      def approveIfNecessary : Future[Unit] = if ( preapproved( taInputs ) ) futureUnit else icontext.transactionApprover( taInputs )
+      
       for {
-        _ <- icontext.transactionApprover( signed )
+        _ <- approveIfNecessary
         hash <- client.eth.sendSignedTransaction( signed )
       } yield {
         TransactionLogger.log( icontext.transactionLogger, hash, signed, url.toExternalForm )
