@@ -46,6 +46,8 @@ object Invoker {
     def compute( default : BigInt ) : BigInt
   }
   final case class Markup( fraction : Double, cap : Option[BigInt] = None, floor : Option[BigInt] = None ) extends MarkupOrOverride {
+    if ( cap.nonEmpty && floor.nonEmpty ) require( cap.get >= floor.get, s"Cap ${cap.get} cannot be less than floor ${floor.get}!" )
+
     def compute( default : BigInt ) : BigInt = {
       val base             = rounded( BigDecimal( default ) * BigDecimal(1 + fraction) ).toBigInt
       val floored          = floor.fold( base )( floorInWei => base max floorInWei )
