@@ -117,7 +117,7 @@ package object stub {
           ScalaParameterHelper(
             s"immutable.Seq[${baseTypeHelper.scalaTypeName}]",
             name => s"""com.mchange.sc.v1.consuela.ethereum.ethabi.Encoder.ArrayRep( "${baseTypeName}", ${name}.map( elem => ${baseTypeHelper.inConversionGen("elem")} ) )""",
-            name => s"""${name}.items.map( elem => ${baseTypeHelper.outConversionGen("elem")} )"""
+            name => s"""${name}.asInstanceOf[ArrayRep].items.map( elem => ${baseTypeHelper.outConversionGen("elem")} )"""
           )
         }
       }

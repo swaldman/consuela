@@ -50,6 +50,7 @@ object Generator {
     "com.mchange.sc.v1.log.MLevel._",
     "com.mchange.sc.v1.consuela.ethereum.{EthAddress,EthChainId,EthHash,EthLogEntry}",
     "com.mchange.sc.v1.consuela.ethereum.ethabi",
+    "com.mchange.sc.v1.consuela.ethereum.ethabi.Encoder.ArrayRep",
     "com.mchange.sc.v1.consuela.ethereum.ethabi.{Decoded,SolidityEvent}",
     "com.mchange.sc.v1.consuela.ethereum.stub",
     "com.mchange.sc.v1.consuela.ethereum.stub.{sol,Nonce,Payment,UnexpectedEventException}",
