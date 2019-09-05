@@ -68,7 +68,7 @@ object EthSignature {
     * For more general parsing of fixed-length signatures without Chain IDs, see the methods
     * of EthSignature.Basic
     */ 
-  def fromBytesRSV( seq : immutable.Seq[Byte] ) : EthSignature = {
+  def fromBytesRSV( seq : Seq[Byte] ) : EthSignature = {
     this.fromBytesRSV( seq.toArray )
   }
 
@@ -113,8 +113,8 @@ object EthSignature {
       }
       WithChainId( v, r, s )
     }
-    def fromBytesRSV( arr : Array[Byte] )         : EthSignature.WithChainId = this.fromBytesChainIdRSV( arr )
-    def fromBytesRSV( seq : immutable.Seq[Byte] ) : EthSignature.WithChainId = this.fromBytesRSV( seq.toArray )
+    def fromBytesRSV( arr : Array[Byte] ) : EthSignature.WithChainId = this.fromBytesChainIdRSV( arr )
+    def fromBytesRSV( seq : Seq[Byte] )   : EthSignature.WithChainId = this.fromBytesRSV( seq.toArray )
 
     def apply( simple : EthSignature.Basic, chainId : EthChainId ) : WithChainId = {
       val v = chainId.signatureWithChainIdV( simple.v )

@@ -6,7 +6,10 @@ package com.mchange.sc.v1.consuela.ethereum
   * 
   * See https://eips.ethereum.org/EIPS/eip-155
   */
+
 import specification.Types.{ByteSeqExact32, UnsignedBigInt}
+
+import scala.collection._
 
 object EthSigner {
   trait Source[T] {
@@ -23,6 +26,9 @@ object EthSigner {
   }
   implicit final object ByteSeqIsSource extends EthSigner.Source[Seq[Byte]] {
     def toEthSigner( bytes : Seq[Byte] ) = EthPrivateKey( bytes )
+  }
+  implicit final object ImmutableByteSeqIsSource extends EthSigner.Source[immutable.Seq[Byte]] {
+    def toEthSigner( bytes : immutable.Seq[Byte] ) = EthPrivateKey( bytes )
   }
   implicit final object ByteArrayIsSource extends EthSigner.Source[Array[Byte]] {
     def toEthSigner( bytes : Array[Byte] ) = EthPrivateKey( bytes )

@@ -40,6 +40,8 @@ import encoding.{RLP,Nibble}
 
 import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact20, Unsigned256}
 
+import scala.collection._
+
 object EthAddress {
   val ByteLength = 20;
 
@@ -76,6 +78,9 @@ object EthAddress {
   }
   implicit final object ByteSeqIsSource extends EthAddress.Source[Seq[Byte]]{
     def toEthAddress( seq : Seq[Byte] ) = EthAddress( seq )
+  }
+  implicit final object ImmutableByteSeqIsSource extends EthAddress.Source[immutable.Seq[Byte]]{
+    def toEthAddress( seq : immutable.Seq[Byte] ) = EthAddress( seq )
   }
   implicit final object ByteArrayIsSource extends EthAddress.Source[Array[Byte]]{
     def toEthAddress( arr : Array[Byte] ) = EthAddress( arr )
