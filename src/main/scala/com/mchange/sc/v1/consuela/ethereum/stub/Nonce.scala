@@ -7,6 +7,9 @@ object Nonce {
       case None          => Nonce.Auto
     }
   }
+  def apply( value : BigInt )      : Nonce = Nonce.withValue( sol.UInt256( value ) )
+  def apply( value : Long )        : Nonce = Nonce.withValue( sol.UInt256( value ) )
+  def apply( value : Int )         : Nonce = Nonce.withValue( sol.UInt256( value ) )
 
   final case class withValue( value : sol.UInt256 ) extends Nonce {
     def toOption : Option[sol.UInt256] = Some( value )
