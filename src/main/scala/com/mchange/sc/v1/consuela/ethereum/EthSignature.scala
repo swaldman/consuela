@@ -39,6 +39,8 @@ import com.mchange.sc.v1.consuela._;
 
 import scala.collection._;
 
+import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq
+
 import specification.Types.{ByteSeqExact64, ByteSeqExact65, SignatureV, SignatureR, SignatureS, SignatureRecId, SignatureWithChainIdV, UnsignedBigInt};
 
 // what should I name 32 so that I don't keep retyping 32?
@@ -209,10 +211,10 @@ object EthSignature {
 
     lazy val untypedV : UnsignedBigInt = UnsignedBigInt(v.widen)
 
-    lazy val exportBytesVRS : ByteSeqExact65 = ByteSeqExact65.assert( v.widen +: Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) : _* ) );
-    lazy val exportBytesRSV : ByteSeqExact65 = ByteSeqExact65.assert( Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) :+ v.widen : _* ) );
-    lazy val exportBytesIRS : ByteSeqExact65 = ByteSeqExact65.assert( recId.widen +: Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) : _* ) );
-    lazy val exportBytesRSI : ByteSeqExact65 = ByteSeqExact65.assert( Vector( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) :+ recId.widen : _* ) );
+    lazy val exportBytesVRS : ByteSeqExact65 = ByteSeqExact65.assert( v.widen +: ImmutableArraySeq.Byte( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)).toArray ) );
+    lazy val exportBytesRSV : ByteSeqExact65 = ByteSeqExact65.assert( ImmutableArraySeq.Byte( ((r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) :+ v.widen).toArray ) );
+    lazy val exportBytesIRS : ByteSeqExact65 = ByteSeqExact65.assert( recId.widen +: ImmutableArraySeq.Byte( (r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)).toArray ) );
+    lazy val exportBytesRSI : ByteSeqExact65 = ByteSeqExact65.assert( ImmutableArraySeq.Byte( ((r.widen.unsignedBytes(32) ++ s.widen.unsignedBytes(32)) :+ recId.widen).toArray ) );
 
     def rsvBytes : immutable.Seq[Byte] = exportBytesRSV.widen
 
