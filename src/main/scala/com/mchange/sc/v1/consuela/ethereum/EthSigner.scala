@@ -53,14 +53,32 @@ trait EthSigner {
   /*
    *  Abstract methods
    */ 
-  def sign( document : Array[Byte] ) : EthSignature.Basic
-  def sign( document : Seq[Byte] )   : EthSignature.Basic
+  def signWithoutHashing( bytesToSign : Array[Byte] ) : EthSignature.Basic
 
-  def signPrehashed( documentHash : EthHash ) : EthSignature.Basic
+  /*
+   * Basic methods (with default implementations)
+   */ 
+
+  def signWithoutHashing( bytesToSign : Seq[Byte] ) : EthSignature.Basic = signWithoutHashing( bytesToSign.toArray )
+
+
+  def sign( document : Array[Byte] ) : EthSignature.Basic = signPrehashed( EthHash.hash( document ) )
+  def sign( document : Seq[Byte] )   : EthSignature.Basic = signPrehashed( EthHash.hash( document ) )
+
+  def signPrehashed( documentHash : EthHash ) : EthSignature.Basic = signWithoutHashing( documentHash.bytes )
+
 
   /*
    *  Implemented variations for EIP-155 chain ID
    */ 
+  def signWithoutHashing( document : Array[Byte], chainId : EthChainId )   : EthSignature.WithChainId = EthSignature.WithChainId( signWithoutHashing( document ), chainId )
+  final def signWithoutHashing( document : Array[Byte], chainId : BigInt ) : EthSignature.WithChainId = signWithoutHashing( document, EthChainId( UnsignedBigInt( chainId ) ) )
+  final def signWithoutHashing( document : Array[Byte], chainId : Long )   : EthSignature.WithChainId = signWithoutHashing( document, chainId )
+
+  def signWithoutHashing( document : Seq[Byte], chainId : EthChainId )   : EthSignature.WithChainId = EthSignature.WithChainId( signWithoutHashing( document ), chainId )
+  final def signWithoutHashing( document : Seq[Byte], chainId : BigInt ) : EthSignature.WithChainId = signWithoutHashing( document, EthChainId( UnsignedBigInt( chainId ) ) )
+  final def signWithoutHashing( document : Seq[Byte], chainId : Long )   : EthSignature.WithChainId = signWithoutHashing( document, chainId )
+
   def sign( document : Array[Byte], chainId : EthChainId )   : EthSignature.WithChainId = EthSignature.WithChainId( sign( document ), chainId )
   final def sign( document : Array[Byte], chainId : BigInt ) : EthSignature.WithChainId = sign( document, EthChainId( UnsignedBigInt( chainId ) ) )
   final def sign( document : Array[Byte], chainId : Long )   : EthSignature.WithChainId = sign( document, chainId )

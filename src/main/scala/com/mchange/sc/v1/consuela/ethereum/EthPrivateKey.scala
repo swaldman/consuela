@@ -74,9 +74,6 @@ final case class EthPrivateKey( val bytes : ByteSeqExact32 ) extends EthSigner {
 
   lazy val s = bytes.widen.toUnsignedBigInt
 
-  // default signing scheme
-  def sign( document : Array[Byte] ) : EthSignature.Basic = signHashedDocument( document );
-
   private def internalSignRawBytes( rawBytes : Array[Byte] ) : EthSignature.Basic = {
     import crypto.secp256k1._;
     recoverableCompleteSignature( s.bigInteger, rawBytes ) match {
@@ -101,8 +98,7 @@ final case class EthPrivateKey( val bytes : ByteSeqExact32 ) extends EthSigner {
 
   // for EthSigner trait
 
-  def sign( document : Seq[Byte] ) : EthSignature.Basic = this.sign( document.toArray )
-  def signPrehashed( documentHash : EthHash ) : EthSignature.Basic = this.signEthHash( documentHash )
+  def signWithoutHashing( bytesToSign : Array[Byte] ) : EthSignature.Basic = this.signRawBytes( bytesToSign )
 
   lazy val address = toPublicKey.toAddress
 
