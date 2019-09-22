@@ -12,7 +12,7 @@ import specification.Types.{ByteSeqExact32, UnsignedBigInt}
 import scala.collection._
 
 object EthSigner {
-  trait Source[T] {
+  trait Source[-T] {
     def toEthSigner( t : T ) : EthSigner 
   }
   implicit final object EthSignerIsSource extends EthSigner.Source[EthSigner] {
@@ -26,9 +26,6 @@ object EthSigner {
   }
   implicit final object ByteSeqIsSource extends EthSigner.Source[Seq[Byte]] {
     def toEthSigner( bytes : Seq[Byte] ) = EthPrivateKey( bytes )
-  }
-  implicit final object ImmutableByteSeqIsSource extends EthSigner.Source[immutable.Seq[Byte]] {
-    def toEthSigner( bytes : immutable.Seq[Byte] ) = EthPrivateKey( bytes )
   }
   implicit final object ByteArrayIsSource extends EthSigner.Source[Array[Byte]] {
     def toEthSigner( bytes : Array[Byte] ) = EthPrivateKey( bytes )

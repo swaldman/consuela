@@ -64,7 +64,7 @@ object EthAddress {
 
   val Zero = EthAddress( ByteSeqExact20( Array.fill[Byte](20)(0.toByte) ) )
 
-  trait Source[T] {
+  trait Source[-T] {
     /**
       * May throw if the instance of T cannot be converted
       */ 
