@@ -360,7 +360,19 @@ object Client {
           doExchange( "eth_getFilterChanges", Seq( JsString(filter.identifier) ) )( _.result.as[immutable.Seq[RawLog]].map( Client.Log.apply ) )
         }
         def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext ) : Future[Option[Client.TransactionReceipt]] = {
-          val raw = doExchange( "eth_getTransactionReceipt", Seq( encodeBytes( transactionHash.bytes ) ) )( _.result.as[Option[Client.TransactionReceipt]] )
+          val raw = doExchange( "eth_getTransactionReceipt", Seq( encodeBytes( transactionHash.bytes ) ) ) { success =>
+
+            // handle Parity's weird habit of sometimes returning receipts for unmined transactions
+            // JsUndefined covers both (usual) JsNull case and the possibility of an incomplete JsObject if blockHash is unknown
+            def isMinedReceipt : Boolean = {
+              (success.result \ "blockHash") match {
+                case JsDefined(value) => value != JsNull
+                case _ : JsUndefined  => false
+              }
+            }
+
+            if (isMinedReceipt) success.result.as[Option[Client.TransactionReceipt]] else None
+          }
 
           // geth 1.8.0 returns an undocumented error response, rather than a null success, on an unknown or pending transaction hash
           // we recover from this case. See https://github.com/ethereum/go-ethereum/issues/16092#issuecomment-366871447
