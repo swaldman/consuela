@@ -36,13 +36,13 @@ val restrictedTypeVersion = "0.0.6"
 val failableVersion       = "0.0.3"
 
 libraryDependencies ++= Seq(
-  "com.mchange"             %% "mlog-scala"                      % "0.3.11",
+  "com.mchange"             %% "mlog-scala"                      % "0.3.12-SNAPSHOT" changing(),
   "com.mchange"             %% "failable"                        % failableVersion,
   "com.mchange"             %% "failable-logging"                % failableVersion,
   "com.mchange"             %% "restricted-type"                 % restrictedTypeVersion,
   "com.mchange"             %% "yinyang"                         % "0.0.2",
-  "com.mchange"             %% "mchange-commons-scala"           % "0.4.10",
-  "com.mchange"             %% "literal"                         % "0.0.2",
+  "com.mchange"             %% "mchange-commons-scala"           % "0.4.11-SNAPSHOT" changing(),
+  "com.mchange"             %% "literal"                         % "0.1.0-SNAPSHOT" changing(),
   "com.mchange"             %% "mchange-play-json-util"          % "0.0.4",
   "com.mchange"             %% "jsonrpc-client"                  % "0.0.7-SNAPSHOT" changing(),
   "com.mchange"             %  "mchange-commons-java"            % "0.2.16",
