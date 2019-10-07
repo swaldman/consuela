@@ -51,7 +51,7 @@ libraryDependencies ++= Seq(
   "com.madgag.spongycastle" %  "prov"                            % "1.54.0.0"            % "compile,optional", //only necessary on android
   "com.mchange"             %% "restricted-type-scalacheck-util" % restrictedTypeVersion % "test",
   "org.specs2"              %% "specs2"                          % "2.4.17"              % "test",
-  "ch.qos.logback"          % "logback-classic"                  % "1.1.2"               % "test"
+  "ch.qos.logback"          % "logback-classic"                  % "1.1.2"               % "test",
 )
 
 libraryDependencies += {

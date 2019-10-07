@@ -43,9 +43,15 @@ import scala.language.implicitConversions;
 import scala.collection.immutable;
 
 import java.math.BigInteger;
-import javax.xml.bind.DatatypeConverter;
 
 package object consuela {
+
+  // javadocs: "Instances of Base64.Encoder class are safe for use by multiple concurrent threads."
+  private val B64Encoder = java.util.Base64.getEncoder()
+
+  // javadocs: "Instances of Base64.Decoder class are safe for use by multiple concurrent threads."
+  private val B64Decoder = java.util.Base64.getDecoder()
+
   class ConsuelaException( message : String, t : Throwable = null ) extends Exception( message, t );
   class BadConversionException( message : String, t : Throwable = null ) extends ConsuelaException( message, t )
 
@@ -64,12 +70,12 @@ package object consuela {
     def decodeHexAsSeq( allowPrefix : Boolean ) : immutable.Seq[Byte] = ImmutableArraySeq.Byte.createNoCopy( this.decodeHex( allowPrefix ) );
     def decodeHexAsSeq : immutable.Seq[Byte] = decodeHexAsSeq( allowPrefix = true )
 
-    def decodeBase64 : Array[Byte] = DatatypeConverter.parseBase64Binary( string );
+    def decodeBase64 : Array[Byte] = B64Decoder.decode( string );
   }
   trait RichBytes { // if we accept code duplication, we can inline this stuff and let the subclasses extend AnyVal. Hmmm....
     protected val _bytes     : Array[Byte];
     def toImmutableSeq       : immutable.Seq[Byte];
-    def base64               : String              = DatatypeConverter.printBase64Binary( _bytes )
+    def base64               : String              = B64Encoder.encodeToString( _bytes )
     def hex                  : String              = ByteUtils.toLowercaseHexAscii( _bytes ); // should we switch to the DatatypeConverter implementation of hex encoding/decoding?
     def toBigInteger         : BigInteger          = new BigInteger( _bytes );
     def toUnsignedBigInteger : BigInteger          = new BigInteger( 1, _bytes );
