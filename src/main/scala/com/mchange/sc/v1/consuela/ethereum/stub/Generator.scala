@@ -42,6 +42,7 @@ object Generator {
     "scala.collection._",
     "scala.concurrent._",
     "scala.concurrent.duration.Duration",
+    "scala.util.Try",
     "com.mchange.sc.v3.failable._",
     "com.mchange.sc.v2.concurrent.{Poller,Scheduler}",
     "com.mchange.sc.v2.jsonrpc.Exchanger",
@@ -102,7 +103,8 @@ object Generator {
     iw.println( "httpTimeout : Duration = stub.Context.Default.HttpTimeout," )
     iw.println( "transactionApprover : stub.TransactionApprover = stub.Context.Default.TransactionApprover," )
     iw.println( "transactionLogger : stub.TransactionLogger = stub.Context.Default.TransactionLogger," )
-    iw.println( "eventConfirmations : Int = stub.Context.Default.EventConfirmations" )
+    iw.println( "eventConfirmations : Int = stub.Context.Default.EventConfirmations," )
+    iw.println( "onTransactionSubmitted : Try[EthHash] => Unit = stub.Context.Default.OnTransactionSubmitted" )
     iw.downIndent()
     iw.println( ")( implicit" )
     iw.upIndent()
@@ -125,7 +127,8 @@ object Generator {
     iw.println( "httpTimeout = httpTimeout," )
     iw.println( "transactionApprover = transactionApprover," )
     iw.println( "transactionLogger = transactionLogger," )
-    iw.println( "eventConfirmations = eventConfirmations" )
+    iw.println( "eventConfirmations = eventConfirmations," )
+    iw.println( "onTransactionSubmitted = onTransactionSubmitted" )
     iw.downIndent()
     iw.println( ")( implicitly[EthAddress.Source[T]], efactory, poller, scheduler, econtext )" )
     iw.downIndent()
@@ -144,7 +147,8 @@ object Generator {
     iw.println( "httpTimeout : Duration = stub.Context.Default.HttpTimeout," )
     iw.println( "transactionApprover : stub.TransactionApprover = stub.Context.Default.TransactionApprover," )
     iw.println( "transactionLogger : stub.TransactionLogger = stub.Context.Default.TransactionLogger," )
-    iw.println( "eventConfirmations : Int = stub.Context.Default.EventConfirmations" )
+    iw.println( "eventConfirmations : Int = stub.Context.Default.EventConfirmations," )
+    iw.println( "onTransactionSubmitted : Try[EthHash] => Unit = stub.Context.Default.OnTransactionSubmitted" )
     iw.downIndent()
     iw.println( ")( implicit" )
     iw.upIndent()
@@ -168,7 +172,8 @@ object Generator {
     iw.println( "httpTimeout = httpTimeout," )
     iw.println( "transactionApprover = transactionApprover," )
     iw.println( "transactionLogger = transactionLogger," )
-    iw.println( "eventConfirmations = eventConfirmations" )
+    iw.println( "eventConfirmations = eventConfirmations," )
+    iw.println( "onTransactionSubmitted = onTransactionSubmitted" )
     iw.downIndent()
     iw.println( ")( efactory, poller, scheduler )")
     iw.downIndent()
@@ -316,15 +321,16 @@ object Generator {
       iw.println( s"final class $className( val contractAddress : EthAddress )( implicit scontext : stub.Context )${mbExtends} {" )
       iw.upIndent()
       iw.println()
-      iw.println( "val chainId             : Option[EthChainId]       = scontext.icontext.chainId" )
-      iw.println( "val gasPriceTweak       : stub.MarkupOrOverride    = scontext.icontext.gasPriceTweak" )
-      iw.println( "val gasLimitTweak       : stub.MarkupOrOverride    = scontext.icontext.gasLimitTweak" )
-      iw.println( "val pollPeriod          : Duration                 = scontext.icontext.pollPeriod" )
-      iw.println( "val pollTimeout         : Duration                 = scontext.icontext.pollTimeout" )
-      iw.println( "val httpTimeout         : Duration                 = scontext.icontext.httpTimeout" )
-      iw.println( "val transactionApprover : stub.TransactionApprover = scontext.icontext.transactionApprover" )
-      iw.println( "val transactionLogger   : stub.TransactionLogger   = scontext.icontext.transactionLogger" )
-      iw.println( "val eventConfirmations  : Int                      = scontext.eventConfirmations" )
+      iw.println( "val chainId                : Option[EthChainId]       = scontext.icontext.chainId" )
+      iw.println( "val gasPriceTweak          : stub.MarkupOrOverride    = scontext.icontext.gasPriceTweak" )
+      iw.println( "val gasLimitTweak          : stub.MarkupOrOverride    = scontext.icontext.gasLimitTweak" )
+      iw.println( "val pollPeriod             : Duration                 = scontext.icontext.pollPeriod" )
+      iw.println( "val pollTimeout            : Duration                 = scontext.icontext.pollTimeout" )
+      iw.println( "val httpTimeout            : Duration                 = scontext.icontext.httpTimeout" )
+      iw.println( "val transactionApprover    : stub.TransactionApprover = scontext.icontext.transactionApprover" )
+      iw.println( "val transactionLogger      : stub.TransactionLogger   = scontext.icontext.transactionLogger" )
+      iw.println( "val eventConfirmations     : Int                      = scontext.eventConfirmations" )
+      iw.println( "val onTransactionSubmitted : Try[EthHash] => Unit     = scontext.onTransactionSubmitted" )
       iw.println()
       iw.println( "def address = contractAddress" )
       iw.println()
@@ -850,14 +856,14 @@ object Generator {
     }
     iw.println( s"""val fcn = ${stubUtilitiesClassName}.${functionValName(fcn)}""" )
     iw.println( s"""val reps = immutable.Seq[Any]( ${fcn.inputs.map( toRepLambda ).mkString(", ")} )""" )
-    iw.println( s"""val callData = ethabi.callDataForAbiFunctionFromEncoderRepresentations( reps, fcn ).get""" )
+    iw.println(  """val callData = ethabi.callDataForAbiFunctionFromEncoderRepresentations( reps, fcn ).get""" )
 
     if ( constantSection ) {
-      iw.println( s"""val futRetBytes = jsonrpc.Invoker.constant.sendMessage( sender.address, contractAddress, payment.amountInWei, callData )""" )
-      iw.println( s"""val futDecodedReturnValues = futRetBytes.map( bytes => ethabi.decodeReturnValuesForFunction( bytes, fcn ) )""" )
-      iw.println( s"""val futDecodedReps = futDecodedReturnValues.map( _.get.map( _.value  ).toVector )""" )
+      iw.println( """val futRetBytes = jsonrpc.Invoker.constant.sendMessage( sender.address, contractAddress, payment.amountInWei, callData )""" )
+      iw.println( """val futDecodedReturnValues = futRetBytes.map( bytes => ethabi.decodeReturnValuesForFunction( bytes, fcn ) )""" )
+      iw.println( """val futDecodedReps = futDecodedReturnValues.map( _.get.map( _.value  ).toVector )""" )
 
-      iw.println( s"""val futOut = futDecodedReps.map { decodedReps =>""" )
+      iw.println( """val futOut = futDecodedReps.map { decodedReps =>""" )
       iw.upIndent()
 
       if ( fcn.outputs.length == 1 ) {
@@ -881,8 +887,9 @@ object Generator {
         iw.println( s"""Await.result( futOut, Duration.Inf )""" )
       }
     } else {
-      iw.println( s"""val futHash = jsonrpc.Invoker.transaction.sendMessage( sender.findSigner(), contractAddress, payment.amountInWei, callData, nonce.toOption )""" )
-      iw.println( s"""val futTransactionInfoAsync = futHash.map( hash => stub.TransactionInfo.Async.fromClientTransactionReceipt( hash, jsonrpc.Invoker.futureTransactionReceipt( hash ) ) )""" )
+      iw.println( """val futHash = jsonrpc.Invoker.transaction.sendMessage( sender.findSigner(), contractAddress, payment.amountInWei, callData, nonce.toOption )""" )
+      iw.println( """futHash.onComplete( onTransactionSubmitted )""" )
+      iw.println( """val futTransactionInfoAsync = futHash.map( hash => stub.TransactionInfo.Async.fromClientTransactionReceipt( hash, jsonrpc.Invoker.futureTransactionReceipt( hash ) ) )""" )
       if ( async ) {
         iw.println( "futTransactionInfoAsync" )
       } else {
