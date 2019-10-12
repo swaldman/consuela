@@ -216,14 +216,14 @@ object Invoker {
 
     val fEffectiveGasPrice : Future[BigInt] = {
       icontext.gasPriceTweak match {
-        case Override( amount ) => Future.successful( amount )
+        case Override( amount ) => Future.successful( amount ) // why wait?
         case _                  => fDefaultGasPrice.map( icontext.gasPriceTweak.compute )
       }
     }
 
     val fEffectiveGasLimit : Future[BigInt] = {
       icontext.gasLimitTweak match {
-        case Override( amount ) => Future.successful( amount )
+        case Override( amount ) => Future.successful( amount ) // why wait?
         case _                  => fDefaultGasLimit.map( icontext.gasLimitTweak.compute )
       }
     }
@@ -235,6 +235,11 @@ object Invoker {
     } yield {
       ComputedGas( egp, egl )
     }
+  }
+
+  def currentDefaultGasPrice( implicit icontext : Invoker.Context ) : Future[BigInt] = {
+    implicit val econtext = icontext.econtext
+    borrow( newClient( icontext ) ) { case NewClient(client, url) => client.eth.gasPrice() }
   }
 
   /**
