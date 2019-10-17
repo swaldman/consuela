@@ -67,12 +67,30 @@ object Generator {
 
   private val AnonymousEventName = "Anonymous"
 
-  private def fillArgs( inputs : immutable.Seq[Abi.Function.Parameter] ) : immutable.Seq[Abi.Function.Parameter] = {
+  private def expandArgs( inputs : immutable.Seq[Abi.Function.Parameter] ) : immutable.Seq[Abi.Function.Parameter] = {
     inputs.zip( Stream.from(1) ).map { case ( param, index ) =>
       if ( param.name.length > 0 ) param else Abi.Function.Parameter( s"arg$index", param.`type` )
     }
   }
-  private def fillInputs( fcn : Abi.Function ) = fcn.copy( inputs = fillArgs( fcn.inputs ) )
+  private def fillMissingInputArgs( fcn : Abi.Function ) = fcn.copy( inputs = expandArgs( fcn.inputs ) )
+
+  private val ExtraArgListArgs = immutable.Set("sender")
+
+  private def transformInputArgs( fcn : Abi.Function, sas : immutable.SortedSet[SyntheticArg] ) : Abi.Function = {
+    val filledFunction = fillMissingInputArgs( fcn )
+
+    val origNameSet = fcn.inputs.map( _.name ).toSet
+    val synthNameSet = sas.map( _.inSignature ) ++ ExtraArgListArgs
+
+    def uniquify( param : Abi.Function.Parameter ) : Abi.Function.Parameter = {
+      val avoidSet = (origNameSet - param.name) ++ synthNameSet
+      var goodName = param.name
+      while ( avoidSet( goodName ) ) goodName = s"_${goodName}"
+      param.copy( name = goodName )
+    }
+
+    filledFunction.copy( inputs = filledFunction.inputs.map( uniquify ) )
+  }
 
   private def eventsNoEvents[T]( abi : Abi )( ifEvents : =>T, ifNoEvents : =>T ) = {
     if (abi.events.nonEmpty) ifEvents else ifNoEvents
@@ -345,9 +363,9 @@ object Generator {
       iw.upIndent()
       abi.functions.foreach { fcn =>
         val sas = syntheticArgSet( fcn, false )
-        val fi_fcn = fillInputs(fcn)
-        writeFunction( className, stubUtilitiesClass, fi_fcn, false, async, sas, iw )
-        writeSyntheticArgumentFunctionOverloads( sas, fi_fcn, false, async, iw )
+        val xf_fcn = transformInputArgs(fcn, sas)
+        writeFunction( className, stubUtilitiesClass, xf_fcn, false, async, sas, iw )
+        writeSyntheticArgumentFunctionOverloads( sas, xf_fcn, false, async, iw )
       }
       iw.downIndent()
       iw.println( "}" )
@@ -355,9 +373,9 @@ object Generator {
       iw.upIndent()
       abi.functions.filter( _.constant ).foreach { fcn =>
         val sas = syntheticArgSet( fcn, true )
-        val fi_fcn = fillInputs(fcn)
-        writeFunction( className, stubUtilitiesClass, fi_fcn, true, async, sas, iw )
-        writeSyntheticArgumentFunctionOverloads( sas, fi_fcn, true, async, iw )
+        val xf_fcn = transformInputArgs(fcn, sas)
+        writeFunction( className, stubUtilitiesClass, xf_fcn, true, async, sas, iw )
+        writeSyntheticArgumentFunctionOverloads( sas, xf_fcn, true, async, iw )
       }
       iw.downIndent()
       iw.println( "}" )
