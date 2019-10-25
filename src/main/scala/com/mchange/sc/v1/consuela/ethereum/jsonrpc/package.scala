@@ -133,6 +133,47 @@ package object jsonrpc {
 
   private val DefaultPayable = Some( JsString( "payable" ) )
 
+  private def restrictTransformAbiXxxParameterValue( parentName : String, nonTypeParams : Map[String,Option[JsValue]] )( jsv : JsValue ) : JsResult[JsObject] = {
+    jsv match {
+      case jso : JsObject => restrictTransformAbiXxxParameterObject( parentName, nonTypeParams)( jso )
+      case oops           => JsError( s"An abi ${parentName} parameter must be a JsObject, found $oops" )
+    }
+  }
+
+  private def restrictTransformAbiXxxParameterObject( parentName : String, nonTypeParams : Map[String,Option[JsValue]] )( jso : JsObject ) : JsResult[JsObject] = {
+    val keys = jso.keys
+
+    val wellTyped = {
+      ( keys("type"), keys("internalType") ) match {
+        case (  true,  true ) => JsSuccess( jso )
+        case (  true, false ) => JsSuccess( jso + ( "internalType", jso.value("type" ) ) )
+        case ( false,     _ ) => JsError( s"An abi ${parentName} parameter must contain a 'type'. Bad json: ${jso}" )
+      }
+    }
+
+    nonTypeParams.foldLeft( wellTyped : JsResult[JsObject]) { case ( accum : JsResult[JsObject], Tuple2( key : String, mbDefault : Option[JsValue] ) ) =>
+      accum.flatMap { obj =>
+        ( keys(key), mbDefault ) match {
+          case ( true,          _ ) => JsSuccess( obj )
+          case ( false, Some(jsv) ) => JsSuccess( obj + Tuple2( key, jsv ) )
+          case ( false,      None ) => JsError( s"An abi ${parentName} parameter must contain '${key}' and no default is available. Bad json: ${jso}" )
+        }
+      }
+    }
+  }
+
+  private def restrictTransformAbiConstructorParameterValue( jsv : JsValue ) : JsResult[JsObject] = {
+    restrictTransformAbiXxxParameterValue( "constructor", Map( "name" -> None ) )( jsv )
+  }
+
+  private def restrictTransformAbiFunctionParameterValue( jsv : JsValue ) : JsResult[JsObject] = {
+    restrictTransformAbiXxxParameterValue( "function", Map( "name" -> None ) )( jsv )
+  }
+
+  private def restrictTransformAbiEventParameterValue( jsv : JsValue ) : JsResult[JsObject] = {
+    restrictTransformAbiXxxParameterValue( "event", Map( "name" -> None, "indexed" -> None ) )( jsv )
+  }
+
   private def restrictTransformAbiFunctionValue( jsv : JsValue ) : JsResult[JsObject] = {
     jsv match {
       case jso : JsObject => restrictTransformAbiFunctionObject( jso )
@@ -206,11 +247,11 @@ package object jsonrpc {
 
   private def rd[T]( spec : (String,Option[JsValue])* )( inner : Format[T] ) : Format[T] = new RestrictingDefaultingFormat( spec.toMap )( inner )
 
-  implicit val AbiFunctionParameterFormat    = rd( "name" -> None, "type" -> None )                                                                 ( Json.format[Abi.Function.Parameter]    )
+  implicit val AbiFunctionParameterFormat    = new RestrictTransformingFormat( Seq( restrictTransformAbiFunctionParameterValue ) )                  ( Json.format[Abi.Function.Parameter]    )
   implicit val AbiFunctionFormat             = new RestrictTransformingFormat( Seq( restrictTransformAbiFunctionValue ) )                           ( Json.format[Abi.Function]              )
-  implicit val AbiEventParameterFormat       = rd( "name" -> None, "type" -> None, "indexed" -> None )                                              ( Json.format[Abi.Event.Parameter]       )
+  implicit val AbiEventParameterFormat       = new RestrictTransformingFormat( Seq( restrictTransformAbiEventParameterValue ) )                     ( Json.format[Abi.Event.Parameter]       )
   implicit val AbiEventFormat                = rd( "name" -> None, "inputs" -> None, "anonymous" -> DefaultFalse, "type" -> None )                  ( Json.format[Abi.Event]                 )
-  implicit val AbiConstructorParameterFormat = rd( "name" -> None, "type" -> None )                                                                 ( Json.format[Abi.Constructor.Parameter] )
+  implicit val AbiConstructorParameterFormat = new RestrictTransformingFormat( Seq( restrictTransformAbiConstructorParameterValue ) )               ( Json.format[Abi.Constructor.Parameter] )
   implicit val AbiConstructorFormat          = rd( "inputs" -> None, "payable" -> DefaultTrue, "stateMutability" -> DefaultPayable, "type" -> None )( Json.format[Abi.Constructor]           )
   implicit val AbiFallbackFormat             = rd( "payable" -> DefaultTrue, "stateMutability" -> DefaultPayable, "type" -> None )                  ( Json.format[Abi.Fallback]              )
 

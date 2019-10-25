@@ -129,7 +129,7 @@ package object ethabi {
   def constructorCallData( args : Seq[String], abi : Abi ) : Failable[immutable.Seq[Byte]] = {
 
     def constructorAsFunction( ctor : Abi.Constructor ) : Abi.Function = {
-      val inputs = ctor.inputs.map( ci => Abi.Function.Parameter( ci.name, ci.`type` ) )
+      val inputs = ctor.inputs.map( ci => Abi.Function.Parameter( name=ci.name, `type`= ci.`type`, internalType=ci.internalType ) )
       Abi.Function( "<bullshit-arbitrary-constructor-name>", inputs, Nil, false, false, "nonpayable" )
     }
 

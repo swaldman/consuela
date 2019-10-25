@@ -69,7 +69,7 @@ object Generator {
 
   private def expandArgs( inputs : immutable.Seq[Abi.Function.Parameter] ) : immutable.Seq[Abi.Function.Parameter] = {
     inputs.zip( Stream.from(1) ).map { case ( param, index ) =>
-      if ( param.name.length > 0 ) param else Abi.Function.Parameter( s"arg$index", param.`type` )
+      if ( param.name.length > 0 ) param else param.copy( name=s"arg$index" )
     }
   }
   private def fillMissingInputArgs( fcn : Abi.Function ) = fcn.copy( inputs = expandArgs( fcn.inputs ) )
