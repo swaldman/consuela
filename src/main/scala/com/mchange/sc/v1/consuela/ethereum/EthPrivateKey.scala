@@ -44,20 +44,44 @@ import com.mchange.sc.v1.consuela.util.ByteSeqValue
 
 import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq
 
+import com.mchange.sc.v1.log.MLevel._
+
 import java.security.SecureRandom
 
 import scala.annotation.tailrec
 
 object EthPrivateKey {
+
+  private lazy implicit val logger = mlogger( this )
+
   val ByteLength = 32 // crypto.secp256k1.ValueByteLength
+
+  val Min   = "0x01".decodeHex.toUnsignedBigInt
+  val Limit = "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141".decodeHex.toUnsignedBigInt
 
   def apply( bigInt : BigInt ) : EthPrivateKey = {
     val bytes = ByteSeqExact32( ImmutableArraySeq.Byte.createNoCopy( bigInt.unsignedBytes( ByteLength ) ) )
     EthPrivateKey( bytes );
   }
   def apply( random : SecureRandom ) : EthPrivateKey = {
-    val bytes = ByteSeqExact32( ImmutableArraySeq.Byte.random( ByteLength )( random ) )
-    EthPrivateKey( bytes )
+    val randomBytes = {
+      @tailrec
+      def generate : ImmutableArraySeq.Byte = {
+        val almostCertainlyFine = ImmutableArraySeq.Byte.random( ByteLength )( random )
+        val check = almostCertainlyFine.toUnsignedBigInt
+        if ( check >= Min && check < Limit ) {
+          almostCertainlyFine
+        }
+        else {
+          WARNING.log(
+            s"Extremely unlikely random number invalid as private key generated: 0x${almostCertainlyFine.hex}. Regenerating, but consider verifying the quality of your source of randomness (${random})!"
+          )
+          generate
+        }
+      }
+      ByteSeqExact32( generate )
+    }
+    EthPrivateKey( randomBytes )
   }
   def apply( hexString : String ) : EthPrivateKey = {
     EthPrivateKey( ByteSeqExact32( hexString.decodeHex ) )
@@ -72,7 +96,9 @@ object EthPrivateKey {
 
 final case class EthPrivateKey( val bytes : ByteSeqExact32 ) extends EthSigner {
 
-  lazy val s = bytes.widen.toUnsignedBigInt
+  val s = bytes.widen.toUnsignedBigInt
+
+  require( s >= EthPrivateKey.Min && s < EthPrivateKey.Limit, s"Private key values must be within [${EthPrivateKey.Min},${EthPrivateKey.Limit}), ${s} is not." )
 
   private def internalSignRawBytes( rawBytes : Array[Byte] ) : EthSignature.Basic = {
     import crypto.secp256k1._;
