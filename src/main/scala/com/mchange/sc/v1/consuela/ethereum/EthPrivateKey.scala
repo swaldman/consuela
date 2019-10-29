@@ -56,8 +56,9 @@ object EthPrivateKey {
 
   val ByteLength = 32 // crypto.secp256k1.ValueByteLength
 
+  // see https://en.bitcoin.it/wiki/Private_key
   val Min   = "0x01".decodeHex.toUnsignedBigInt
-  val Limit = "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141".decodeHex.toUnsignedBigInt
+  val Limit = "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141".decodeHex.toUnsignedBigInt // secp256k1 n
 
   def apply( bigInt : BigInt ) : EthPrivateKey = {
     val bytes = ByteSeqExact32( ImmutableArraySeq.Byte.createNoCopy( bigInt.unsignedBytes( ByteLength ) ) )
