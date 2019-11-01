@@ -28,7 +28,7 @@ object SolidityEventSpec {
     )
   }
   val exAbiParam = {
-    Abi.Event.Parameter("payload","string",false)
+    Abi.Event.Parameter("payload","string",false,"string")
   }
   val exAbiEvent = {
     Abi.Event("Pinged",List( exAbiParam ),false)
