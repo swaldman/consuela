@@ -38,5 +38,7 @@ final case class BtcPrivateKey private ( val toEthPrivateKey : EthPrivateKey )  
     Base58.encodeChecked( header, payload )
   }
 
+  lazy val toPublicKey : BtcPublicKey = BtcPublicKey( toEthPrivateKey.toPublicKey )
+
   override def toString() : String = "BtcPrivateKey(ByteSeqExact32(<masked>))"
 }

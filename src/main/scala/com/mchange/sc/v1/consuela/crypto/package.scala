@@ -271,6 +271,12 @@ package object crypto {
       findPublicKeyComputer( provider ).recoverPublicKeyAndV( sigR, sigS, signed )( provider )
     }
 
+    // expects header bytes for compressed keys, 0x02 or 0x03
+    // returns 65 bytes including 0x04 header byte for uncompressed keys
+    def decompressPublicKey( xBN : BigInteger, headerByte : Byte)( implicit provider : jce.Provider ) : Array[Byte] = {
+      findPublicKeyComputer( provider ).decompressPublicKey( xBN, headerByte )( provider )
+    }
+
     private trait PublicKeyComputer {
       def implementingProvider : jce.Provider;
 
@@ -293,6 +299,10 @@ package object crypto {
       def recoverPublicKeyBytesRecId( recId : Int, sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] )( implicit provider : jce.Provider ) : Option[Array[Byte]];
 
       def recoverPublicKeyAndV( sigR : BigInteger, sigS : BigInteger, signed : Array[Byte] )( implicit provider : jce.Provider ) : Option[RecoveredPublicKeyAndV];
+
+      // expects header bytes for compressed keys, 0x02 or 0x03
+      // returns 65 bytes including 0x04 header byte for uncompressed keys
+      def decompressPublicKey( xBN : BigInteger, headerByte : Byte)( implicit provider : jce.Provider ) : Array[Byte]
     }
 
     /*
@@ -323,6 +333,18 @@ package object crypto {
 
       val Params = SECNamedCurves.getByName(ECParamBundleName);
       val Curve = new ECDomainParameters(Params.getCurve(), Params.getG(), Params.getN(), Params.getH());
+
+      // expects header bytes for compressed keys, 0x02 or 0x03
+      // returns 65 bytes including 0x04 header byte for uncompressed keys
+      def decompressPublicKey( xBN : BigInteger, headerByte : Byte)( implicit provider : jce.Provider ) : Array[Byte] = {
+        require( headerByte == 0x02 || headerByte == 0x03, s"Invalid compressed key header: ${headerByte}" )
+
+        val curve = Curve.getCurve().asInstanceOf[ECCurve.Fp];
+        val x9 = new X9IntegerConverter();
+        val compEnc = x9.integerToBytes(xBN, 1 + x9.getByteLength(curve));
+        compEnc(0) = headerByte
+        curve.decodePoint(compEnc).getEncoded( false )
+      }
 
       /**
        *  @return a 64 byte / 512 bit byte array which is the concatenation of the byte representations
@@ -458,6 +480,18 @@ package object crypto {
 
       val Params = SECNamedCurves.getByName(ECParamBundleName);
       val Curve = new ECDomainParameters(Params.getCurve(), Params.getG(), Params.getN(), Params.getH());
+
+      // expects header bytes for compressed keys, 0x02 or 0x03
+      // returns 65 bytes including 0x04 header byte for uncompressed keys
+      def decompressPublicKey( xBN : BigInteger, headerByte : Byte)( implicit provider : jce.Provider ) : Array[Byte] = {
+        require( headerByte == 0x02 || headerByte == 0x03, s"Invalid compressed key header: ${headerByte}" )
+
+        val curve = Curve.getCurve().asInstanceOf[ECCurve.Fp];
+        val x9 = new X9IntegerConverter();
+        val compEnc = x9.integerToBytes(xBN, 1 + x9.getByteLength(curve));
+        compEnc(0) = headerByte
+        curve.decodePoint(compEnc).getEncoded( false )
+      }
 
       /**
        *  @return a 64 byte / 512 bit byte array which is the concatenation of the byte representations
