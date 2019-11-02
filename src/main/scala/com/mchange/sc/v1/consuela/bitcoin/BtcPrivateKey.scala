@@ -22,11 +22,8 @@ object BtcPrivateKey {
 
   // javadoc: "Instances of Base64.Decoder class are safe for use by multiple concurrent threads."
   private lazy val Base64Decoder = java.util.Base64.getDecoder()
-
-  private final val ArbitraryHashCodeOffset = 17698
-
 }
-final class BtcPrivateKey private ( val toEthPrivateKey : EthPrivateKey )  {
+final case class BtcPrivateKey private ( val toEthPrivateKey : EthPrivateKey )  {
   import BtcPrivateKey._
 
   private [this] lazy val raw = toEthPrivateKey.bytes.widen.toArray
@@ -40,15 +37,6 @@ final class BtcPrivateKey private ( val toEthPrivateKey : EthPrivateKey )  {
     val payload = if ( compressed ) raw :+ CompressedMarker else raw
     Base58.encodeChecked( header, payload )
   }
-
-  override def equals( other : Any ) : Boolean = {
-    other match {
-      case bpk : BtcPrivateKey => this.toEthPrivateKey == bpk.toEthPrivateKey
-      case _                   => false
-    }
-  }
-
-  override def hashCode() : Int = toEthPrivateKey.hashCode + ArbitraryHashCodeOffset
 
   override def toString() : String = "BtcPrivateKey(ByteSeqExact32(<masked>))"
 }
