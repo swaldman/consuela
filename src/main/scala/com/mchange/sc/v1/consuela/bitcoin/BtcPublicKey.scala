@@ -3,6 +3,7 @@ package com.mchange.sc.v1.consuela.bitcoin
 import com.mchange.sc.v1.consuela._
 import com.mchange.sc.v1.consuela.crypto.secp256k1.decompressPublicKey
 import com.mchange.sc.v1.consuela.ethereum.EthPublicKey
+import com.mchange.sc.v1.consuela.hash.{RIPEMD160,SHA256}
 
 import com.mchange.sc.v3.failable._
 
@@ -48,9 +49,17 @@ object BtcPublicKey {
 case class BtcPublicKey( val toEthPublicKey : EthPublicKey ) {
   import BtcPublicKey._
 
-  def uncompressedBytes = toEthPublicKey.bytesWithUncompressedHeader
-  lazy val uncompressedHex   = toEthPublicKey.bytesWithUncompressedHeader.widen.hex
+  private def hash( bytes : immutable.Seq[Byte] ) : ByteSeqExact20 = ByteSeqExact20( RIPEMD160.hash( SHA256.hash( bytes ).bytes ).bytes )
 
+  def headerlessBytes = toEthPublicKey.bytes
+  def headerlessHex = toEthPublicKey.bytes.widen.hex
+
+  // includes header byte 0x04
+  def uncompressedBytes     = toEthPublicKey.bytesWithUncompressedHeader
+  lazy val uncompressedHex  = toEthPublicKey.bytesWithUncompressedHeader.widen.hex
+  lazy val uncompressedHash = hash( uncompressedBytes.widen )
+
+  // includes header byte 0x02 or 0x03
   lazy val compressedBytes = {
     val x = toEthPublicKey.x
     val y = toEthPublicKey.y
@@ -59,7 +68,13 @@ case class BtcPublicKey( val toEthPublicKey : EthPublicKey ) {
     buff ++= x.unsignedBytes( CoordinateLength )
     ByteSeqExact33( buff.toArray.toImmutableSeq )
   }
-  lazy val compressedHex = compressedBytes.widen.hex
+  lazy val compressedHex  = compressedBytes.widen.hex
+  lazy val compressedHash = hash( compressedBytes.widen )
+
+  def toBtcAddress( ofType : BtcAddress.Type = BtcAddress.P2PKH_Mainnet, useCompressedKey : Boolean = true ) : BtcAddress = {
+    val hash = if ( useCompressedKey ) compressedHash else uncompressedHash
+    ofType.fromPublicKeyHash( hash )
+  }
 
   override def toString : String = s"BtcPublicKey(0x${uncompressedHex})"
 }

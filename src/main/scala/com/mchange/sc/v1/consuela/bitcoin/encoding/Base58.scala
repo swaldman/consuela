@@ -114,7 +114,7 @@ object Base58 {
       ( headered(0), headered.tail )
     }
     else {
-      throw new NumberFormatException( s"Checksum failed! Expected: 0x${expectedCheck.hex}, Found: 0x${check.hex}" )
+      throw new ChecksumFailedException( s"Checksum failed! Expected: 0x${expectedCheck.hex}, Found: 0x${check.hex}" )
     }
   }
 

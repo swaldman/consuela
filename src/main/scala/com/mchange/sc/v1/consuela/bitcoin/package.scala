@@ -5,6 +5,9 @@ package object bitcoin {
 
   class UnknownPublicKeyFormatException( message : String, t : Throwable = null ) extends BtcException( message, t )
 
+  val  ByteSeqExact20 = com.mchange.sc.v1.consuela.ethereum.specification.Types.ByteSeqExact20
+  type ByteSeqExact20 = com.mchange.sc.v1.consuela.ethereum.specification.Types.ByteSeqExact20
+
   val  ByteSeqExact32 = com.mchange.sc.v1.consuela.ethereum.specification.Types.ByteSeqExact32
   type ByteSeqExact32 = com.mchange.sc.v1.consuela.ethereum.specification.Types.ByteSeqExact32
   
@@ -16,5 +19,4 @@ package object bitcoin {
 
   val  ByteSeqExact65 = com.mchange.sc.v1.consuela.ethereum.specification.Types.ByteSeqExact65
   type ByteSeqExact65 = com.mchange.sc.v1.consuela.ethereum.specification.Types.ByteSeqExact65
-  
 }
