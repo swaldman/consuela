@@ -44,7 +44,7 @@ object Base58 {
     }
     else {
       val number = Base58.toBigInt( numPart )
-      val numberBytes = number.toByteArray.dropWhile( _ == 0x00 )
+      val numberBytes = number.toByteArray.dropWhile( _ == 0x00 ) // BigInt bytes will have a zero prepended if sign bit of the desired-to-be-positive byte representation would otherwise be negative
       val raw = Array.ofDim[Byte](zeroPart.length + numberBytes.length)
       Array.copy( numberBytes, 0, raw, zeroPart.length, numberBytes.length ) // bytes prior to zeroPart.length left as 0x00
       raw
