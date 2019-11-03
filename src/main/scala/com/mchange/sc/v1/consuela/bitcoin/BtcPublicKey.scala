@@ -37,6 +37,8 @@ object BtcPublicKey {
     }
   }
 
+  def apply( bytes : Array[Byte] ) : BtcPublicKey = this.apply( bytes.toImmutableSeq )
+
   final object Header {
     val CompressedEven = 0x02.toByte
     val CompressedOdd  = 0x03.toByte

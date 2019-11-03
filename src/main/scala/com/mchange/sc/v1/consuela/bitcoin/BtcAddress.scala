@@ -40,6 +40,7 @@ object BtcAddress {
     }
   }
   case object P2PKH_Mainnet extends Type {
+    val Regex = """1.+""".r
     def fromPublicKeyHash( publicKeyHash : ByteSeqExact20 ) : P2PKH_Mainnet = this.apply( Base58.encodeChecked( 0x00, publicKeyHash.widen.toArray ) )
   }
   // case object P2SH_0x05 extends Type
@@ -58,6 +59,13 @@ object BtcAddress {
   }
 
   final case class P2PKH_Mainnet( val text : String ) extends P2PKH( Byte0, text )
+
+  def apply( text : String ) : BtcAddress = {
+    text match {
+      case P2PKH_Mainnet.Regex() => P2PKH_Mainnet( text )
+      case _                     => throw new UnknownBtcAddressFormatException( s"Couldn't decode '${text}'" )
+    }
+  }
 }
 sealed trait BtcAddress {
   def text : String
