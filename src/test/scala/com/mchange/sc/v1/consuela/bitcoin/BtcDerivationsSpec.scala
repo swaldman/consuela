@@ -40,6 +40,11 @@ object BtcDerivationSpec {
     )
   )
 
+  val TextAddressesToScriptPubKeys = immutable.Map( // taken from https://eips.ethereum.org/EIPS/eip-2304
+    "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa" -> "76a91462e907b15cbf27d5425399ebf6f0fb50ebb88f1888ac",
+    "3Ai1JZ8pdJb2ksieUV8FsxSNVJCpoPi8W6" -> "a91462e907b15cbf27d5425399ebf6f0fb50ebb88f1887"
+  )
+
   private def bad( msg : => String ) : Boolean = {
     println( s"BAD: ${msg}" )
     false
@@ -95,6 +100,7 @@ class BtcDerivationSpec extends Specification { def is = s2"""
    BTC private key formats derive and interchange               ${e1} 
    BTC public keys derive as expected                           ${e2} 
    BTC addresses derive as expected                             ${e3} 
+   scriptPubKeys are as expected                                ${e4}
 """
 
   import BtcDerivationSpec._
@@ -102,4 +108,5 @@ class BtcDerivationSpec extends Specification { def is = s2"""
   def e1 : Boolean = WalletRecs.map( privateKeyFormatsOK ).forall( identity )
   def e2 : Boolean = WalletRecs.map( expectedPublicKeys ).forall( identity )
   def e3 : Boolean = WalletRecs.map( expectedAddresses ).forall( identity )
+  def e4 : Boolean = TextAddressesToScriptPubKeys.map { case ( textAddress, spkHex ) => BtcAddress.parse( textAddress ).assert.toScriptPubKey == spkHex.decodeHexAsSeq }.forall( identity ) 
 }
