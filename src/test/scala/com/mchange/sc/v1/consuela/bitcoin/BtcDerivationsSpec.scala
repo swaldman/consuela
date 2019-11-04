@@ -81,10 +81,10 @@ object BtcDerivationSpec {
     val derivedAddressCompressed   = derivedPublicKey.toBtcAddress( ofType = BtcAddress.P2PKH_Mainnet, useCompressedKey = true )
 
     def generatesAddressUncompressed = rec.p2pkhMainnetUncompressed.fold( true ){ address =>
-      ( derivedAddressUncompressed == BtcAddress(address) || bad( s"derived and expected address not equal: ${rec}" ) )
+      ( derivedAddressUncompressed == BtcAddress.parse(address).assert || bad( s"derived and expected address not equal: ${rec}" ) )
     }
     def generatesAddressCompressed = rec.p2pkhMainnetCompressed.fold( true ){ address =>
-      ( derivedAddressCompressed == BtcAddress(address) || bad( s"derived and expected address not equal: ${rec}" ) )
+      ( derivedAddressCompressed == BtcAddress.parse(address).assert || bad( s"derived and expected address not equal: ${rec}" ) )
     }
 
     generatesAddressUncompressed && generatesAddressCompressed
