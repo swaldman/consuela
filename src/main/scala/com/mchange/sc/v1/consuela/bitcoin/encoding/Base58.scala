@@ -22,6 +22,15 @@ object Base58 {
 
   private final val CheckLength = 4
 
+  private def indexForLetter( letter : Char ) : BigInt = {
+    try {
+      IndexForLetter( letter )
+    }
+    catch {
+      case nse : NoSuchElementException => throw new IllegalLetterException( s"Letter '${letter}' does not exist in the Base58 alphabet.", nse )
+    }
+  }
+
   def fromBigInt( number : BigInt ) : String = {
     require( number >= 0, s"Only positive integers can be represented in Base58. Can't convert ${number}.")
     _fromBigInt( number )
@@ -74,10 +83,10 @@ object Base58 {
           BigZero
         }
         case biggest :: Nil => {
-          current + ( IndexForLetter(biggest) * BigAlphabetLength.pow(place) )
+          current + ( indexForLetter(biggest) * BigAlphabetLength.pow(place) )
         }
         case next :: more  => {
-          buildNumber( current + ( IndexForLetter(next) * BigAlphabetLength.pow(place) ), place + 1, more )
+          buildNumber( current + ( indexForLetter(next) * BigAlphabetLength.pow(place) ), place + 1, more )
         }
       }
     }
