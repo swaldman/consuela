@@ -3,7 +3,7 @@ package com.mchange.sc.v1.consuela.bitcoin
 import com.mchange.sc.v1.consuela._
 import com.mchange.sc.v1.consuela.bitcoin.encoding.Base58
 
-import com.mchange.sc.v3.failable._;
+import com.mchange.sc.v3.failable._
 
 import scala.collection._
 
@@ -29,6 +29,8 @@ object BtcAddress {
     ByteSeqExact20( payload )
   }
 
+  private def toHex( b : Byte ) = String.format("%02X ", Array.ofDim[Byte](b))
+
   // see https://eips.ethereum.org/EIPS/eip-2304
   //     https://en.bitcoin.it/wiki/Transaction#Types_of_Transaction
   private final object P2PKH {
@@ -49,12 +51,46 @@ object BtcAddress {
       out.toImmutableSeq
     }
 
+    private[BtcAddress]
+    def whyBadScriptPubKey( scriptPubKey : immutable.Seq[Byte] ) : Option[String] = {
+      if (scriptPubKey.length != P2PKH.ScriptPubKeyLength) {
+        Some( s"P2PKH addresses should yield scriptPubKeys of length ${P2PKH.ScriptPubKeyLength}, cannot parse from ${scriptPubKey} with length ${scriptPubKey.length}" )
+      }
+      else if (scriptPubKey(0) != OP.DUP) {
+        Some( s"P2PKH scriptPubkey should, doesn't, begin with OP_DUP (0x${toHex(OP.DUP)})). scriptPubKey: 0x${scriptPubKey.hex}" )
+      }
+      else if (scriptPubKey(1) != OP.HASH160) {
+        Some( s"The second byte of a P2PKH scriptPubkey should be, isn't, OP_HASH160 (0x${toHex(OP.HASH160)})). scriptPubKey: 0x${scriptPubKey.hex}" )
+      }
+      else if (scriptPubKey(2) != Byte_UnversionedPubKeyHashLength ) {
+        Some( s"The third byte of a P2PKH scriptPubKey should be the public key hash length 0x${toHex(Byte_UnversionedPubKeyHashLength)}, isn't. scriptPubKey: 0x${scriptPubKey.hex}"  )
+      }
+      else if ( scriptPubKey(23) != OP.EQUALVERIFY ) {
+        Some( s"The next to last byte of a P2PKH scriptPubkey should be, isn't, OP_EQUALVERIFY (0x${toHex(OP.EQUALVERIFY)})). scriptPubKey: 0x${scriptPubKey.hex}" )
+      }
+      else if ( scriptPubKey(24) != OP.CHECKSIG ) {
+        Some( s"P2PKH scriptPubkey should, doesn't, end with OP_CHECKSIG (0x${toHex(OP.CHECKSIG)})). scriptPubKey: 0x${scriptPubKey.hex}" )
+      }
+      else {
+        None
+      }
+    }
+
+    private[BtcAddress]
+    def extractPublicKeyHash( scriptPubKey : immutable.Seq[Byte] ) : ByteSeqExact20 = ByteSeqExact20( scriptPubKey.slice( 3, 23 ) )
+
     final object Version {
       final val Mainnet : Byte = 0x00.toByte
     }
   }
 
   final case object P2PKH_Mainnet extends Type {
+    def fromScriptPubKey( scriptPubKey : immutable.Seq[Byte] ) : P2PKH_Mainnet = {
+      P2PKH.whyBadScriptPubKey( scriptPubKey ) match {
+        case Some( problem ) => throw new UnexpectedScriptPubKeyFormatException( problem )
+        case None            => fromPublicKeyHash( P2PKH.extractPublicKeyHash( scriptPubKey ) )
+      }
+    }
     def fromPublicKeyHash( publicKeyHash : ByteSeqExact20 ) : P2PKH_Mainnet = {
       val version = P2PKH.Version.Mainnet
       val payload = publicKeyHash.widen.toArray
@@ -86,12 +122,40 @@ object BtcAddress {
       out.toImmutableSeq
     }
 
+    private[BtcAddress]
+    def whyBadScriptPubKey( scriptPubKey : immutable.Seq[Byte] ) : Option[String] = {
+      if (scriptPubKey.length != P2SH.ScriptPubKeyLength) {
+        Some( s"P2SH addresses should yield scriptPubKeys of length ${P2SH.ScriptPubKeyLength}, cannot parse from ${scriptPubKey} with length ${scriptPubKey.length}" )
+      }
+      else if (scriptPubKey(0) != OP.HASH160) {
+        Some( s"P2SH scriptPubkey should, doesn't, begin with OP_HASH160 (0x${toHex(OP.HASH160)})). scriptPubKey: 0x${scriptPubKey.hex}" )
+      }
+      else if (scriptPubKey(1) != Byte_UnversionedPubKeyHashLength )
+        Some( s"The second byte of a P2SH scriptPubKey should be the public key hash length 0x${toHex(Byte_UnversionedPubKeyHashLength)}, isn't. scriptPubKey: 0x${scriptPubKey.hex}"  )
+      else if ( scriptPubKey(22) != OP.EQUAL ) {
+        Some( s"P2SH scriptPubkey should, doesn't, end with OP_EQUAL (0x${toHex(OP.EQUAL)})). scriptPubKey: 0x${scriptPubKey.hex}" )
+      }
+      else {
+        None
+      }
+    }
+
+    private[BtcAddress]
+    def extractPublicKeyHash( scriptPubKey : immutable.Seq[Byte] ) : ByteSeqExact20 = ByteSeqExact20( scriptPubKey.slice( 2, 22 ) )
+
     final object Version {
       final val Mainnet : Byte = 0x05.toByte
     }
   }
 
   final case object P2SH_Mainnet extends Type {
+
+    def fromScriptPubKey( scriptPubKey : immutable.Seq[Byte] ) : P2SH_Mainnet = {
+      P2SH.whyBadScriptPubKey( scriptPubKey ) match {
+        case Some( problem ) => throw new UnexpectedScriptPubKeyFormatException( problem )
+        case None            => fromPublicKeyHash( P2SH.extractPublicKeyHash( scriptPubKey ) )
+      }
+    }
     def fromPublicKeyHash( publicKeyHash : ByteSeqExact20 ) : P2SH_Mainnet = {
       val version = P2SH.Version.Mainnet
       val payload = publicKeyHash.widen.toArray
@@ -117,6 +181,13 @@ object BtcAddress {
       }
     }
   }
+
+  def recoverFromScriptPubKey( scriptPubKey : immutable.Seq[Byte] ) : Failable[BtcAddress] = {
+    Failable( P2PKH_Mainnet.fromScriptPubKey( scriptPubKey ) ) orElseTrace Failable( P2SH_Mainnet.fromScriptPubKey( scriptPubKey ) )
+  }
+
+  // throws exceptions on failure
+  def apply( text : String ) : BtcAddress = parse( text ).assert
 }
 sealed trait BtcAddress {
   def text            : String

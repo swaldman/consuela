@@ -3,6 +3,7 @@ package com.mchange.sc.v1.consuela
 package object bitcoin {
   class BtcException( message : String, t : Throwable = null ) extends ConsuelaException( message, t )
 
+  class UnexpectedScriptPubKeyFormatException( message : String, t : Throwable = null ) extends BtcException( message, t )
   class UnknownPublicKeyFormatException( message : String, t : Throwable = null ) extends BtcException( message, t )
   class UnknownBtcAddressFormatException( message : String, t : Throwable = null ) extends BtcException( message, t )
 

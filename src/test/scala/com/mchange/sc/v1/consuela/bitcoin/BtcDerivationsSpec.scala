@@ -101,6 +101,7 @@ class BtcDerivationSpec extends Specification { def is = s2"""
    BTC public keys derive as expected                           ${e2} 
    BTC addresses derive as expected                             ${e3} 
    scriptPubKeys are as expected                                ${e4}
+   addresses are recoverable from scriptPubKeys                 ${e5}
 """
 
   import BtcDerivationSpec._
@@ -108,5 +109,7 @@ class BtcDerivationSpec extends Specification { def is = s2"""
   def e1 : Boolean = WalletRecs.map( privateKeyFormatsOK ).forall( identity )
   def e2 : Boolean = WalletRecs.map( expectedPublicKeys ).forall( identity )
   def e3 : Boolean = WalletRecs.map( expectedAddresses ).forall( identity )
+
   def e4 : Boolean = TextAddressesToScriptPubKeys.map { case ( textAddress, spkHex ) => BtcAddress.parse( textAddress ).assert.toScriptPubKey == spkHex.decodeHexAsSeq }.forall( identity ) 
+  def e5 : Boolean = TextAddressesToScriptPubKeys.map { case ( textAddress, spkHex ) => BtcAddress.recoverFromScriptPubKey( spkHex.decodeHexAsSeq ).assert.text == textAddress }.forall( identity ) 
 }
