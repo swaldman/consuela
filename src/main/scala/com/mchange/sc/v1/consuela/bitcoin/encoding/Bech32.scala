@@ -56,6 +56,10 @@ object Bech32 {
     hrp + '1' + toCharQuintet(version) + expandToStringQuintets( witnessProgram ) + checksum
   }
 
+  def encodeSegWit( hrp : String, version : Byte, witnessProgram : immutable.Seq[Byte] ) : String = {
+    encodeSegWit( hrp, version, witnessProgram.toArray )
+  }
+
   private def ensureValidVersionWitnessProgramPair( version : Byte, witnessProgram : Array[Byte] ) : Unit = {
     ( version, witnessProgram.length ) match {
       case ( 0, 20 )   => ()
