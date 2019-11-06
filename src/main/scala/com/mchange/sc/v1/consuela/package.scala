@@ -71,6 +71,8 @@ package object consuela {
     def decodeHexAsSeq : immutable.Seq[Byte] = decodeHexAsSeq( allowPrefix = true )
 
     def decodeBase64 : Array[Byte] = B64Decoder.decode( string );
+
+    def isMixedCase : Boolean = string.exists( Character.isUpperCase ) && string.exists( Character.isLowerCase )
   }
   trait RichBytes { // if we accept code duplication, we can inline this stuff and let the subclasses extend AnyVal. Hmmm....
     protected val _bytes     : Array[Byte];
