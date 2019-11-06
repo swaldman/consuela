@@ -31,10 +31,16 @@ object Bech32 {
   }
 
   def decodeSegWitAsArray( expectedHrp : String, encoded : String ) : ( Byte, Array[Byte] ) = {
+    if ( encoded.isMixedCase ) {
+      throw new InvalidBech32Exception( s"Mixed case encodings are forbidden: '${encoded}'" )
+    }
     val caseNormalized = normalizeCase( encoded )
     val (hrp, stringQuintetsWithChecksum) = splitValidateHrpData( caseNormalized )
 
-    if ( normalizeCase( expectedHrp ) != hrp ) {
+    if ( expectedHrp.isMixedCase ) {
+      throw new IllegalArgumentException( s"Expected Human Readable Part should not be mixed-case. expectedHrp: ${expectedHrp}" )
+    }
+    else if ( normalizeCase( expectedHrp ) != hrp ) {
       throw new InvalidBech32Exception( s"Did not find expected human-readable part (hrp). found: '${hrp}', expected: ${expectedHrp}" )
     }
     else if (! verifyChecksum( hrp, stringQuintetsWithChecksum ) ) {
@@ -51,9 +57,18 @@ object Bech32 {
   }
 
   def encodeSegWit( hrp : String, version : Byte, witnessProgram : Array[Byte] ) : String = {
+
+    whyBadHrp( hrp ).foreach( msg => throw new IllegalArgumentException( msg ) )
+
     ensureValidVersionWitnessProgramPair( version, witnessProgram )
-    val checksum = createChecksum( hrp, version, witnessProgram )
-    hrp + '1' + toCharQuintet(version) + expandToStringQuintets( witnessProgram ) + checksum
+
+    val nhrp = normalizeCase(hrp)
+    val checksum = createChecksum( nhrp, version, witnessProgram )
+    val out = ( nhrp + '1' + toCharQuintet(version) + expandToStringQuintets( witnessProgram ) + checksum ).toLowerCase
+    if ( out.length > 90 ) {
+      throw new InvalidBech32Exception( s"Cannot encode, would yield an SegWit address longer than 90 chars (${out.length} chars: '${out}'), which is illegal." )
+    }
+    out
   }
 
   def encodeSegWit( hrp : String, version : Byte, witnessProgram : immutable.Seq[Byte] ) : String = {
@@ -166,11 +181,26 @@ object Bech32 {
   }
 
   private def normalizeCase( encoded : String ) : String = {
-    if ( encoded.isMixedCase ) {
-      throw new InvalidBech32Exception( s"Mixed case encodings are forbidden: '${encoded}'" )
+    encoded.toLowerCase
+  }
+
+  private def whyBadHrp( hrp : String ) : Option[String] = {
+    val len = hrp.length
+
+    if (len < 1) {
+      Some( s"Human readable part must be at least one character long, is not" )
+    }
+    else if (len > 83) {
+      Some( s"Human readable part can be no longer than 83 chars, found ${len}" )
+    }
+    else if ( hrp.exists( c => (c < 33 || c > 126) ) ) {
+      Some( s"Human readable part must include only ASCII characters in range [33,126] (hrp: '${hrp}')" )
+    }
+    else if ( hrp.isMixedCase ) {
+      Some( s"Mixed case human-readable parts are forbidden. (hrp: '${hrp}')" )
     }
     else {
-      encoded.toLowerCase
+      None
     }
   }
 
@@ -180,17 +210,14 @@ object Bech32 {
     if (separator < 0) {
       throw new InvalidBech32Exception( s"No delimited human readable part: '${encoded}'" )
     }
-    else if (separator < 1) {
-      throw new InvalidBech32Exception( s"Human readable part must be at least one character long: '${encoded}'" )
-    }
 
+    // note that we are skipping the separator char
     val hrp  = encoded.substring(0, separator)
     val data = encoded.substring(separator + 1)
 
-    if ( hrp.exists( c => (c < 33 || c > 126) ) ) {
-      throw new InvalidBech32Exception( s"Human readable part must include only ASCII characters in range [33,126]. hrp: '${hrp}'" )
-    }
-    else if ( data.length < 6 ) {
+    whyBadHrp( hrp ).foreach( msg => throw new InvalidBech32Exception( s"${msg}: '${encoded}'" ) )
+
+    if ( data.length < 6 ) {
       throw new InvalidBech32Exception( s"Data part must be at least 6 characters long. data: '${data}'" )
     }
     else if ( data.exists( c => !AlphabetSet(c) ) ) {
