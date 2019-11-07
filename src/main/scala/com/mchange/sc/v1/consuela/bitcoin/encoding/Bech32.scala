@@ -36,7 +36,7 @@ object Bech32 {
     }
 
     if (! verifyChecksum( hrp, dataWithChecksum ) ) {
-      throw new InvalidBech32Exception( s"Bad address. Checksum failed: ${encoded}" )
+      throw new Bech32ChecksumFailedException( s"Bad address. Checksum failed: ${encoded}" )
     }
 
     val unchecksummed = unchecksum( dataWithChecksum )
