@@ -2,7 +2,6 @@ package com.mchange.sc.v1.consuela.bitcoin.encoding
 
 import com.mchange.sc.v1.consuela._
 
-import scala.annotation.tailrec
 import scala.collection._
 
 // see https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki
@@ -18,167 +17,47 @@ object Bech32 {
   
   private final val GEN = Array[Int]( 0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3 )
 
-  private final val Mask5           = (1 << 5) - 1
-  private final val UpperMask5      = (Mask5 << 5)
-  private final val UnoffsetWindow5 = (Mask5 << 11)
-  private final val UnoffsetWindow8 = (0xFF  << 7)
-
   private final val Padding6 = Array.ofDim[Int](6)
 
-  def decodeSegWit( expectedHrp : String, encoded : String ) : ( Byte, immutable.Seq[Byte] ) = {
-    val ( v, w ) = decodeSegWitAsArray( expectedHrp : String, encoded : String )
-    ( v, w.toImmutableSeq )
-  }
-
-  def decodeSegWitAsArray( expectedHrp : String, encoded : String ) : ( Byte, Array[Byte] ) = {
+  def decodeQuintets( expectedHrp : Option[String], encoded : String ) : Iterable[Int] = {
     if ( encoded.isMixedCase ) {
       throw new InvalidBech32Exception( s"Mixed case encodings are forbidden: '${encoded}'" )
     }
     val caseNormalized = normalizeCase( encoded )
-    val (hrp, stringQuintetsWithChecksum) = splitValidateHrpData( caseNormalized )
+    val (hrp, dataWithChecksum) = splitValidateHrpData( caseNormalized )
 
-    if ( expectedHrp.isMixedCase ) {
-      throw new IllegalArgumentException( s"Expected Human Readable Part should not be mixed-case. expectedHrp: ${expectedHrp}" )
+    expectedHrp.foreach { expected =>
+      if ( expected.isMixedCase ) {
+        throw new IllegalArgumentException( s"Expected Human Readable Part should not be mixed-case. expectedHrp: ${expected}" )
+      }
+      else if ( normalizeCase( expected ) != hrp ) {
+        throw new InvalidBech32Exception( s"Did not find expected human-readable part (hrp). found: '${hrp}', expected: ${expectedHrp}" )
+      }
     }
-    else if ( normalizeCase( expectedHrp ) != hrp ) {
-      throw new InvalidBech32Exception( s"Did not find expected human-readable part (hrp). found: '${hrp}', expected: ${expectedHrp}" )
-    }
-    else if (! verifyChecksum( hrp, stringQuintetsWithChecksum ) ) {
+
+    if (! verifyChecksum( hrp, dataWithChecksum ) ) {
       throw new InvalidBech32Exception( s"Bad address. Checksum failed: ${encoded}" )
     }
 
-    val unchecksummedStringQuintets = unchecksum( stringQuintetsWithChecksum )
+    val unchecksummed = unchecksum( dataWithChecksum )
 
-    val out = decodeUnchecksummed( unchecksummedStringQuintets )
-
-    ensureValidVersionWitnessProgramPairTupled(out)
-
-    out
+    unchecksummed.map( c => AlphabetToIndex( c ) )
   }
 
-  def encodeSegWit( hrp : String, version : Byte, witnessProgram : Array[Byte] ) : String = {
+  def encodeQuintets( hrp : String, quintets : Array[Int] ) : String = {
 
     whyBadHrp( hrp ).foreach( msg => throw new IllegalArgumentException( msg ) )
 
-    ensureValidVersionWitnessProgramPair( version, witnessProgram )
-
     val nhrp = normalizeCase(hrp)
-    val checksum = createChecksum( nhrp, version, witnessProgram )
-    val out = ( nhrp + '1' + toCharQuintet(version) + expandToStringQuintets( witnessProgram ) + checksum ).toLowerCase
+    val checksum = createChecksum( nhrp, quintets )
+    val out = ( nhrp + '1' + toStringQuintets( quintets ) + checksum ).toLowerCase
     if ( out.length > 90 ) {
-      throw new InvalidBech32Exception( s"Cannot encode, would yield an SegWit address longer than 90 chars (${out.length} chars: '${out}'), which is illegal." )
+      throw new InvalidBech32Exception( s"Cannot encode, would illegally yield Bech32 longer than 90 chars (${out.length} chars: '${out}'), which is illegal." )
     }
     out
   }
 
-  def encodeSegWit( hrp : String, version : Byte, witnessProgram : immutable.Seq[Byte] ) : String = {
-    encodeSegWit( hrp, version, witnessProgram.toArray )
-  }
-
-  private def ensureValidVersionWitnessProgramPair( version : Byte, witnessProgram : Array[Byte] ) : Unit = {
-    ( version, witnessProgram.length ) match {
-      case ( 0, 20 )   => ()
-      case ( 0, 32 )   => ()
-      case ( 0, len  ) => throw new InvalidBech32Exception( s"Version 0x0 addresses must have 20 or 32 byte witness programs, found ${len} bytes" )
-      case _           => ()
-    }
-  }
-
-  private val ensureValidVersionWitnessProgramPairTupled = (ensureValidVersionWitnessProgramPair _).tupled
-
   private def unchecksum( dataWithChecksum : String ) : String = dataWithChecksum.substring( 0, dataWithChecksum.length - 6 )
-
-  private def decodeUnchecksummed( stringQuintets : String ) : ( Byte, Array[Byte] ) = ( toQuintet(stringQuintets.head).toByte, packQuintets( stringQuintets.tail ) )
-
-  private def zlpn_binaryString( n : Int, i : Int ) = {
-    val tail = i.toBinaryString
-    if ( tail.length < n ) {
-      ("0"*(n-tail.length)) + tail
-    }
-    else {
-      tail
-    }
-  }
-
-  private def expandToQuintets( witnessPart : Array[Byte] ) : Iterable[Int] = {
-
-    val len = witnessPart.length
-
-    def encode( startByte : Int, startBit : Int, reverseQuintetAccum : List[Int] ) : List[Int] = {
-      val source = {
-        def first  = (witnessPart( startByte ) & 0xFF) << 8
-        def second = if (startByte < len - 1) (witnessPart( startByte + 1 ) & 0xFF) else 0
-        first | second
-      }
-      val tailBits = 16 - (5 + startBit)
-      val extracted = ((UnoffsetWindow5 >>> startBit) & source) >>> tailBits
-
-      val nextReverseQuintetAccum = extracted :: reverseQuintetAccum
-      val nextStartByte = if (startBit < 3) startByte else startByte + 1
-      val nextStartBit  = (startBit + 5) % 8
-
-      if ( nextStartByte >= len ) {
-        nextReverseQuintetAccum.reverse
-      }
-      else {
-        encode( nextStartByte, nextStartBit, nextReverseQuintetAccum )
-      }
-    }
-
-    encode( 0, 0, Nil )
-  }
-
-  private def expandToStringQuintets( witnessPart : Array[Byte] ) : String = {
-    toStringQuintets( expandToQuintets( witnessPart ) )
-  }
-
-  private def packQuintets( stringQuintets : String ) : Array[Byte] = packQuintetsFrom( stringQuintets, 0 )
-
-  private def packQuintetsFrom( stringQuintets : String, startIndex : Int ) : Array[Byte] = {
-    val len = stringQuintets.length
-
-    @tailrec
-    def decode( startChar : Int, startBit : Int, reverseAccumBytes : List[Byte] ) : Array[Byte] = {
-      // println( s"decode( ${startChar}, ${startBit}, ${reverseAccumBytes} )" )
-
-      val source    = {
-        def first5  = (AlphabetToIndex(stringQuintets.charAt(startChar    )) & Mask5) << 10
-        def second5 = (AlphabetToIndex(stringQuintets.charAt(startChar + 1)) & Mask5) <<  5
-        def third5  = (AlphabetToIndex(stringQuintets.charAt(startChar + 2)) & Mask5)
-
-        (len - startChar) match {
-          case 0 => sys.error( s"Oops. We have recursed into an index out of bounds situation, startChar ${startChar}, len ${len}" )
-          case 1 => first5
-          case 2 => first5 | second5
-          case _ => first5 | second5 | third5
-        }
-      }
-
-      // println( s"source: ${zlp15_binaryString_delimited(source)}" )
-
-      val tailBits  = 15 - (8 + startBit)
-      val extracted = (((UnoffsetWindow8 >>> startBit) & source) >>> tailBits)
-
-      // println( s"startBit: ${startBit}, tailBits: ${tailBits}" )
-      // println( s"extracted: ${zlp8_binaryString(extracted)}" )
-
-      val nextReverseAccumBytes = extracted.toByte :: reverseAccumBytes
-
-      val nextStartChar = if (startBit < 2) startChar + 1 else startChar + 2
-      val nextStartBit  = (5 - (tailBits % 5)) % 5
-
-      // println( s"nextStartChar: ${nextStartChar}, len: ${len}" )
-
-      if ( nextStartChar >= len ) {
-        nextReverseAccumBytes.reverse.toArray
-      }
-      else {
-        decode( nextStartChar, nextStartBit, nextReverseAccumBytes )
-      }
-    }
-
-    decode( startIndex, 0, Nil )
-  }
 
   private def normalizeCase( encoded : String ) : String = {
     encoded.toLowerCase
@@ -264,23 +143,9 @@ object Bech32 {
     polymod( Array.concat( hrpExpand(hrp), toQuintets(stringQuintets) ) ) == 1
   }
 
-  private def createChecksum( hrp : String, version : Byte, witnessProgram : Array[Byte] ) : String = {
-    val data = Array.concat( Array[Int]( version ), toQuintets( expandToStringQuintets(witnessProgram) ) )
-    createChecksum( hrp, data )
-  }
-
   private def createChecksum( hrp : String, quintets : Array[Int] ) : String = {
     val paddedValues = Array.concat( hrpExpand(hrp), quintets, Padding6 )
     val pmod         = polymod( paddedValues ) ^ 1
     (0 until 6 ).map( i => (pmod >>> (5 * (5-i))) & 31 ).map( IndexToAlphabet ).mkString
-  }
-
-  // debugging only
-  private def zlp8_binaryString( i : Int ) = zlpn_binaryString( 8, i )
-  private def zlp15_binaryString( i : Int ) = zlpn_binaryString( 15, i )
-
-  private def zlp15_binaryString_delimited( i : Int ) = {
-    val raw = zlp15_binaryString( i )
-    raw.substring(0,5) + '|' + raw.substring(5,10) + '|' + raw.substring(10,15)
   }
 }

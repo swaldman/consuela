@@ -11,7 +11,7 @@ import org.scalacheck.Prop.{forAll, forAllNoShrink, propBoolean}
 
 import scala.collection._
 
-object Bech32Properties extends Properties("Bech32") {
+object SegWitProperties extends Properties("SegWit") {
 
   private final val Byte0 = 0.toByte
 
@@ -33,22 +33,29 @@ object Bech32Properties extends Properties("Bech32") {
 
   property("bcOnlyZeroTwentyRoundtrips") = forAll { ( bse20 : ByteSeqExact20 ) =>
     val startTuple = ( Byte0, bse20.widen )
-    val encoded = Bech32.encodeSegWit( "bc", startTuple._1, startTuple._2 )
-    val decoded = Bech32.decodeSegWit( "bc", encoded )
+    val encoded = SegWit.encode( "bc", startTuple._1, startTuple._2 )
+    val decoded = SegWit.decode( Some("bc"), encoded )
     decoded == startTuple
   }
 
   property("tbOnlyZeroTwentyRoundtrips") = forAll { ( bse20 : ByteSeqExact20 ) =>
     val startTuple = ( Byte0, bse20.widen )
-    val encoded = Bech32.encodeSegWit( "tb", startTuple._1, startTuple._2 )
-    val decoded = Bech32.decodeSegWit( "tb", encoded )
+    val encoded = SegWit.encode( "tb", startTuple._1, startTuple._2 )
+    val decoded = SegWit.decode( Some("tb"), encoded )
     decoded == startTuple
   }
 
-  property("variableHrpZeroTwentyRoundtrips") = forAllNoShrink( HrpGen, genRandomImmutableByteSeqN(20) ) { ( hrp : String, seq20 : immutable.Seq[Byte] ) =>
+  property("variableHrpZeroTwentyRoundtripsWithExpectation") = forAllNoShrink( HrpGen, genRandomImmutableByteSeqN(20) ) { ( hrp : String, seq20 : immutable.Seq[Byte] ) =>
     val startTuple = ( Byte0, seq20 )
-    val encoded = Bech32.encodeSegWit( hrp, startTuple._1, startTuple._2 )
-    val decoded = Bech32.decodeSegWit( hrp, encoded )
+    val encoded = SegWit.encode( hrp, startTuple._1, startTuple._2 )
+    val decoded = SegWit.decode( Some(hrp), encoded )
+    decoded == startTuple
+  }
+
+  property("variableHrpZeroTwentyRoundtripsNoExpectation") = forAllNoShrink( HrpGen, genRandomImmutableByteSeqN(20) ) { ( hrp : String, seq20 : immutable.Seq[Byte] ) =>
+    val startTuple = ( Byte0, seq20 )
+    val encoded = SegWit.encode( hrp, startTuple._1, startTuple._2 )
+    val decoded = SegWit.decode( None, encoded )
     decoded == startTuple
   }
 

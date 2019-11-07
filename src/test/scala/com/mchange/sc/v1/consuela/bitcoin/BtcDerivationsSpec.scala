@@ -40,9 +40,10 @@ object BtcDerivationSpec {
     )
   )
 
-  val TextAddressesToScriptPubKeys = immutable.Map( // taken from https://eips.ethereum.org/EIPS/eip-2304
+  val TextAddressesToScriptPubKeys = immutable.Map( // taken from https://eips.ethereum.org/EIPS/eip-2304 and https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki
     "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa" -> "76a91462e907b15cbf27d5425399ebf6f0fb50ebb88f1888ac",
-    "3Ai1JZ8pdJb2ksieUV8FsxSNVJCpoPi8W6" -> "a91462e907b15cbf27d5425399ebf6f0fb50ebb88f1887"
+    "3Ai1JZ8pdJb2ksieUV8FsxSNVJCpoPi8W6" -> "a91462e907b15cbf27d5425399ebf6f0fb50ebb88f1887",
+    "BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4" -> "0014751e76e8199196d454941c45d1b3a323f1433bd6"
   )
 
   private def bad( msg : => String ) : Boolean = {
@@ -94,6 +95,9 @@ object BtcDerivationSpec {
 
     generatesAddressUncompressed && generatesAddressCompressed
   }
+  def compareAddressText( a1 : String, a2 : String ) : Boolean = { //
+    if (a1.startsWith("bc") || a1.startsWith("BC")) a1.toLowerCase == a2.toLowerCase else a1 == a2
+  }
 
 }
 class BtcDerivationSpec extends Specification { def is = s2"""
@@ -111,5 +115,5 @@ class BtcDerivationSpec extends Specification { def is = s2"""
   def e3 : Boolean = WalletRecs.map( expectedAddresses ).forall( identity )
 
   def e4 : Boolean = TextAddressesToScriptPubKeys.map { case ( textAddress, spkHex ) => BtcAddress.parse( textAddress ).assert.toScriptPubKey == spkHex.decodeHexAsSeq }.forall( identity ) 
-  def e5 : Boolean = TextAddressesToScriptPubKeys.map { case ( textAddress, spkHex ) => BtcAddress.recoverFromScriptPubKey( spkHex.decodeHexAsSeq ).assert.text == textAddress }.forall( identity ) 
+  def e5 : Boolean = TextAddressesToScriptPubKeys.map { case ( textAddress, spkHex ) => compareAddressText( BtcAddress.recoverFromScriptPubKey( spkHex.decodeHexAsSeq ).assert.text, textAddress ) }.forall( identity ) 
 }

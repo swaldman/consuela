@@ -1,7 +1,7 @@
 package com.mchange.sc.v1.consuela.bitcoin
 
 import com.mchange.sc.v1.consuela._
-import com.mchange.sc.v1.consuela.bitcoin.encoding.{Base58,Bech32}
+import com.mchange.sc.v1.consuela.bitcoin.encoding.{Base58,SegWit}
 
 import com.mchange.sc.v3.failable._
 
@@ -170,7 +170,7 @@ object BtcAddress {
     val toScriptPubKey = P2SH.scriptPubKeyFor( toPublicKeyHash )
   }
 
-  private final object Bech32HumanReadablePart {
+  private final object SegWitHumanReadablePart {
     val Mainnet = "bc"
     val Testnet = "tb"
   }
@@ -201,10 +201,10 @@ object BtcAddress {
     private[BtcAddress]
     def extractPublicKeyHash( scriptPubKey : immutable.Seq[Byte] ) : ByteSeqExact20 = ByteSeqExact20( scriptPubKey.drop(2) )
 
-    val HumanReadablePart = Bech32HumanReadablePart
+    val HumanReadablePart = SegWitHumanReadablePart
   }
   final case object P2WPKH_Mainnet extends Type {
-    def fromPublicKeyHash( publicKeyHash : ByteSeqExact20 ) : P2WPKH_Mainnet = this.apply( Bech32.encodeSegWit(P2WPKH.HumanReadablePart.Mainnet,P2WPKH.Version,publicKeyHash.widen) )
+    def fromPublicKeyHash( publicKeyHash : ByteSeqExact20 ) : P2WPKH_Mainnet = this.apply( SegWit.encode(P2WPKH.HumanReadablePart.Mainnet,P2WPKH.Version,publicKeyHash.widen) )
 
     def fromScriptPubKey( scriptPubKey : immutable.Seq[Byte] ) : P2WPKH_Mainnet = {
       P2WPKH.whyBadScriptPubKey( scriptPubKey ) match {
@@ -215,7 +215,7 @@ object BtcAddress {
   }
   final case class P2WPKH_Mainnet( val text : String ) extends HashRetrievable {
     val witnessProgram = {
-      val ( version, wp ) = Bech32.decodeSegWit(P2WPKH.HumanReadablePart.Mainnet, text)
+      val ( version, wp ) = SegWit.decode(Some(P2WPKH.HumanReadablePart.Mainnet), text)
       require(
         version == P2WPKH.Version && wp.length == P2WPKH.WitnessProgramLen,
         s"Bad address '${text}': P2WPKH_Mainnet should specify version ${P2WPKH.Version} and a ${P2WPKH.WitnessProgramLen}-byte witness program. Found version ${version} and a ${wp.length} byte witness program."
@@ -240,11 +240,11 @@ object BtcAddress {
   // case object SegWit_bc extends Type
 
   def parse( text : String ) : Failable[BtcAddress] = {
-    def mainnetBech32Attempts = Failable {
-      val ( version, witnessProgram ) = Bech32.decodeSegWit( Bech32HumanReadablePart.Mainnet, text )
+    def mainnetSegWitAttempts = Failable {
+      val ( version, witnessProgram ) = SegWit.decode( Some(SegWitHumanReadablePart.Mainnet), text )
       ( version, witnessProgram.length ) match {
-        case ( 0, P2WPKH.WitnessProgramLen ) => P2WPKH_Mainnet( text ) // we'll decodeChecked Bech32 redundantly in the ctor, but trying to avoid that isn't worth the hassle
-        case other => throw new UnknownBtcAddressFormatException( s"Couldn't parse '${text}, decodes as Bech32, but unexpected version ${version} and or witness program length ${witnessProgram.length}: ${other} " )
+        case ( 0, P2WPKH.WitnessProgramLen ) => P2WPKH_Mainnet( text ) // we'll decode SegWit redundantly in the ctor, but trying to avoid that isn't worth the hassle
+        case other => throw new UnknownBtcAddressFormatException( s"Couldn't parse '${text}, decodes as SegWit, but unexpected version ${version} and or witness program length ${witnessProgram.length}: ${other} " )
       }
     }
     def base58Attempts = Failable {
@@ -256,11 +256,11 @@ object BtcAddress {
       }
     }
 
-    mainnetBech32Attempts orElseTrace base58Attempts
+    mainnetSegWitAttempts orElseTrace base58Attempts
   }
 
   def recoverFromScriptPubKey( scriptPubKey : immutable.Seq[Byte] ) : Failable[BtcAddress] = {
-    Failable(P2WPKH_Mainnet.fromScriptPubKey( scriptPubKey) )  orElseTrace
+    Failable( P2WPKH_Mainnet.fromScriptPubKey( scriptPubKey) ) orElseTrace
     Failable( P2PKH_Mainnet.fromScriptPubKey( scriptPubKey ) ) orElseTrace
     Failable( P2SH_Mainnet.fromScriptPubKey( scriptPubKey ) )
   }
