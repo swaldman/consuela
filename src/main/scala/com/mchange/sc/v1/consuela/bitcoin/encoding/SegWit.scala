@@ -43,7 +43,7 @@ final object SegWit {
     ( version, witnessProgram.length ) match {
       case ( 0, 20 )   => ()
       case ( 0, 32 )   => ()
-      case ( 0, len  ) => throw new InvalidBech32Exception( s"Version 0x0 addresses must have 20 or 32 byte witness programs, found ${len} bytes" )
+      case ( 0, len  ) => throw new InvalidSegWitException( s"Version 0x0 addresses must have 20 or 32 byte witness programs, found ${len} bytes: 0x${witnessProgram.hex}" )
       case _           => ()
     }
   }
@@ -121,7 +121,23 @@ final object SegWit {
 
         // println( s"nextStartQuintet: ${nextStartQuintet}, len: ${len}" )
 
-        if ( nextStartQuintet >= len ) {
+        def nextOverflowsLastByte : Boolean = {
+          val out = nextStartQuintet == len - 1 && nextStartBit != 0
+          if ( out ) {
+            //println( s"nextStartBit: ${nextStartBit}, quintet: ${zlp5_binaryString(quintets(len-1))}}" )
+            val tailMask = (1 << (5 - nextStartBit)) - 1
+            if ((quintets( len - 1 ) & tailMask) != 0) {
+              throw new InvalidSegWitException( s"Any incomplete group at the end MUST be all zeroes, but is not -- nextStartBit: ${nextStartBit}, quintet: ${zlp5_binaryString(quintets(len-1))}}" )
+            }
+          }
+          out
+        }
+
+        def checkTerminate : Boolean = {
+          nextStartQuintet >= len || nextOverflowsLastByte
+        }
+
+        if ( checkTerminate ) {
           nextReverseAccumBytes.reverse.toArray
         }
         else {
@@ -142,11 +158,15 @@ final object SegWit {
     if ( tail.length < n ) {
       ("0"*(n-tail.length)) + tail
     }
-    else {
+    else if (tail.length == n ){
       tail
+    }
+    else {
+      tail.drop( tail.length - n )
     }
   }
 
+  private def zlp5_binaryString( i : Int ) = zlpn_binaryString( 5, i )
   private def zlp8_binaryString( i : Int ) = zlpn_binaryString( 8, i )
   private def zlp15_binaryString( i : Int ) = zlpn_binaryString( 15, i )
 

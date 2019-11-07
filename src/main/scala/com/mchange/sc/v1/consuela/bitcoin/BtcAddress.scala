@@ -18,6 +18,14 @@ object BtcAddress {
     val EQUAL       : Byte = 0x87.toByte
     val EQUALVERIFY : Byte = 0x88.toByte
     val HASH160     : Byte = 0xa9.toByte
+
+    def apply( i : Int ) : Byte = {
+      i match {
+        case 0                     => 0x00.toByte
+        case i if i > 0 && i <= 16 => (0x50 + i).toByte
+        case other                 => throw new IllegalArgumentException( s"No OP_${i} has been defined." )
+      }
+    }
   }
 
   sealed trait Type {
@@ -176,7 +184,7 @@ object BtcAddress {
   }
 
   private final object P2WPKH {
-    val Version = 0x00.toByte
+    val Version = OP(0)
 
     val WitnessProgramLen = 20
 
@@ -188,7 +196,7 @@ object BtcAddress {
         Some( s"A P2WKH public key must be ${ScriptPubKeyLen} bytes long, found ${scriptPubKey.length} bytes: 0x${scriptPubKey.hex}" )
       }
       else if ( scriptPubKey(0) != Version ) {
-        Some( s"The first (version) byte of a P2WPKH hash should be ${toHex(Version)}, found ${toHex(scriptPubKey(0))}: 0x${scriptPubKey.hex}" )
+        Some( s"The first (version) byte of a P2WPKH hash should be OP_0 (${toHex(Version)}), found ${toHex(scriptPubKey(0))}: 0x${scriptPubKey.hex}" )
       }
       else if ( scriptPubKey(1) != Byte_UnversionedPubKeyHashLength ) {
         Some( s"The second byte of a P2WPKH hash should be the public key hash length ${toHex(Byte_UnversionedPubKeyHashLength)}, found ${toHex(scriptPubKey(0))}: 0x${scriptPubKey.hex}" )
