@@ -29,4 +29,15 @@ object BtcAddressRoundtrips extends Properties("BtcAddressRoundtrips") {
     BtcAddress.recoverFromScriptPubKey( address.toScriptPubKey ).assert == address
   }
 
+  property("p2wpkhMainnetTextRoundTrips") = forAll { ( publicKeyHash : ByteSeqExact20 ) =>
+    val address = BtcAddress.P2WPKH_Mainnet.fromPublicKeyHash( publicKeyHash )
+    BtcAddress( address.text ) == address
+  }
+
+  property("p2wpkhMainnetScriptPubKeyRoundTrips") = forAll { ( publicKeyHash : ByteSeqExact20 ) =>
+    val address = BtcAddress.P2WPKH_Mainnet.fromPublicKeyHash( publicKeyHash )
+    BtcAddress.recoverFromScriptPubKey( address.toScriptPubKey ).assert == address
+  }
+
+
 }
