@@ -50,22 +50,22 @@ libraryDependencies ++= Seq(
   "org.bouncycastle"        %  "bcprov-jdk15on"                  % "1.54",
   "com.madgag.spongycastle" %  "prov"                            % "1.54.0.0"            % "compile,optional", //only necessary on android
   "com.mchange"             %% "restricted-type-scalacheck-util" % restrictedTypeVersion % "test",
-  "org.scalacheck"          %% "scalacheck"                      % "1.14.1"              % "test",  
   "org.specs2"              %% "specs2-core"                     % "4.6.0"               % "test",
+  "org.scalacheck"          %% "scalacheck"                      % "1.14.1"              % "test",
   "ch.qos.logback"          % "logback-classic"                  % "1.1.2"               % "test",
 )
 
-libraryDependencies += {
+libraryDependencies ++= {
   CrossVersion.partialVersion(Keys.scalaVersion.value) match {
-    case Some((2, 12)) => {
-      "com.typesafe.play" %% "play-json" % "2.6.13"
-    }
-    case Some((2, 11)) => {
+    case Some((2, 12)) => Seq(
+      "com.typesafe.play" %% "play-json"  % "2.6.13"
+    )
+    case Some((2, 11)) => Seq( 
       "com.typesafe.play" %% "play-json" % "2.5.18"
-    }
-    case _ => {
+    )
+    case _ => Seq (
       "com.typesafe.play" %% "play-json" % "2.4.11"
-    }
+    )
   }
 }
 
