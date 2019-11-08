@@ -44,6 +44,13 @@ object BtcDerivationSpec {
     "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa" -> "76a91462e907b15cbf27d5425399ebf6f0fb50ebb88f1888ac",
     "3Ai1JZ8pdJb2ksieUV8FsxSNVJCpoPi8W6" -> "a91462e907b15cbf27d5425399ebf6f0fb50ebb88f1887",
     "BC1QW508D6QEJXTDG4Y5R3ZARVARY0C5XW7KV8F3T4" -> "0014751e76e8199196d454941c45d1b3a323f1433bd6"
+
+    // the following mappings are in https://github.com/bitcoin/bips/blob/master/bip-0173.mediawiki
+    // but they parse to non-zero version bytes, so it's unclear how they should be interpreted, where these scriptPubKey values come from
+    
+    // "bc1pw508d6qejxtdg4y5r3zarvary0c5xw7kw508d6qejxtdg4y5r3zarvary0c5xw7k7grplx" -> "5128751e76e8199196d454941c45d1b3a323f1433bd6751e76e8199196d454941c45d1b3a323f1433bd6",
+    // "BC1SW50QA3JX3S" -> "6002751e",
+    // "bc1zw508d6qejxtdg4y5r3zarvaryvg6kdaj" -> "5210751e76e8199196d454941c45d1b3a323"
   )
 
   private def bad( msg : => String ) : Boolean = {

@@ -39,23 +39,25 @@ object BtcAddress {
     def fromScriptPubKey( scriptPubKey : immutable.Seq[Byte] ) : BtcAddress
   }
 
-  /*
-  private def payload20FromBase58Checked( requiredVersion : Byte )( version : Byte, payload : Array[Byte] ) : ByteSeqExact20 = {
-    require( version == requiredVersion, s"${this} must include a ${requiredVersion} header byte, instead header byte is ${version}." )
-    ByteSeqExact20( payload )
-  }
-  */ 
-
   private def toHex( b : Byte ) = String.format("%02X ", Array.ofDim[Byte](b))
 
   // see https://eips.ethereum.org/EIPS/eip-2304
   //     https://en.bitcoin.it/wiki/Transaction#Types_of_Transaction
+
+
+
+  /*
+   *  Base58 formats
+   */ 
+
+  /* P2PKH */
+
   private final object P2PKH {
-    val ScriptPubKeyLength = 25
+    val ScriptPubKeyLen = 25
     val PublicKeyHashLen   = 20
 
     private val Template = {
-      val raw = Array.ofDim[Byte](ScriptPubKeyLength)
+      val raw = Array.ofDim[Byte](ScriptPubKeyLen)
       raw(0)  = OP.DUP
       raw(1)  = OP.HASH160
       raw(2)  = Byte_Hash160Length
@@ -72,8 +74,8 @@ object BtcAddress {
 
     private[BtcAddress]
     def whyBadScriptPubKey( scriptPubKey : immutable.Seq[Byte] ) : Option[String] = {
-      if (scriptPubKey.length != P2PKH.ScriptPubKeyLength) {
-        Some( s"P2PKH addresses should yield scriptPubKeys of length ${P2PKH.ScriptPubKeyLength}, cannot parse from ${scriptPubKey} with length ${scriptPubKey.length}" )
+      if (scriptPubKey.length != P2PKH.ScriptPubKeyLen) {
+        Some( s"P2PKH addresses should yield scriptPubKeys of length ${P2PKH.ScriptPubKeyLen}, cannot parse from ${scriptPubKey} with length ${scriptPubKey.length}" )
       }
       else if (scriptPubKey(0) != OP.DUP) {
         Some( s"P2PKH scriptPubkey should, doesn't, begin with OP_DUP (0x${toHex(OP.DUP)})). scriptPubKey: 0x${scriptPubKey.hex}" )
@@ -120,21 +122,23 @@ object BtcAddress {
     def fromPayload( payload : immutable.Seq[Byte] ) : P2PKH_Mainnet = this.fromPublicKeyHash( ByteSeqExact20( payload ) )
   }
   final case class P2PKH_Mainnet( val text : String ) extends PublicKeyHashRecoverable {
-    private val ( version, payload ) = enc.Base58.decodeChecked( text ) // not lazy, insist on all checks
+    private val ( version, _payload ) = enc.Base58.decodeChecked( text ) // not lazy, insist on all checks
     require( version == P2PKH.Version.Mainnet, s"Bad P2PKH_Mainnet Version: ${version}" )
-    require( payload.length == P2PKH.PublicKeyHashLen, s"Bad P2PKH_Mainnet public key hash. Must be ${P2PKH.PublicKeyHashLen} bytes, found ${payload.length} bytes. publicKeyHash: 0x${payload}" )
+    require( _payload.length == P2PKH.PublicKeyHashLen, s"Bad P2PKH_Mainnet public key hash. Must be ${P2PKH.PublicKeyHashLen} bytes, found ${_payload.length} bytes. publicKeyHash: 0x${_payload}" )
+    val payload = _payload.toImmutableSeq
     val toPublicKeyHash = ByteSeqExact20( payload )
     val toScriptPubKey  = P2PKH.scriptPubKeyFor( toPublicKeyHash )
+    def addressType = P2PKH_Mainnet
   }
 
-  // see https://eips.ethereum.org/EIPS/eip-2304
-  //     https://en.bitcoin.it/wiki/Transaction#Types_of_Transaction
+  /* P2SH */
+
   private final object P2SH {
-    val ScriptPubKeyLength = 23
-    val ScriptHashLen      = 20
+    val ScriptPubKeyLen = 23
+    val ScriptHashLen   = 20
 
     private val Template = {
-      val raw = Array.ofDim[Byte](ScriptPubKeyLength)
+      val raw = Array.ofDim[Byte](ScriptPubKeyLen)
       raw(0)  = OP.HASH160
       raw(1)  = Byte_Hash160Length
       raw(22) = OP.EQUAL
@@ -150,8 +154,8 @@ object BtcAddress {
 
     private[BtcAddress]
     def whyBadScriptPubKey( scriptPubKey : immutable.Seq[Byte] ) : Option[String] = {
-      if (scriptPubKey.length != P2SH.ScriptPubKeyLength) {
-        Some( s"P2SH addresses should yield scriptPubKeys of length ${P2SH.ScriptPubKeyLength}, cannot parse from ${scriptPubKey} with length ${scriptPubKey.length}" )
+      if (scriptPubKey.length != P2SH.ScriptPubKeyLen) {
+        Some( s"P2SH addresses should yield scriptPubKeys of length ${P2SH.ScriptPubKeyLen}, cannot parse from ${scriptPubKey} with length ${scriptPubKey.length}" )
       }
       else if (scriptPubKey(0) != OP.HASH160) {
         Some( s"P2SH scriptPubkey should, doesn't, begin with OP_HASH160 (0x${toHex(OP.HASH160)})). scriptPubKey: 0x${scriptPubKey.hex}" )
@@ -192,18 +196,27 @@ object BtcAddress {
     def fromPayload( bytes : immutable.Seq[Byte] )          : P2SH_Mainnet = this.fromScriptHash( ByteSeqExact20( bytes ) )
   }
   final case class P2SH_Mainnet( val text : String ) extends BtcAddress {
-    private val ( version, scriptHash ) = enc.Base58.decodeChecked( text ) // not lazy, insist on all checks
+    private val ( version, _scriptHash ) = enc.Base58.decodeChecked( text ) // not lazy, insist on all checks
     require( version == P2SH.Version.Mainnet, s"Bad P2SH_Mainnet Version: ${version}" )
-    require( scriptHash.length == P2SH.ScriptHashLen, s"Bad P2SH_Mainnet scriptHash. Must be ${P2SH.ScriptHashLen} bytes, found ${scriptHash.length} bytes. scriptHash: 0x${scriptHash}" )
-    val toPayload = ByteSeqExact20( scriptHash )
-    def toScriptHash = toPayload
-    val toScriptPubKey = P2SH.scriptPubKeyFor( scriptHash )
+    require( _scriptHash.length == P2SH.ScriptHashLen, s"Bad P2SH_Mainnet scriptHash. Must be ${P2SH.ScriptHashLen} bytes, found ${_scriptHash.length} bytes. scriptHash: 0x${_scriptHash}" )
+    val payload    = _scriptHash.toImmutableSeq
+    val scriptHash = ByteSeqExact20( _scriptHash )
+    val toScriptPubKey = P2SH.scriptPubKeyFor( _scriptHash.toArray )
+    def addressType = P2SH_Mainnet
   }
+
+  /*
+   * 
+   *  Bech32 / SegWit formats
+   * 
+   */ 
 
   private final object SegWitHumanReadablePart {
     val Mainnet = "bc"
     val Testnet = "tb"
   }
+
+  /* P2SH */
 
   private final object P2WPKH {
     val Version = OP(0)
@@ -254,8 +267,11 @@ object BtcAddress {
         version == P2WPKH.Version && wp.length == P2WPKH.WitnessProgramLen,
         s"Bad address '${text}': P2WPKH_Mainnet should specify version ${P2WPKH.Version} and a ${P2WPKH.WitnessProgramLen}-byte witness program. Found version ${version} and a ${wp.length} byte witness program."
       )
-      wp
+      wp.toImmutableSeq
     }
+
+    def payload = witnessProgram
+    def addressType = P2WPKH_Mainnet
 
     val toPublicKeyHash = ByteSeqExact20( witnessProgram )
     val toScriptPubKey = {
@@ -266,6 +282,8 @@ object BtcAddress {
       buffer.toArray.toImmutableSeq
     }
   }
+
+  /* P2WSH */
 
   private final object P2WSH {
     val Version = OP(0)
@@ -322,8 +340,10 @@ object BtcAddress {
         version == P2WSH.Version && wp.length == P2WSH.WitnessProgramLen,
         s"Bad address '${text}': P2WSH_Mainnet should specify version ${P2WSH.Version} and a ${P2WSH.WitnessProgramLen}-byte witness program. Found version ${version} and a ${wp.length} byte witness program."
       )
-      wp
+      wp.toImmutableSeq
     }
+    def payload = witnessProgram
+    def addressType = P2WSH_Mainnet
     val toScriptPubKey = {
       val buffer = new mutable.ArrayBuffer[Byte](P2WSH.ScriptPubKeyLen)
       buffer += P2WSH.Version
@@ -343,7 +363,7 @@ object BtcAddress {
       ( version, witnessProgram.length ) match {
         case ( 0, P2WPKH.WitnessProgramLen ) => P2WPKH_Mainnet( text ) // we'll decode SegWit redundantly in the ctor, but trying to avoid that isn't worth the hassle
         case ( 0, P2WSH.WitnessProgramLen )  => P2WSH_Mainnet ( text ) // we'll decode SegWit redundantly in the ctor, but trying to avoid that isn't worth the hassle
-        case other => throw new UnknownBtcAddressFormatException( s"Couldn't parse '${text}, decodes as SegWit, but unexpected version ${version} and or witness program length ${witnessProgram.length}: ${other} " )
+        case other => throw new UnknownBtcAddressFormatException( s"Couldn't parse '${text}, decodes as SegWit, but unexpected version ${version} and/or witness program length ${witnessProgram.length}: ${other} " )
       }
     }
     def base58Attempts = Failable {
@@ -370,5 +390,7 @@ object BtcAddress {
 }
 sealed trait BtcAddress {
   def text            : String
+  def payload         : immutable.Seq[Byte]
+  def addressType     : BtcAddress.Type
   def toScriptPubKey  : immutable.Seq[Byte]
 }
