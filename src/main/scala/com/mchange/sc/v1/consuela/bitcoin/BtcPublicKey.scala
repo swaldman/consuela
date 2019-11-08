@@ -75,7 +75,12 @@ case class BtcPublicKey( val toEthPublicKey : EthPublicKey ) {
 
   def toBtcAddress( ofType : BtcAddress.Type = BtcAddress.P2PKH_Mainnet, useCompressedKey : Boolean = true ) : BtcAddress = {
     val hash = if ( useCompressedKey ) compressedHash else uncompressedHash
-    ofType.fromPublicKeyHash( hash )
+
+
+    ofType match {
+      case BtcAddress.P2PKH_Mainnet => BtcAddress.P2PKH_Mainnet.fromPublicKeyHash( hash )
+      case _ => throw new UnsupportedBtcAddressTypeException( s"Conversion of public keys to ${ofType} addresses is not currently supported." )
+    }
   }
 
   override def toString : String = s"BtcPublicKey(0x${uncompressedHex})"

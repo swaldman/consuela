@@ -1,7 +1,7 @@
 package com.mchange.sc.v1.consuela.bitcoin
 
 import com.mchange.sc.v1.consuela._
-import com.mchange.sc.v1.consuela.bitcoin.encoding.{Base58,SegWit}
+import com.mchange.sc.v1.consuela.bitcoin.{encoding => enc}
 
 import com.mchange.sc.v3.failable._
 
@@ -9,7 +9,8 @@ import scala.collection._
 
 object BtcAddress {
 
-  private final val Byte_UnversionedPubKeyHashLength = 0x14.toByte
+  private final val Byte_Hash160Length = 0x14.toByte
+  private final val Byte32             = 0x20.toByte
 
   // see https://en.bitcoin.it/wiki/Script
   private final object OP {
@@ -28,14 +29,22 @@ object BtcAddress {
     }
   }
 
+  case class Base58( version : Byte ) extends Encoding
+  case class SegWit( version : Byte, payloadLength : Int, hrp : String ) extends Encoding
+  sealed trait Encoding
+
   sealed trait Type {
-    def fromPublicKeyHash( publicKeyHash : ByteSeqExact20 ) : BtcAddress
+    def encoding : Encoding
+    def fromPayload( payload : immutable.Seq[Byte] ) : BtcAddress
+    def fromScriptPubKey( scriptPubKey : immutable.Seq[Byte] ) : BtcAddress
   }
 
-  private def publicKeyHashFromBase58Checked( requiredVersion : Byte )( version : Byte, payload : Array[Byte] ) : ByteSeqExact20 = {
+  /*
+  private def payload20FromBase58Checked( requiredVersion : Byte )( version : Byte, payload : Array[Byte] ) : ByteSeqExact20 = {
     require( version == requiredVersion, s"${this} must include a ${requiredVersion} header byte, instead header byte is ${version}." )
     ByteSeqExact20( payload )
   }
+  */ 
 
   private def toHex( b : Byte ) = String.format("%02X ", Array.ofDim[Byte](b))
 
@@ -43,11 +52,13 @@ object BtcAddress {
   //     https://en.bitcoin.it/wiki/Transaction#Types_of_Transaction
   private final object P2PKH {
     val ScriptPubKeyLength = 25
+    val PublicKeyHashLen   = 20
+
     private val Template = {
       val raw = Array.ofDim[Byte](ScriptPubKeyLength)
       raw(0)  = OP.DUP
       raw(1)  = OP.HASH160
-      raw(2)  = Byte_UnversionedPubKeyHashLength
+      raw(2)  = Byte_Hash160Length
       raw(23) = OP.EQUALVERIFY
       raw(24) = OP.CHECKSIG
       raw
@@ -70,8 +81,8 @@ object BtcAddress {
       else if (scriptPubKey(1) != OP.HASH160) {
         Some( s"The second byte of a P2PKH scriptPubkey should be, isn't, OP_HASH160 (0x${toHex(OP.HASH160)})). scriptPubKey: 0x${scriptPubKey.hex}" )
       }
-      else if (scriptPubKey(2) != Byte_UnversionedPubKeyHashLength ) {
-        Some( s"The third byte of a P2PKH scriptPubKey should be the public key hash length 0x${toHex(Byte_UnversionedPubKeyHashLength)}, isn't. scriptPubKey: 0x${scriptPubKey.hex}"  )
+      else if (scriptPubKey(2) != Byte_Hash160Length ) {
+        Some( s"The third byte of a P2PKH scriptPubKey should be the public key hash length 0x${toHex(Byte_Hash160Length)}, isn't. scriptPubKey: 0x${scriptPubKey.hex}"  )
       }
       else if ( scriptPubKey(23) != OP.EQUALVERIFY ) {
         Some( s"The next to last byte of a P2PKH scriptPubkey should be, isn't, OP_EQUALVERIFY (0x${toHex(OP.EQUALVERIFY)})). scriptPubKey: 0x${scriptPubKey.hex}" )
@@ -93,6 +104,7 @@ object BtcAddress {
   }
 
   final case object P2PKH_Mainnet extends Type {
+    val encoding = Base58( P2PKH.Version.Mainnet )
     def fromScriptPubKey( scriptPubKey : immutable.Seq[Byte] ) : P2PKH_Mainnet = {
       P2PKH.whyBadScriptPubKey( scriptPubKey ) match {
         case Some( problem ) => throw new UnexpectedScriptPubKeyFormatException( problem )
@@ -102,13 +114,16 @@ object BtcAddress {
     def fromPublicKeyHash( publicKeyHash : ByteSeqExact20 ) : P2PKH_Mainnet = {
       val version = P2PKH.Version.Mainnet
       val payload = publicKeyHash.widen.toArray
-      val text = Base58.encodeChecked( version, payload )
+      val text = enc.Base58.encodeChecked( version, payload )
       this.apply( text )
     }
+    def fromPayload( payload : immutable.Seq[Byte] ) : P2PKH_Mainnet = this.fromPublicKeyHash( ByteSeqExact20( payload ) )
   }
-  final case class P2PKH_Mainnet( val text : String ) extends HashRetrievable {
-    private val ( version, payload ) = Base58.decodeChecked( text ) // not lazy, insist on all checks
-    val toPublicKeyHash = publicKeyHashFromBase58Checked( P2PKH.Version.Mainnet )( version, payload )
+  final case class P2PKH_Mainnet( val text : String ) extends PublicKeyHashRecoverable {
+    private val ( version, payload ) = enc.Base58.decodeChecked( text ) // not lazy, insist on all checks
+    require( version == P2PKH.Version.Mainnet, s"Bad P2PKH_Mainnet Version: ${version}" )
+    require( payload.length == P2PKH.PublicKeyHashLen, s"Bad P2PKH_Mainnet public key hash. Must be ${P2PKH.PublicKeyHashLen} bytes, found ${payload.length} bytes. publicKeyHash: 0x${payload}" )
+    val toPublicKeyHash = ByteSeqExact20( payload )
     val toScriptPubKey  = P2PKH.scriptPubKeyFor( toPublicKeyHash )
   }
 
@@ -116,17 +131,20 @@ object BtcAddress {
   //     https://en.bitcoin.it/wiki/Transaction#Types_of_Transaction
   private final object P2SH {
     val ScriptPubKeyLength = 23
+    val ScriptHashLen      = 20
+
     private val Template = {
       val raw = Array.ofDim[Byte](ScriptPubKeyLength)
       raw(0)  = OP.HASH160
-      raw(1)  = Byte_UnversionedPubKeyHashLength
+      raw(1)  = Byte_Hash160Length
       raw(22) = OP.EQUAL
       raw
     }
-    def scriptPubKeyFor( publicKeyHash : ByteSeqExact20 ) : immutable.Seq[Byte] = {
-      val in = publicKeyHash.widen.toArray
+    def scriptPubKeyFor( scriptHash : Array[Byte] ) : immutable.Seq[Byte] = {
+      require( scriptHash.length == ScriptHashLen, s"The payload of a P2SH address should be ${ScriptHashLen} bytes long, found ${scriptHash.length}. scriptHash: 0x${scriptHash.hex}" )
+      val in = scriptHash
       val out = Template.clone()
-      Array.copy( in, 0, out, 2, 20 )
+      Array.copy( in, 0, out, 2, ScriptHashLen )
       out.toImmutableSeq
     }
 
@@ -138,8 +156,8 @@ object BtcAddress {
       else if (scriptPubKey(0) != OP.HASH160) {
         Some( s"P2SH scriptPubkey should, doesn't, begin with OP_HASH160 (0x${toHex(OP.HASH160)})). scriptPubKey: 0x${scriptPubKey.hex}" )
       }
-      else if (scriptPubKey(1) != Byte_UnversionedPubKeyHashLength )
-        Some( s"The second byte of a P2SH scriptPubKey should be the public key hash length 0x${toHex(Byte_UnversionedPubKeyHashLength)}, isn't. scriptPubKey: 0x${scriptPubKey.hex}"  )
+      else if (scriptPubKey(1) != Byte_Hash160Length )
+        Some( s"The second byte of a P2SH scriptPubKey should be the script hash length 0x${toHex(Byte_Hash160Length)}, isn't. scriptPubKey: 0x${scriptPubKey.hex}"  )
       else if ( scriptPubKey(22) != OP.EQUAL ) {
         Some( s"P2SH scriptPubkey should, doesn't, end with OP_EQUAL (0x${toHex(OP.EQUAL)})). scriptPubKey: 0x${scriptPubKey.hex}" )
       }
@@ -149,7 +167,7 @@ object BtcAddress {
     }
 
     private[BtcAddress]
-    def extractPublicKeyHash( scriptPubKey : immutable.Seq[Byte] ) : ByteSeqExact20 = ByteSeqExact20( scriptPubKey.slice( 2, 22 ) )
+    def extractScriptHash( scriptPubKey : immutable.Seq[Byte] ) : ByteSeqExact20 = ByteSeqExact20( scriptPubKey.slice( 2, 22 ) )
 
     final object Version {
       val Mainnet = 0x05.toByte
@@ -157,25 +175,29 @@ object BtcAddress {
   }
 
   final case object P2SH_Mainnet extends Type {
+    val encoding = Base58( P2SH.Version.Mainnet )
 
     def fromScriptPubKey( scriptPubKey : immutable.Seq[Byte] ) : P2SH_Mainnet = {
       P2SH.whyBadScriptPubKey( scriptPubKey ) match {
         case Some( problem ) => throw new UnexpectedScriptPubKeyFormatException( problem )
-        case None            => fromPublicKeyHash( P2SH.extractPublicKeyHash( scriptPubKey ) )
+        case None            => fromScriptHash( P2SH.extractScriptHash( scriptPubKey ) )
       }
     }
-    def fromPublicKeyHash( publicKeyHash : ByteSeqExact20 ) : P2SH_Mainnet = {
+    def fromScriptHash( scriptHash : ByteSeqExact20 ) : P2SH_Mainnet = {
       val version = P2SH.Version.Mainnet
-      val payload = publicKeyHash.widen.toArray
-      val text = Base58.encodeChecked( version, payload )
+      val payload = scriptHash.widen.toArray
+      val text = enc.Base58.encodeChecked( version, payload )
       this.apply( text )
     }
+    def fromPayload( bytes : immutable.Seq[Byte] )          : P2SH_Mainnet = this.fromScriptHash( ByteSeqExact20( bytes ) )
   }
-  final case class P2SH_Mainnet( val text : String ) extends HashRetrievable {
-    private val ( version, payload ) = Base58.decodeChecked( text ) // not lazy, insist on all checks
+  final case class P2SH_Mainnet( val text : String ) extends BtcAddress {
+    private val ( version, scriptHash ) = enc.Base58.decodeChecked( text ) // not lazy, insist on all checks
     require( version == P2SH.Version.Mainnet, s"Bad P2SH_Mainnet Version: ${version}" )
-    val toPublicKeyHash = publicKeyHashFromBase58Checked( P2SH.Version.Mainnet )( version, payload )
-    val toScriptPubKey = P2SH.scriptPubKeyFor( toPublicKeyHash )
+    require( scriptHash.length == P2SH.ScriptHashLen, s"Bad P2SH_Mainnet scriptHash. Must be ${P2SH.ScriptHashLen} bytes, found ${scriptHash.length} bytes. scriptHash: 0x${scriptHash}" )
+    val toPayload = ByteSeqExact20( scriptHash )
+    def toScriptHash = toPayload
+    val toScriptPubKey = P2SH.scriptPubKeyFor( scriptHash )
   }
 
   private final object SegWitHumanReadablePart {
@@ -193,13 +215,13 @@ object BtcAddress {
     private[BtcAddress]
     def whyBadScriptPubKey( scriptPubKey : immutable.Seq[Byte] ) : Option[String] = {
       if ( scriptPubKey.length != ScriptPubKeyLen ) {
-        Some( s"A P2WKH public key must be ${ScriptPubKeyLen} bytes long, found ${scriptPubKey.length} bytes: 0x${scriptPubKey.hex}" )
+        Some( s"A P2WPKH scriptPubKey must be ${ScriptPubKeyLen} bytes long, found ${scriptPubKey.length} bytes: 0x${scriptPubKey.hex}" )
       }
       else if ( scriptPubKey(0) != Version ) {
-        Some( s"The first (version) byte of a P2WPKH hash should be OP_0 (${toHex(Version)}), found ${toHex(scriptPubKey(0))}: 0x${scriptPubKey.hex}" )
+        Some( s"The first (version) byte of a P2WPKH scriptPubKey should be OP_0 (${toHex(Version)}), found ${toHex(scriptPubKey(0))}: 0x${scriptPubKey.hex}" )
       }
-      else if ( scriptPubKey(1) != Byte_UnversionedPubKeyHashLength ) {
-        Some( s"The second byte of a P2WPKH hash should be the public key hash length ${toHex(Byte_UnversionedPubKeyHashLength)}, found ${toHex(scriptPubKey(0))}: 0x${scriptPubKey.hex}" )
+      else if ( scriptPubKey(1) != Byte_Hash160Length ) {
+        Some( s"The second byte of a P2WPKH scriptPubKey should be the public key hash length ${toHex(Byte_Hash160Length)}, found ${toHex(scriptPubKey(1))}: 0x${scriptPubKey.hex}" )
       }
       else {
         None
@@ -212,7 +234,11 @@ object BtcAddress {
     val HumanReadablePart = SegWitHumanReadablePart
   }
   final case object P2WPKH_Mainnet extends Type {
-    def fromPublicKeyHash( publicKeyHash : ByteSeqExact20 ) : P2WPKH_Mainnet = this.apply( SegWit.encode(P2WPKH.HumanReadablePart.Mainnet,P2WPKH.Version,publicKeyHash.widen) )
+    val encoding = SegWit( P2WPKH.Version, P2WPKH.WitnessProgramLen, P2WPKH.HumanReadablePart.Mainnet )
+
+    def fromPayload( payload : immutable.Seq[Byte] ) : P2WPKH_Mainnet = this.fromPublicKeyHash( ByteSeqExact20( payload ) )
+
+    def fromPublicKeyHash( publicKeyHash : ByteSeqExact20 ) : P2WPKH_Mainnet = this.apply( enc.SegWit.encode(P2WPKH.HumanReadablePart.Mainnet,P2WPKH.Version,publicKeyHash.widen) )
 
     def fromScriptPubKey( scriptPubKey : immutable.Seq[Byte] ) : P2WPKH_Mainnet = {
       P2WPKH.whyBadScriptPubKey( scriptPubKey ) match {
@@ -221,9 +247,9 @@ object BtcAddress {
       }
     }
   }
-  final case class P2WPKH_Mainnet( val text : String ) extends HashRetrievable {
+  final case class P2WPKH_Mainnet( val text : String ) extends PublicKeyHashRecoverable {
     val witnessProgram = {
-      val ( version, wp ) = SegWit.decode(Some(P2WPKH.HumanReadablePart.Mainnet), text)
+      val ( version, wp ) = enc.SegWit.decode(Some(P2WPKH.HumanReadablePart.Mainnet), text)
       require(
         version == P2WPKH.Version && wp.length == P2WPKH.WitnessProgramLen,
         s"Bad address '${text}': P2WPKH_Mainnet should specify version ${P2WPKH.Version} and a ${P2WPKH.WitnessProgramLen}-byte witness program. Found version ${version} and a ${wp.length} byte witness program."
@@ -235,28 +261,93 @@ object BtcAddress {
     val toScriptPubKey = {
       val buffer = new mutable.ArrayBuffer[Byte](P2WPKH.ScriptPubKeyLen)
       buffer += P2WPKH.Version
-      buffer += Byte_UnversionedPubKeyHashLength
+      buffer += Byte_Hash160Length
       buffer ++= witnessProgram
       buffer.toArray.toImmutableSeq
     }
   }
 
-  sealed trait HashRetrievable extends BtcAddress {
+  private final object P2WSH {
+    val Version = OP(0)
+
+    val WitnessProgramLen = 32
+
+    val ScriptPubKeyLen = 34
+
+    private[BtcAddress]
+    def whyBadScriptPubKey( scriptPubKey : immutable.Seq[Byte] ) : Option[String] = {
+      if ( scriptPubKey.length != ScriptPubKeyLen ) {
+        Some( s"A P2WSH scriptPubKey must be ${ScriptPubKeyLen} bytes long, found ${scriptPubKey.length} bytes: 0x${scriptPubKey.hex}" )
+      }
+      else if ( scriptPubKey(0) != Version ) {
+        Some( s"The first (version) byte of a P2WSH scriptPubKey should be OP_0 (${toHex(Version)}), found ${toHex(scriptPubKey(0))}: 0x${scriptPubKey.hex}" )
+      }
+      else if ( scriptPubKey(1) != Byte32 ) {
+        Some( s"The second byte of a P2WSH scriptPubKey should be the payload length ${toHex(Byte32)}, found ${toHex(scriptPubKey(1))}: 0x${scriptPubKey.hex}" )
+      }
+      else {
+        None
+      }
+    }
+
+    private[BtcAddress]
+    def extractScriptHash( scriptPubKey : immutable.Seq[Byte] ) : ByteSeqExact32 = ByteSeqExact32( scriptPubKey.drop(2) )
+
+    val HumanReadablePart = SegWitHumanReadablePart
+  }
+  final object P2WSH_Mainnet extends Type {
+    val encoding = SegWit( P2WSH.Version, P2WSH.WitnessProgramLen, P2WSH.HumanReadablePart.Mainnet )
+    def fromPayload( payload : immutable.Seq[Byte] ) : P2WSH_Mainnet = {
+      fromPayload( payload.toArray )
+    }
+    def fromPayload( payload : Array[Byte] ) : P2WSH_Mainnet = {
+      require( payload.length == P2WSH.WitnessProgramLen, s"The payload of a P2WSH address should be ${P2WSH.WitnessProgramLen} bytes long, found ${payload.length}: 0x${payload.hex}" )
+      val version = P2WSH.Version
+      val text = enc.SegWit.encode( P2WSH.HumanReadablePart.Mainnet, version, payload )
+      this.apply( text )
+    }
+    def fromScriptHash ( scriptHash : immutable.Seq[Byte] ) = fromPayload( scriptHash )
+    def fromScriptHash ( scriptHash : Array[Byte] )         = fromPayload( scriptHash )
+    def fromScriptPubKey( scriptPubKey : immutable.Seq[Byte] ) : P2WSH_Mainnet = {
+      P2WSH.whyBadScriptPubKey( scriptPubKey ) match {
+        case Some( problem ) => throw new UnexpectedScriptPubKeyFormatException( problem )
+        case None            => fromScriptHash( P2WSH.extractScriptHash( scriptPubKey ).widen )
+      }
+    }
+  }
+  final case class P2WSH_Mainnet( val text : String ) extends BtcAddress {
+    val witnessProgram = {
+      val ( version, wp ) = enc.SegWit.decode(Some(P2WSH.HumanReadablePart.Mainnet), text)
+      require(
+        version == P2WSH.Version && wp.length == P2WSH.WitnessProgramLen,
+        s"Bad address '${text}': P2WSH_Mainnet should specify version ${P2WSH.Version} and a ${P2WSH.WitnessProgramLen}-byte witness program. Found version ${version} and a ${wp.length} byte witness program."
+      )
+      wp
+    }
+    val toScriptPubKey = {
+      val buffer = new mutable.ArrayBuffer[Byte](P2WSH.ScriptPubKeyLen)
+      buffer += P2WSH.Version
+      buffer += Byte32
+      buffer ++= witnessProgram
+      buffer.toArray.toImmutableSeq
+    }
+  }
+
+  sealed trait PublicKeyHashRecoverable extends BtcAddress {
     def toPublicKeyHash : ByteSeqExact20
   }
 
-  // case object SegWit_bc extends Type
-
   def parse( text : String ) : Failable[BtcAddress] = {
     def mainnetSegWitAttempts = Failable {
-      val ( version, witnessProgram ) = SegWit.decode( Some(SegWitHumanReadablePart.Mainnet), text )
+      val ( version, witnessProgram ) = enc.SegWit.decode( Some(SegWitHumanReadablePart.Mainnet), text )
       ( version, witnessProgram.length ) match {
         case ( 0, P2WPKH.WitnessProgramLen ) => P2WPKH_Mainnet( text ) // we'll decode SegWit redundantly in the ctor, but trying to avoid that isn't worth the hassle
+        case ( 0, P2WSH.WitnessProgramLen )  => P2WSH_Mainnet ( text ) // we'll decode SegWit redundantly in the ctor, but trying to avoid that isn't worth the hassle
         case other => throw new UnknownBtcAddressFormatException( s"Couldn't parse '${text}, decodes as SegWit, but unexpected version ${version} and or witness program length ${witnessProgram.length}: ${other} " )
       }
     }
     def base58Attempts = Failable {
-      val ( version, payload ) = Base58.decodeChecked( text )
+      val ( version, payload ) = enc.Base58.decodeChecked( text )
       version match {
         case P2PKH.Version.Mainnet => P2PKH_Mainnet( text ) // we'll decodeChecked Base58 redundantly in the ctor, but trying to avoid that isn't worth the hassle
         case P2SH.Version.Mainnet  => P2SH_Mainnet ( text ) // we'll decodeChecked Base58 redundantly in the ctor, but trying to avoid that isn't worth the hassle
@@ -269,6 +360,7 @@ object BtcAddress {
 
   def recoverFromScriptPubKey( scriptPubKey : immutable.Seq[Byte] ) : Failable[BtcAddress] = {
     Failable( P2WPKH_Mainnet.fromScriptPubKey( scriptPubKey) ) orElseTrace
+    Failable( P2WSH_Mainnet.fromScriptPubKey( scriptPubKey) )  orElseTrace
     Failable( P2PKH_Mainnet.fromScriptPubKey( scriptPubKey ) ) orElseTrace
     Failable( P2SH_Mainnet.fromScriptPubKey( scriptPubKey ) )
   }

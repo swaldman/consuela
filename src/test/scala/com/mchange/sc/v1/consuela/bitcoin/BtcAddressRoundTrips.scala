@@ -19,13 +19,13 @@ object BtcAddressRoundtrips extends Properties("BtcAddressRoundtrips") {
     BtcAddress.recoverFromScriptPubKey( address.toScriptPubKey ).assert == address
   }
 
-  property("p2shMainnetTextRoundTrips") = forAll { ( publicKeyHash : ByteSeqExact20 ) =>
-    val address = BtcAddress.P2SH_Mainnet.fromPublicKeyHash( publicKeyHash )
+  property("p2shMainnetTextRoundTrips") = forAll { ( payload : ByteSeqExact20 ) =>
+    val address = BtcAddress.P2SH_Mainnet.fromPayload( payload.widen )
     BtcAddress( address.text ) == address
   }
 
-  property("p2shMainnetScriptPubKeyRoundTrips") = forAll { ( publicKeyHash : ByteSeqExact20 ) =>
-    val address = BtcAddress.P2SH_Mainnet.fromPublicKeyHash( publicKeyHash )
+  property("p2shMainnetScriptPubKeyRoundTrips") = forAll { ( payload : ByteSeqExact20 ) =>
+    val address = BtcAddress.P2SH_Mainnet.fromPayload( payload.widen )
     BtcAddress.recoverFromScriptPubKey( address.toScriptPubKey ).assert == address
   }
 
@@ -36,6 +36,16 @@ object BtcAddressRoundtrips extends Properties("BtcAddressRoundtrips") {
 
   property("p2wpkhMainnetScriptPubKeyRoundTrips") = forAll { ( publicKeyHash : ByteSeqExact20 ) =>
     val address = BtcAddress.P2WPKH_Mainnet.fromPublicKeyHash( publicKeyHash )
+    BtcAddress.recoverFromScriptPubKey( address.toScriptPubKey ).assert == address
+  }
+
+  property("p2wshMainnetTextRoundTrips") = forAll { ( payload : ByteSeqExact32 ) =>
+    val address = BtcAddress.P2WSH_Mainnet.fromPayload( payload.widen )
+    BtcAddress( address.text ) == address
+  }
+
+  property("p2wshMainnetScriptPubKeyRoundTrips") = forAll { ( payload : ByteSeqExact32 ) =>
+    val address = BtcAddress.P2WSH_Mainnet.fromPayload( payload.widen )
     BtcAddress.recoverFromScriptPubKey( address.toScriptPubKey ).assert == address
   }
 
