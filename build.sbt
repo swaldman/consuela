@@ -18,9 +18,9 @@ resolvers += ("releases" at nexusReleases)
 
 resolvers += ("snapshots" at nexusSnapshots)
 
-resolvers += ("Scalaz Bintray Repo" at "http://dl.bintray.com/scalaz/releases")
+resolvers += ("Scalaz Bintray Repo" at "https://dl.bintray.com/scalaz/releases")
 
-resolvers += ("Typesafe repository" at "http://repo.typesafe.com/typesafe/releases/")
+resolvers += ("Typesafe repository" at "https://repo.typesafe.com/typesafe/releases/")
 
 publishTo := {
   val v = version.value
@@ -50,7 +50,7 @@ libraryDependencies ++= Seq(
   "org.bouncycastle"        %  "bcprov-jdk15on"                  % "1.54",
   "com.madgag.spongycastle" %  "prov"                            % "1.54.0.0"            % "compile,optional", //only necessary on android
   "com.mchange"             %% "restricted-type-scalacheck-util" % restrictedTypeVersion % "test",
-  "org.specs2"              %% "specs2-core"                     % "4.6.0"               % "test",
+  "org.specs2"              %% "specs2-core"                     % "3.10.0"              % "test",
   "org.scalacheck"          %% "scalacheck"                      % "1.14.1"              % "test",
   "ch.qos.logback"          % "logback-classic"                  % "1.1.2"               % "test",
 )
