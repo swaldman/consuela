@@ -6,7 +6,7 @@ organization := "com.mchange"
 
 name := "consuela"
 
-version := "0.2.1-SNAPSHOT"
+version := "0.2.1"
 
 scalaVersion := "2.12.10"
 
@@ -33,12 +33,12 @@ publishTo := {
 }
 
 val restrictedTypeVersion = "0.0.6"
-val failableVersion       = "0.0.4-SNAPSHOT" // don't forget to remove the 'changing()' tags
+val failableVersion       = "0.0.4"
 
 libraryDependencies ++= Seq(
   "com.mchange"             %% "mlog-scala"                      % "0.3.13",
-  "com.mchange"             %% "failable"                        % failableVersion changing(),
-  "com.mchange"             %% "failable-logging"                % failableVersion changing(),
+  "com.mchange"             %% "failable"                        % failableVersion,
+  "com.mchange"             %% "failable-logging"                % failableVersion,
   "com.mchange"             %% "restricted-type"                 % restrictedTypeVersion,
   "com.mchange"             %% "yinyang"                         % "0.0.2",
   "com.mchange"             %% "mchange-commons-scala"           % "0.4.12",
