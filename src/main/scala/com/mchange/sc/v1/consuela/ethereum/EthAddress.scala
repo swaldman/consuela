@@ -43,13 +43,95 @@ import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact20, 
 import scala.collection._
 
 object EthAddress {
+  final object BadChecksumException {
+    private def message( mixedCaseHex : String, mbChainId : Option[EthChainId] ) = {
+      val main = s"The checksum embedded in the mixed case of '${mixedCaseHex}' is incorrect for this address"
+      val suffix = {
+        mbChainId match {
+          case Some( chainId ) => main + s" and chain ID ${chainId.value} (under RSKIP-60)."
+          case None            => " (under EIP-55)."
+        }
+      }
+      main + suffix
+    }
+  }
+  final class BadChecksumException( mixedCaseHex : String, mbChainId : Option[EthChainId] ) extends EthereumException( BadChecksumException.message( mixedCaseHex, mbChainId ) )
+
+  // Implements https://github.com/rsksmart/RSKIPs/blob/master/IPs/RSKIP60.md
+  final object RSKIP60 {
+    import java.nio.charset.StandardCharsets.US_ASCII
+
+    def toChecksumHex( address : EthAddress, mbChainId : Option[EthChainId] ) : String = {
+      // careful not to call address.hex, which would be an endless recursion
+      val unprefixedLowercaseHex = address.bytes.widen.hex.toLowerCase
+      assert( !unprefixedLowercaseHex.startsWith("0x"), s"address.bytes.widen.hex unexpectedly yields 0x-prefixed hex string:'${unprefixedLowercaseHex}'" )
+      val hashable = {
+        val s = mbChainId match {
+          case Some( chainId ) => chainId.value.widen + "0x" + unprefixedLowercaseHex
+          case None            => unprefixedLowercaseHex
+        }
+        s.getBytes()
+      }
+      val hashHex    = EthHash.hash(hashable).hex 
+      val outSeq = {
+        unprefixedLowercaseHex.zip( hashHex ).map { case ( sourceDigit, checkDigit ) =>
+          if ( Integer.parseInt( String.valueOf(checkDigit), 16 ) >= 8 ) Character.toUpperCase(sourceDigit) else sourceDigit
+        }
+      }
+      outSeq.mkString
+    }
+  }
+
+  final object EIP55 {
+    // implements https://github.com/ethereum/EIPs/blob/master/EIPS/eip-55.md
+    def toChecksumHex( address : EthAddress ) : String = RSKIP60.toChecksumHex( address, None )
+  }
+
   val ByteLength = 20;
 
   def apply( pub : EthPublicKey ) : EthAddress = new EthAddress( this.computeBytes( pub ) );
 
   def computeBytes( pub : EthPublicKey ) : ByteSeqExact20 = ByteSeqExact20( EthHash.hash(pub.bytes.widen).toByteArray.drop(12) );
 
-  def apply( hexString : String ) : EthAddress = EthAddress( ByteSeqExact20( hexString.decodeHex ) )
+  private def _parse( hexString : String, mbChainId : Option[EthChainId] ) : Option[EthAddress] = {
+    val addr = EthAddress( ByteSeqExact20( hexString.decodeHex ) )
+    val deprefixed = if ( hexString.startsWith("0x") ) hexString.drop(2) else hexString
+    if ( deprefixed.isMixedCase && deprefixed != RSKIP60.toChecksumHex( addr, mbChainId ) ) None else Some(addr)
+  }
+
+  def parse( hexString : String, mbChainId : Option[EthChainId], withOrWithoutChainIdIfPresent : Boolean ) : EthAddress = {
+    val out = {
+      if ( withOrWithoutChainIdIfPresent && mbChainId.nonEmpty ) {
+        _parse( hexString, mbChainId ) orElse _parse( hexString, None )
+      }
+      else {
+        _parse( hexString, mbChainId )
+      }
+    }
+    out.getOrElse( throw new BadChecksumException( hexString, mbChainId ) )
+  }
+
+  def parseStrictly( hexString : String, chainId : EthChainId ) : EthAddress = {
+    val chain = Some( chainId )
+    this.parse( hexString, chain, false )
+  }
+
+  def parseStrictly( hexString : String, mbChainId : Option[EthChainId] ) : EthAddress = {
+    parse( hexString, mbChainId, false )
+  }
+
+  def parsePermissively( hexString : String, chainId : EthChainId ) : EthAddress = {
+    val chain = Some( chainId )
+    this.parse( hexString, chain, true )
+  }
+
+  def parsePermissively( hexString : String, mbChainId : Option[EthChainId] ) : EthAddress = {
+    parse( hexString, mbChainId, true )
+  }
+
+  def parse( hexString : String ) : EthAddress = this.parse( hexString, None, true )
+
+  def apply( hexString : String ) : EthAddress = this.parse( hexString )
 
   def apply( bytes : Array[Byte] ) : EthAddress = EthAddress( ByteSeqExact20( bytes ) )
 
@@ -92,7 +174,7 @@ object EthAddress {
 final case class EthAddress( val bytes : ByteSeqExact20 ) {
   lazy val toNibbles : IndexedSeq[Nibble] = encoding.toNibbles( bytes.widen )
 
-  def hex = bytes.widen.hex
+  def hex = EthAddress.EIP55.toChecksumHex( this )
 
   def matches( pub : EthPublicKey ) : Boolean = bytes == EthAddress.computeBytes( pub );
 }
