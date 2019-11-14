@@ -77,7 +77,7 @@ class EthAddressChecksumSpec extends Specification {
       true
     }
     catch {
-      case bce : EthAddress.BadChecksumException => {
+      case bce : EthAddress.BadMixedCaseChecksumException => {
         if (expected) println( s"Unexpected failure: ${hex}" )
         false
       }
@@ -95,7 +95,7 @@ class EthAddressChecksumSpec extends Specification {
       true
     }
     catch {
-      case bce : EthAddress.BadChecksumException => {
+      case bce : EthAddress.BadMixedCaseChecksumException => {
         if (expected) println( s"Unexpected failure: ${hex} ${mbChainId}" )
         false
       }
@@ -113,7 +113,7 @@ class EthAddressChecksumSpec extends Specification {
       true
     }
     catch {
-      case bce : EthAddress.BadChecksumException => {
+      case bce : EthAddress.BadMixedCaseChecksumException => {
         if (expected) println( s"Unexpected failure: ${hex} ${mbChainId}" )
         false
       }

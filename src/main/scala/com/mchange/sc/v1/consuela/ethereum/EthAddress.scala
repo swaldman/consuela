@@ -43,7 +43,7 @@ import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact20, 
 import scala.collection._
 
 object EthAddress {
-  final object BadChecksumException {
+  final object BadMixedCaseChecksumException {
     private def message( mixedCaseHex : String, mbChainId : Option[EthChainId] ) = {
       val main = s"The checksum embedded in the mixed case of '${mixedCaseHex}' is incorrect for this address"
       val suffix = {
@@ -55,7 +55,7 @@ object EthAddress {
       main + suffix
     }
   }
-  final class BadChecksumException( mixedCaseHex : String, mbChainId : Option[EthChainId] ) extends EthereumException( BadChecksumException.message( mixedCaseHex, mbChainId ) )
+  final class BadMixedCaseChecksumException( mixedCaseHex : String, mbChainId : Option[EthChainId] ) extends EthereumException( BadMixedCaseChecksumException.message( mixedCaseHex, mbChainId ) )
 
   // Implements https://github.com/rsksmart/RSKIPs/blob/master/IPs/RSKIP60.md
   final object RSKIP60 {
@@ -108,7 +108,7 @@ object EthAddress {
         _parse( hexString, mbChainId )
       }
     }
-    out.getOrElse( throw new BadChecksumException( hexString, mbChainId ) )
+    out.getOrElse( throw new BadMixedCaseChecksumException( hexString, mbChainId ) )
   }
 
   def parseStrictly( hexString : String, chainId : EthChainId ) : EthAddress = {
