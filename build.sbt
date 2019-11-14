@@ -6,7 +6,7 @@ organization := "com.mchange"
 
 name := "consuela"
 
-version := "0.2.2-SNAPSHOT"
+version := "0.3.0-SNAPSHOT"
 
 scalaVersion := "2.12.10"
 
