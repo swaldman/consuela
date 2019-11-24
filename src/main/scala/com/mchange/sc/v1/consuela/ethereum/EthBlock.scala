@@ -40,7 +40,7 @@ import specification.Types.{Unsigned64,Unsigned256,Unsigned2048,ByteSeqMax1024};
 
 import com.mchange.sc.v1.consuela.ethereum.{EthBlockDetails => Details}
 
-import scala.collection.immutable.Seq;
+import scala.collection._
 
 object EthBlock {
   val Genesis : EthBlock = Details.GenesisBlock;
@@ -69,4 +69,4 @@ object EthBlock {
     def isValidChild( putativeParent : Header ) : Boolean = Header.isValidChildOfParent( this, putativeParent );
   }
 }
-final case class EthBlock( header : EthBlock.Header, transactions : Seq[EthTransaction], ommers : Seq[EthBlock.Header] );
+final case class EthBlock( header : EthBlock.Header, transactions : immutable.Seq[EthTransaction], ommers : immutable.Seq[EthBlock.Header] );

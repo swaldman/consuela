@@ -106,6 +106,7 @@ object Types {
   final object Int256 extends RestrictedBigInt.TwosComplementWithBitLength[Int256]( 256 ) { override protected def create( value : BigInt ) = new Int256( value ); }
   
   final object UnsignedBigInt extends RestrictedBigInt.Unsigned[UnsignedBigInt] { override protected def create( value : BigInt ) = new UnsignedBigInt( value ); }
+  val Unsigned = UnsignedBigInt
 
   final object Unsigned1   extends RestrictedByte.UnsignedWithBitLength[Unsigned1]( 1 )         { override protected def create( value : Byte  )  = new Unsigned1( value ); }
   final object Unsigned8   extends RestrictedShort.UnsignedWithBitLength[Unsigned8]( 8 )        { override protected def create( value : Short  ) = new Unsigned8( value ); }
@@ -238,6 +239,7 @@ object Types {
   final class Int256  private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt]
 
   final class UnsignedBigInt private ( val widen : BigInt ) extends AnyVal with RestrictedType.Element[BigInt];
+  type Unsigned = UnsignedBigInt
 
   final class Unsigned1   private ( val widen : Byte  )  extends AnyVal with RestrictedType.Element[Byte];
   final class Unsigned8   private ( val widen : Short  ) extends AnyVal with RestrictedType.Element[Short];

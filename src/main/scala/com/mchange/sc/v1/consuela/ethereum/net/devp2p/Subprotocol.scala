@@ -85,6 +85,122 @@ object Subprotocol {
     }
   }
 
+  final object Eth63 extends Subprotocol.Base( StringASCII_Exact3("eth"), Unsigned16(63) ) {
+
+    // touching this suggests an error has occurred
+    final object Undefined extends Payload.Factory[Nothing] {
+      def subprotocol : Subprotocol = Eth63
+
+      def rlp : RLPSerializing[Nothing] = throw new RuntimeException("Eth63.Undefined can't serialize/deserialize anything.")
+
+      override lazy val offset : Unsigned16 = throw new RuntimeException("Eth63.Undefined represents no valid offset.")
+    }
+    //final object Undefined extends Payload.Factory.Base[Undefined]( Eth63 );
+    //final case class Undefined( typeCode : Unsigned ) extends Payload.Base[Undefined]( Undefined )
+
+    final object Status extends Payload.Factory.Base[Status]( Eth63 );
+    final case class Status (
+      typeCode        : Unsigned16, 
+      protocolVersion : Unsigned,
+      networkId       : Unsigned,
+      totalDifficulty : Unsigned,
+      bestHash        : EthHash,
+      genesisHash     : EthHash,
+      number          : Unsigned
+    ) extends Payload.Base[Status]( Status )
+
+    final object NewBlockHashes extends Payload.Factory.Base[NewBlockHashes]( Eth63 );
+    final case class NewBlockHashes ( 
+      typeCode        : Unsigned16,
+      hashes          : immutable.IndexedSeq[Tuple2[EthHash,Unsigned]]
+    ) extends Payload.Base[NewBlockHashes]( NewBlockHashes )
+
+    final object Transactions extends Payload.Factory.Base[Transactions]( Eth63 );
+    final case class Transactions (
+      typeCode        : Unsigned16,
+      transactions    : immutable.IndexedSeq[EthTransaction]
+    ) extends Payload.Base[Transactions]( Transactions )
+
+    final object GetBlockHeaders extends Payload.Factory.Base[GetBlockHeaders]( Eth63 );
+    final case class GetBlockHeaders (
+      typeCode        : Unsigned16,
+      block           : Either[EthHash,Unsigned],
+      maxHeaders      : Unsigned,
+      skip            : Unsigned,
+      reverse         : Unsigned1
+    ) extends Payload.Base[GetBlockHeaders]( GetBlockHeaders )
+
+    final object BlockHeaders extends Payload.Factory.Base[BlockHeaders]( Eth63 );
+    final case class BlockHeaders (
+      typeCode        : Unsigned16,
+      blockHeaders    : immutable.IndexedSeq[EthBlock.Header]
+    ) extends Payload.Base[BlockHeaders]( BlockHeaders )
+
+    final object GetBlockBodies extends Payload.Factory.Base[GetBlockBodies]( Eth63 );
+    final case class GetBlockBodies (
+      typeCode        : Unsigned16,
+      hashes          : immutable.IndexedSeq[EthHash]
+    ) extends Payload.Base[GetBlockBodies]( GetBlockBodies )
+
+    final object BlockBodies extends Payload.Factory.Base[BlockBodies]( Eth63 );
+    final case class BlockBodies (
+      typeCode        : Unsigned16,
+      bodies          : immutable.IndexedSeq[Tuple2[immutable.Seq[EthTransaction],immutable.Seq[EthBlock.Header]]]
+    ) extends Payload.Base[BlockBodies]( BlockBodies )
+
+    final object NewBlock extends Payload.Factory.Base[NewBlock]( Eth63 );
+    final case class NewBlock (
+      typeCode        : Unsigned16,
+      block           : EthBlock,
+      totalDifficulty : Unsigned
+    ) extends Payload.Base[NewBlock]( NewBlock )
+
+    final object GetNodeData extends Payload.Factory.Base[GetNodeData]( Eth63 )
+    final case class GetNodeData (
+      typeCode        : Unsigned16,
+      hashes          : immutable.Seq[EthHash]
+    ) extends Payload.Base[GetNodeData]( GetNodeData )
+
+    final object NodeData extends Payload.Factory.Base[NodeData]( Eth63 )
+    final case class NodeData (
+      typeCode        : Unsigned16,
+      values          : immutable.Seq[immutable.Seq[Byte]]
+    ) extends Payload.Base[NodeData]( NodeData )
+
+    final object GetReceipts extends Payload.Factory.Base[GetReceipts]( Eth63 )
+    final case class GetReceipts (
+      typeCode        : Unsigned16,
+      hashes          : immutable.Seq[EthHash]
+    ) extends Payload.Base[GetReceipts]( GetReceipts )
+
+    final object Receipts extends Payload.Factory.Base[Receipts]( Eth63 )
+    final case class Receipts (
+      typeCode        : Unsigned16,
+      receiptLists    : immutable.Seq[immutable.Seq[EthTransactionReceipt]]
+    ) extends Payload.Base[Receipts]( Receipts )
+
+    lazy val PayloadFactories : immutable.IndexedSeq[Payload.Factory[_]] =  immutable.IndexedSeq(
+      Status,           // 0x00
+      NewBlockHashes,   // 0x01
+      Transactions,     // 0x02
+      GetBlockHeaders,  // 0x03
+      BlockHeaders,     // 0x04
+      GetBlockBodies,   // 0x05
+      BlockBodies,      // 0x06
+      NewBlock,         // 0x07
+      Undefined,        // 0x08
+      Undefined,        // 0x09
+      Undefined,        // 0x0a
+      Undefined,        // 0x0b
+      Undefined,        // 0x0c
+      GetNodeData,      // 0x0d
+      NodeData,         // 0x0e
+      GetReceipts,      // 0x0f
+      Receipts          // 0x10
+    )
+  }
+
+
   final object Eth60 extends Subprotocol.Base( StringASCII_Exact3("eth"), Unsigned16(60) ) {
     final object Status extends Payload.Factory.Base[Status]( this );
     final case class Status (
