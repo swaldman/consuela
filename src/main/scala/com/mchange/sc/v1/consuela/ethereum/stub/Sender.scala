@@ -1,7 +1,8 @@
 package com.mchange.sc.v1.consuela.ethereum.stub
 
 import scala.collection._
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{Await, ExecutionContext, Future}
+import scala.concurrent.duration._
 
 import com.mchange.sc.v1.consuela.crypto.jce
 import com.mchange.sc.v1.consuela.ethereum.wallet
@@ -48,6 +49,10 @@ object Sender {
 trait Sender {
   def address : EthAddress
 
+  def asyncBalance()(implicit scontext : stub.Context ) = getBalance()( scontext )
+  def awaitBalance( duration : Duration = Duration.Inf )(implicit scontext : stub.Context ) = getBalance()( scontext )
+
+  @deprecated(message="Prefer asyncBalance() or awaitBalance().", since="0.3.0")
   def getBalance()(implicit scontext : stub.Context ) : Future[BigInt] = {
     jsonrpc.Invoker.getBalance( address )( scontext.icontext )
   }
