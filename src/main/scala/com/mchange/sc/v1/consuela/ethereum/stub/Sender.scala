@@ -49,8 +49,8 @@ object Sender {
 trait Sender {
   def address : EthAddress
 
-  def asyncBalance()(implicit scontext : stub.Context ) = getBalance()( scontext )
-  def awaitBalance( duration : Duration = Duration.Inf )(implicit scontext : stub.Context ) = getBalance()( scontext )
+  def asyncBalance()(implicit scontext : stub.Context )                                     : Future[BigInt] = getBalance()( scontext )
+  def awaitBalance( duration : Duration = Duration.Inf )(implicit scontext : stub.Context ) : BigInt         = Await.result( getBalance()( scontext ), duration )
 
   @deprecated(message="Prefer asyncBalance() or awaitBalance().", since="0.3.0")
   def getBalance()(implicit scontext : stub.Context ) : Future[BigInt] = {
