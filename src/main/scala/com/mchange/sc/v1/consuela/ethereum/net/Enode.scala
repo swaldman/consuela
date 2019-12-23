@@ -22,8 +22,8 @@ object Enode {
 }
 final case class Enode( nodeId : EthPublicKey, address : IPAddress, port : Unsigned16, discoveryPort : Unsigned16 ) {
   override lazy val toString : String = {
-    val suffix = if ( port != discoveryPort ) "?discport=${discoveryPort}" else ""
-    s"enode://${nodeId.bytes.widen.hex}@${address}:${port}${suffix}"
+    val suffix = if ( port != discoveryPort ) "?discport=${discoveryPort.widen}" else ""
+    s"enode://${nodeId.bytes.widen.hex}@${address}:${port.widen}${suffix}"
   }
 }
 
