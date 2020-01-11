@@ -80,6 +80,10 @@ final case class EthPublicKey( val bytes : ByteSeqExact64 ) {
     ByteSeqExact65( ImmutableArraySeq.Byte( buff.toArray ) )
   }
 
+  def hex = bytes.widen.hex
+
+  def hex0x = bytes.widen.hex0x
+
   def matches( priv : EthPrivateKey ) : Boolean = Arrays.equals( _arr, EthPublicKey.computeBytes( priv ) );
 
   // default scheme

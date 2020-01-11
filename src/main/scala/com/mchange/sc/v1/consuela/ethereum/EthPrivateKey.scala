@@ -123,6 +123,8 @@ final case class EthPrivateKey( val bytes : ByteSeqExact32 ) extends EthSigner {
 
   def hex = bytes.widen.hex
 
+  def hex0x = bytes.widen.hex0x
+
   // for EthSigner trait
 
   def signWithoutHashing( bytesToSign : Array[Byte] ) : EthSignature.Basic = this.signRawBytes( bytesToSign )

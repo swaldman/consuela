@@ -283,6 +283,8 @@ object Client {
         }
       }
 
+      override def toString() : String = s"jsonrpc.Client.Implementation.Exchanger( ${exchanger} )"
+
       private def doExchange[T]( methodName : String, params : Seq[JsValue] )( successHandler : Response.Success => T )( implicit ec : ExecutionContext ) : Future[T] = {
         TRACE.log( s"methodName = ${methodName}; params = ${params}" )
         exchanger.exchange( methodName, JsArray( params ) ).map( responseHandler( successHandler ) )

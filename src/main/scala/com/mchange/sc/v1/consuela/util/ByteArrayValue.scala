@@ -76,6 +76,8 @@ trait ByteArrayValue {
 
   def hex : String = hexbytes;
 
+  def hex0x = "0x" + hex
+
   def length : Int = _bytes.length;
 
   override def equals( other : Any ) : Boolean = {

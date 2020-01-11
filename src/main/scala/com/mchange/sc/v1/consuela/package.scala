@@ -79,6 +79,7 @@ package object consuela {
     def toImmutableSeq       : immutable.Seq[Byte];
     def base64               : String              = B64Encoder.encodeToString( _bytes )
     def hex                  : String              = ByteUtils.toLowercaseHexAscii( _bytes ); // should we switch to the DatatypeConverter implementation of hex encoding/decoding?
+    def hex0x                : String              = "0x" + hex
     def toBigInteger         : BigInteger          = new BigInteger( _bytes );
     def toUnsignedBigInteger : BigInteger          = new BigInteger( 1, _bytes );
     def toBigInt             : BigInt              = BigInt( this.toBigInteger );

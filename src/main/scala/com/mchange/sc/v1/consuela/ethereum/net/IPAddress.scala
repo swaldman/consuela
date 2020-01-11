@@ -32,6 +32,21 @@ object IPAddress{
       case bad => throw new IllegalArgumentException("Only raw IP addresses are acceptable. '${bad}' is not a raw IP.");
     }
   }
+  def parse( formatted : String ) : IPAddress = this.apply( formatted )
+
+  def parseV4( formatted : String ) : IPv4Address = {
+    this.parse( formatted ) match {
+      case v4 : IPv4Address => v4
+      case v6 : IPv6Address => throw new IllegalArgumentException("'${v6}' is not an IPv4 address, but an IPv6Address.");
+    }
+  }
+
+  def parseV6( formatted : String ) : IPv6Address = {
+    this.parse( formatted ) match {
+      case v4 : IPv4Address => throw new IllegalArgumentException("'${v4}' is not an IPv6 address, but an IPv4Address."); 
+      case v6 : IPv6Address => v6
+    }
+  }
 }
 sealed trait IPAddress {
   def toUrlHost : String

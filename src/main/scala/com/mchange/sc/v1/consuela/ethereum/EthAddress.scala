@@ -176,6 +176,8 @@ final case class EthAddress( val bytes : ByteSeqExact20 ) {
 
   def hex = eip55Hex
 
+  def hex0x = "0x" + hex
+
   def eip55Hex = EthAddress.EIP55.toChecksumHex( this )
 
   def rskip60HexForChainId( mbChainId : Option[EthChainId] ) : String = EthAddress.RSKIP60.toChecksumHex( this, mbChainId )
