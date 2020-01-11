@@ -51,9 +51,15 @@ object IPAddress{
 sealed trait IPAddress {
   def toUrlHost : String
 }
+final object IPv4Address {
+  def apply( formatted : String ) : IPv4Address = IPAddress.parseV4( formatted )
+}
 final case class IPv4Address( bytes : ByteSeqExact4 ) extends IPAddress {
   override lazy val toString : String = bytes.widen.map( _ & 0xFF ).mkString(".")
   def toUrlHost : String = this.toString
+}
+final object IPv6Address {
+  def apply( formatted : String ) : IPv6Address = IPAddress.parseV6( formatted )
 }
 final case class IPv6Address( bytes : ByteSeqExact16 ) extends IPAddress {
   override lazy val toString : String = bytes.widen.grouped(2).map( seq => (seq(0) << 8 | seq(1)).toHexString ).mkString(":")
