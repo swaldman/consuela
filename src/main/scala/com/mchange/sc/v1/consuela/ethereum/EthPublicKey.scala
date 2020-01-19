@@ -71,7 +71,9 @@ final case class EthPublicKey( val bytes : ByteSeqExact64 ) {
   lazy val x = BigInt( new java.math.BigInteger( 1, _xBytes ) );
   lazy val y = BigInt( new java.math.BigInteger( 1, _yBytes ) );
 
-  lazy val toAddress = EthAddress( this );
+  lazy val toAddress = EthAddress( this )
+
+  def address = this.toAddress
 
   lazy val bytesWithUncompressedHeader : ByteSeqExact65 = {
     val buff = new mutable.ArrayBuffer[Byte](65)
