@@ -489,11 +489,12 @@ object Invoker {
   }
 
   final object constant {
-    def sendMessage(
+    private def _sendMessage(
       from       : EthAddress,
       to         : EthAddress,
       valueInWei : Unsigned256,
-      data       : immutable.Seq[Byte]
+      data       : immutable.Seq[Byte],
+      strict     : Boolean
     )( implicit icontext : Invoker.Context ) : Future[immutable.Seq[Byte]] = {
       implicit val ( poller, econtext ) = ( icontext.poller, icontext.econtext )
 
@@ -501,11 +502,27 @@ object Invoker {
         val fComputedGas = computedGas( client, from, Some(to), valueInWei, data )
         for {
           cg <- fComputedGas
-          outBytes <- client.eth.call( Some( from ), Some( to ), Some( cg.gasLimit ), Some( cg.gasPrice ), Some( valueInWei.widen ), Some( data ) )
+          outBytes <- client.eth.call( Some( from ), Some( to ), Some( cg.gasLimit ), if (strict) Some( cg.gasPrice ) else None, Some( valueInWei.widen ), Some( data ) )
         } yield {
           outBytes
         }
       }
+    }
+    def sendMessage(
+      from       : EthAddress,
+      to         : EthAddress,
+      valueInWei : Unsigned256,
+      data       : immutable.Seq[Byte]
+    )( implicit icontext : Invoker.Context ) : Future[immutable.Seq[Byte]] = {
+      _sendMessage( from, to, valueInWei, data, false )
+    }
+    def sendMessageStrict(
+      from       : EthAddress,
+      to         : EthAddress,
+      valueInWei : Unsigned256,
+      data       : immutable.Seq[Byte]
+    )( implicit icontext : Invoker.Context ) : Future[immutable.Seq[Byte]] = {
+      _sendMessage( from, to, valueInWei, data, true )
     }
   }
 }
