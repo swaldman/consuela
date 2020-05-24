@@ -17,7 +17,7 @@ object ECIES {
   final object BouncyCastleCipherECIES {
     import org.bouncycastle.crypto.agreement.ECDHBasicAgreement;
     import org.bouncycastle.crypto.digests.SHA256Digest;
-    import org.bouncycastle.crypto.engines.AESFastEngine;
+    import org.bouncycastle.crypto.engines.AESEngine;
     import org.bouncycastle.crypto.engines.IESEngine;
     import org.bouncycastle.jcajce.provider.asymmetric.ec.IESCipher;
     import org.bouncycastle.crypto.macs.HMac;
@@ -31,7 +31,7 @@ object ECIES {
           new ECDHBasicAgreement(), 
           new KDF2BytesGenerator(new SHA256Digest()), 
           new HMac(new SHA256Digest()), 
-          new PaddedBufferedBlockCipher(new SICBlockCipher(new AESFastEngine()))
+          new PaddedBufferedBlockCipher(new SICBlockCipher(new AESEngine()))
         )
       }
     }

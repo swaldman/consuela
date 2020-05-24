@@ -50,7 +50,7 @@ object Provider{
 
   val nameToProviderListMap = {
     CryptoJceProviderClassNames
-      .map( fqcn => WARNING.attempt( Class.forName( fqcn ).newInstance().asInstanceOf[java.security.Provider] ) )
+      .map( fqcn => WARNING.attempt( Class.forName( fqcn ).getDeclaredConstructor().newInstance().asInstanceOf[java.security.Provider] ) )
       .filter( _.isSuccess )
       .map( _.get )
       .groupBy( _.getName() )

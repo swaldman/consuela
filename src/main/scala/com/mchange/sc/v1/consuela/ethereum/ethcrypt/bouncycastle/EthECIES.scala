@@ -12,7 +12,7 @@ import org.bouncycastle.asn1.sec.SECNamedCurves
 import org.bouncycastle.crypto.{BufferedBlockCipher,Digest,Mac}
 import org.bouncycastle.crypto.digests.SHA256Digest
 import org.bouncycastle.math.ec.ECCurve
-import org.bouncycastle.crypto.engines.AESFastEngine
+import org.bouncycastle.crypto.engines.AESEngine
 import org.bouncycastle.crypto.generators.ECKeyPairGenerator
 import org.bouncycastle.crypto.macs.HMac
 import org.bouncycastle.crypto.modes.SICBlockCipher // implements CTR mode
@@ -87,7 +87,7 @@ object EthECIES {
   sealed abstract class EncryptedBlock( var ciphertext : Array[Byte], var mac : Array[Byte] )
 
   def createCipher( encrypt : Boolean, key : Array[Byte], initializationVector : Array[Byte] ) : BufferedBlockCipher = {
-    val out = new BufferedBlockCipher( new SICBlockCipher( new AESFastEngine ) )
+    val out = new BufferedBlockCipher( new SICBlockCipher( new AESEngine ) )
     out.init( encrypt, new ParametersWithIV( new KeyParameter( key ), initializationVector ) )
     out
   }

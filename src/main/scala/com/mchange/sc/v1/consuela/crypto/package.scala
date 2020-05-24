@@ -445,10 +445,8 @@ package object crypto {
         }
       }
       def encode( sig : Signature ) : Array[Byte] = {
-        // grrr...
-        class AutocloseableASN1OutputStream( os : OutputStream ) extends ASN1OutputStream( os ) with AutoCloseable;
         borrow( new ByteArrayOutputStream() ) { baos =>
-          borrow( new AutocloseableASN1OutputStream( baos ) ) { aos =>
+          borrow( ASN1OutputStream.create( baos ) )( _.close() ) { aos =>
             val encodedR = new ASN1Integer( sig.r );
             val encodedS = new ASN1Integer( sig.s );
             val sequence = new DLSequence( Array[ASN1Encodable]( encodedR, encodedS ) );

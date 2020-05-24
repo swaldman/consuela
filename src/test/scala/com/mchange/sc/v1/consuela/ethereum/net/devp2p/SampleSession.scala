@@ -8,8 +8,8 @@ import com.mchange.sc.v1.consuela.ethereum._
 import com.mchange.sc.v1.consuela.ethereum.net.devp2p._
 import com.mchange.sc.v1.consuela.ethereum.specification.Types._
 
-/*
 object SampleSession {
+/*
   def main( argv : Array[String] ) : Unit = {
     val host = argv(0)
     val port = argv(1).toInt
@@ -56,5 +56,6 @@ object SampleSession {
 
     t.join
   }
-}
 */
+}
+
