@@ -6,7 +6,7 @@ organization := "com.mchange"
 
 name := "consuela"
 
-version := "0.3.2"
+version := "0.3.3-SNAPSHOT"
 
 scalaVersion := "2.12.10"
 
@@ -41,7 +41,7 @@ libraryDependencies ++= Seq(
   "com.mchange"             %% "failable-logging"                % failableVersion,
   "com.mchange"             %% "restricted-type"                 % restrictedTypeVersion,
   "com.mchange"             %% "yinyang"                         % "0.0.2",
-  "com.mchange"             %% "mchange-commons-scala"           % "0.4.12",
+  "com.mchange"             %% "mchange-commons-scala"           % "0.4.13",
   "com.mchange"             %% "literal"                         % "0.1.0",
   "com.mchange"             %% "mchange-play-json-util"          % "0.0.4",
   "com.mchange"             %% "jsonrpc-client"                  % "0.0.9",
