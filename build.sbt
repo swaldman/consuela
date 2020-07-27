@@ -47,7 +47,7 @@ libraryDependencies ++= Seq(
   "com.mchange"             %% "jsonrpc-client"                  % "0.0.9",
   "org.reactivestreams"     %  "reactive-streams"                % "1.0.1",
   "com.typesafe"            %  "config"                          % "1.3.0",
-  "org.bouncycastle"        %  "bcprov-jdk15on"                  % "1.64",
+  "org.bouncycastle"        %  "bcprov-jdk15on"                  % "1.66",
   "com.madgag.spongycastle" %  "prov"                            % "1.58.0.0"            % "compile,optional", //only necessary on android
   "com.mchange"             %% "restricted-type-scalacheck-util" % restrictedTypeVersion % "test",
   "org.specs2"              %% "specs2-core"                     % "3.10.0"              % "test",

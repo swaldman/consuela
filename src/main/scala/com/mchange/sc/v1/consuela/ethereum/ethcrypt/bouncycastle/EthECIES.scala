@@ -17,7 +17,6 @@ import org.bouncycastle.crypto.generators.ECKeyPairGenerator
 import org.bouncycastle.crypto.macs.HMac
 import org.bouncycastle.crypto.modes.SICBlockCipher // implements CTR mode
 import org.bouncycastle.crypto.params.{ECDomainParameters,ECKeyGenerationParameters,ECPrivateKeyParameters,ECPublicKeyParameters,KeyParameter,ParametersWithIV}
-import org.bouncycastle.crypto.tls.NamedCurve
 
 import scala.language.implicitConversions
 
