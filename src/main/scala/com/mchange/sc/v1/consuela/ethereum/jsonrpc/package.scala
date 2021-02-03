@@ -182,20 +182,41 @@ package object jsonrpc {
   }
 
   private def restrictTransformAbiFunctionObject( jso : JsObject ) : JsResult[JsObject] = {
+
     val keys = jso.keys
 
     // these keys required for all versions
-    val requiredKeys = "name" :: "inputs" :: "outputs" :: "type" :: "constant" :: Nil
+    val requiredKeys = "name" :: "inputs" :: "outputs" :: "type" :: Nil
 
     def requiredKeysCheck = requiredKeys.foldLeft( None : Option[JsResult[JsObject]] ) { ( nascent, next ) =>
       nascent match {
         case Some( _ ) => nascent
-        case None      => if (!keys(next)) Some( JsError(s"Required key for ABI function '${next}' not found.") ) else None
+        case None      => if (!keys(next)) Some( JsError(s"Required key '${next}' for ABI function not found.") ) else None
       }
     }
-    def constantValue : Boolean = jso.value("constant").asInstanceOf[JsBoolean].value
+
+    def constantFromConstant : Option[Boolean] = jso.value.get("constant").map( _.asInstanceOf[JsBoolean].value )
+
+    def constantFromStateMutability : Option[Boolean] = {
+      jso.value.get("stateMutability").map( _.asInstanceOf[JsString].value ) match {
+        case Some( "pure" ) | Some( "view" ) => Some( true  )
+        case Some( _ )                       => Some( false )
+        case None                            => None
+      }
+    }
+
+    def constantValue : Boolean = {
+      ( constantFromConstant, constantFromStateMutability ) match {
+        case ( Some( c ), None )           => c
+        case ( None, Some( c ) )           => c
+        case ( Some( cfc ), Some( cfsm ) ) => if ( cfc == cfsm ) cfc else throw new ConsuelaException( s"Contains inconsistent 'constant' and 'stateMutability' values: ${jso}" )
+        case ( None, None )                => false // stateMutability is specified as defaulting to 'nonpayable'
+      }
+    }
+
     def payableValue  : Boolean = jso.value("payable").asInstanceOf[JsBoolean].value
 
+    // TODO: simplify this logic, since stateMutabiity is now defined to default to 'nonpayable', so stateMutability is always in some sense available
     def informalAbiVersion = {
       val hasPayable         = keys("payable")
       val hasStateMutability = keys("stateMutability")
@@ -214,30 +235,31 @@ package object jsonrpc {
       informalAbiVersion match {
         case 1 => {
           if ( constantValue ) {
-            JsSuccess[JsObject]( baseObject + ("payable", JsBoolean( false )) + ("stateMutability", JsString("view")) )
+            JsSuccess[JsObject]( baseObject + ("payable", JsBoolean( false )) + ("constant", JsBoolean(constantValue)) + ("stateMutability", JsString("view")) )
           } else {
-            JsSuccess[JsObject]( baseObject + ("payable", JsBoolean( true )) + ("stateMutability", JsString("payable")) ) // maintain compatability, under old compilations all functions payable
+            // stateMutability now specified to default to nonpayable, may break interpretation of very old contract abis (before payable was defined)
+            JsSuccess[JsObject]( baseObject + ("payable", JsBoolean( false )) + ("constant", JsBoolean(constantValue)) + ("stateMutability", JsString("nonpayable")) ) 
           }
         }
         case 2 => {
           if ( payableValue ) {
-            JsSuccess[JsObject]( baseObject + ("payable", JsBoolean( true )) + ("stateMutability", JsString("payable")) )
+            JsSuccess[JsObject]( baseObject + ("payable", JsBoolean( true )) + ("constant", JsBoolean(constantValue)) + ("stateMutability", JsString("payable")) )
           }
           else {
             if (constantValue) {
-              JsSuccess[JsObject]( baseObject + ("payable", JsBoolean( false )) + ("stateMutability", JsString("view")) ) // we can't guarantee pure, so we call this view
+              JsSuccess[JsObject]( baseObject + ("payable", JsBoolean( false )) + ("constant", JsBoolean(constantValue)) + ("stateMutability", JsString("view")) ) // we can't guarantee pure, so we call this view
             }
             else {
-              JsSuccess[JsObject]( baseObject + ("payable", JsBoolean( false )) + ("stateMutability", JsString("nonpayable")) )
+              JsSuccess[JsObject]( baseObject + ("payable", JsBoolean( false )) + ("constant", JsBoolean(constantValue)) + ("stateMutability", JsString("nonpayable")) )
             }
           }
         }
         case 3 => {
-          JsSuccess[JsObject]( Seq( "payable", "stateMutability" ).foldLeft( baseObject ){ ( nascent, next ) => nascent + ( next, jso.value(next) ) } )
+          JsSuccess[JsObject]( Seq( "payable", "stateMutability" ).foldLeft( baseObject ){ ( nascent, next ) => nascent + ( next, jso.value(next) ) } + ("constant", JsBoolean(constantValue) ) )
         }
         case 4 => {
           val sm = jso.value("stateMutability").asInstanceOf[JsString]
-          JsSuccess[JsObject]( baseObject + ("payable", JsBoolean( sm.value == "payable" )) + ("stateMutability", sm) )
+          JsSuccess[JsObject]( baseObject + ("payable", JsBoolean( sm.value == "payable" )) + ("stateMutability", sm) + ("constant", JsBoolean(constantValue)) )
         }
         case _ => throw new InternalError("Unexpected 'Informal ABI Version', this should never happen!")
       }
