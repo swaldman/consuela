@@ -258,6 +258,7 @@ object Client {
     def getLogs( query : Log.Filter.Query )( implicit ec : ExecutionContext )                                    : Future[immutable.Seq[Client.Log]]
     def getLogs( filter : Log.Filter )( implicit ec : ExecutionContext )                                         : Future[immutable.Seq[Client.Log]]
     def getNewLogs( filter : Log.Filter )( implicit ec : ExecutionContext )                                      : Future[immutable.Seq[Client.Log]]
+    def getStorageAt( contractAddress : EthAddress, storageSlot : BigInt )(implicit ec : ExecutionContext )      : Future[BigInt]
     def getTransactionCount( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[BigInt]
     def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext )                     : Future[Option[Client.TransactionReceipt]]
     def getBlockFilterChanges( filter : BlockFilter )( implicit ec : ExecutionContext )                          : Future[immutable.Seq[EthHash]]
@@ -361,6 +362,10 @@ object Client {
         def getNewLogs( filter : Log.Filter )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Client.Log]] = {
           doExchange( "eth_getFilterChanges", Seq( JsString(filter.identifier) ) )( _.result.as[immutable.Seq[RawLog]].map( Client.Log.apply ) )
         }
+        def getStorageAt( contractAddress : EthAddress, storageSlot : BigInt )( implicit ec : ExecutionContext ) : Future[BigInt] = {
+          doExchange( "eth_getStorageAt", Seq( encodeAddress( contractAddress ), encodeQuantity( storageSlot ) ) )( extractBigInt )
+        }
+
         def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext ) : Future[Option[Client.TransactionReceipt]] = {
           val raw = doExchange( "eth_getTransactionReceipt", Seq( encodeBytes( transactionHash.bytes ) ) ) { success =>
 
