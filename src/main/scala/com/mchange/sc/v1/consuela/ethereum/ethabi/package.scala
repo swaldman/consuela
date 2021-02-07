@@ -228,13 +228,20 @@ package object ethabi {
     abi.functions.filter( _.name == functionName )
   }
   def signatureForAbiFunction( function : Abi.Function ) : String = {
+    signatureForFunctionNamesAndInputTypes( function.name, function.inputs.map( _.`type` ) )
+  }
+  def identifierForFunctionNamesAndInputTypes( functionName : String, functionInputTypes : immutable.Seq[String] ) : immutable.Seq[Byte] = {
+    identifierForSignature( signatureForFunctionNamesAndInputTypes( functionName, functionInputTypes ) )
+  }
+  def signatureForFunctionNamesAndInputTypes( functionName : String, functionInputTypes : immutable.Seq[String] ) : String = {
     val sb = new StringBuilder(256) //XXX: hard-coded
-    sb.append( function.name )
+    sb.append( functionName )
     sb.append( '(' )
-    sb.append( function.inputs.map( f => canonicalizeTypeName( f.`type` ) ).mkString(",") )
+    sb.append( functionInputTypes.map( tpe => canonicalizeTypeName( tpe ) ).mkString(",") )
     sb.append( ')' )
     sb.toString
   }
+  
 
   private [ethabi] val TypeAliases : Map[String,String] = Map (
     "uint"   -> "uint256",
