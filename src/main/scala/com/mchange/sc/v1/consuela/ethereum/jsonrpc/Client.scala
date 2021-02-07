@@ -251,22 +251,22 @@ object Client {
       data     : Option[Seq[Byte]]  = None
     )( implicit ec : ExecutionContext ) : Future[BigInt] 
 
-    def gasPrice()( implicit ec : ExecutionContext )                                                             : Future[BigInt]
-    def getBalance( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext )          : Future[BigInt]
-    def getCode( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext )             : Future[immutable.Seq[Byte]]
-    def getCompilers()( implicit ec : ExecutionContext )                                                         : Future[immutable.Set[String]]
-    def getLogs( query : Log.Filter.Query )( implicit ec : ExecutionContext )                                    : Future[immutable.Seq[Client.Log]]
-    def getLogs( filter : Log.Filter )( implicit ec : ExecutionContext )                                         : Future[immutable.Seq[Client.Log]]
-    def getNewLogs( filter : Log.Filter )( implicit ec : ExecutionContext )                                      : Future[immutable.Seq[Client.Log]]
-    def getStorageAt( contractAddress : EthAddress, storageSlot : BigInt )(implicit ec : ExecutionContext )      : Future[BigInt]
-    def getTransactionCount( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[BigInt]
-    def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext )                     : Future[Option[Client.TransactionReceipt]]
-    def getBlockFilterChanges( filter : BlockFilter )( implicit ec : ExecutionContext )                          : Future[immutable.Seq[EthHash]]
-    def newBlockFilter()( implicit ec : ExecutionContext )                                                       : Future[BlockFilter]
-    def newLogFilter( query : Log.Filter.Query )( implicit ec : ExecutionContext )                               : Future[Log.Filter]
-    def sendRawTransaction( bytes : Seq[Byte] )( implicit ec : ExecutionContext )                                : Future[EthHash]
-    def sendSignedTransaction( signedTransaction : EthTransaction.Signed )( implicit ec : ExecutionContext )     : Future[EthHash]
-    def uninstallFilter( filter : Filter )( implicit ec : ExecutionContext )                                     : Future[Boolean]
+    def gasPrice()( implicit ec : ExecutionContext )                                                                                   : Future[BigInt]
+    def getBalance( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext )                                : Future[BigInt]
+    def getCode( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext )                                   : Future[immutable.Seq[Byte]]
+    def getCompilers()( implicit ec : ExecutionContext )                                                                               : Future[immutable.Set[String]]
+    def getLogs( query : Log.Filter.Query )( implicit ec : ExecutionContext )                                                          : Future[immutable.Seq[Client.Log]]
+    def getLogs( filter : Log.Filter )( implicit ec : ExecutionContext )                                                               : Future[immutable.Seq[Client.Log]]
+    def getNewLogs( filter : Log.Filter )( implicit ec : ExecutionContext )                                                            : Future[immutable.Seq[Client.Log]]
+    def getStorageAt( contractAddress : EthAddress, storageSlot : BigInt, blockNumber : BlockNumber )(implicit ec : ExecutionContext ) : Future[BigInt]
+    def getTransactionCount( address : EthAddress, blockNumber : BlockNumber )( implicit ec : ExecutionContext )                       : Future[BigInt]
+    def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext )                                           : Future[Option[Client.TransactionReceipt]]
+    def getBlockFilterChanges( filter : BlockFilter )( implicit ec : ExecutionContext )                                                : Future[immutable.Seq[EthHash]]
+    def newBlockFilter()( implicit ec : ExecutionContext )                                                                             : Future[BlockFilter]
+    def newLogFilter( query : Log.Filter.Query )( implicit ec : ExecutionContext )                                                     : Future[Log.Filter]
+    def sendRawTransaction( bytes : Seq[Byte] )( implicit ec : ExecutionContext )                                                      : Future[EthHash]
+    def sendSignedTransaction( signedTransaction : EthTransaction.Signed )( implicit ec : ExecutionContext )                           : Future[EthHash]
+    def uninstallFilter( filter : Filter )( implicit ec : ExecutionContext )                                                           : Future[Boolean]
   }
 
   def forExchanger( exchanger : Exchanger ) : Client = new Client.Implementation.Exchanger( exchanger )
@@ -362,8 +362,8 @@ object Client {
         def getNewLogs( filter : Log.Filter )( implicit ec : ExecutionContext ) : Future[immutable.Seq[Client.Log]] = {
           doExchange( "eth_getFilterChanges", Seq( JsString(filter.identifier) ) )( _.result.as[immutable.Seq[RawLog]].map( Client.Log.apply ) )
         }
-        def getStorageAt( contractAddress : EthAddress, storageSlot : BigInt )( implicit ec : ExecutionContext ) : Future[BigInt] = {
-          doExchange( "eth_getStorageAt", Seq( encodeAddress( contractAddress ), encodeQuantity( storageSlot ) ) )( extractBigInt )
+        def getStorageAt( contractAddress : EthAddress, storageSlot : BigInt, blockNumber : BlockNumber )( implicit ec : ExecutionContext ) : Future[BigInt] = {
+          doExchange( "eth_getStorageAt", Seq( encodeAddress( contractAddress ), encodeQuantity( storageSlot ), blockNumber.jsValue ) )( extractBigInt )
         }
 
         def getTransactionReceipt( transactionHash : EthHash )( implicit ec : ExecutionContext ) : Future[Option[Client.TransactionReceipt]] = {
