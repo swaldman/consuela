@@ -16,7 +16,7 @@ final object Abi {
     val noArgNoEffect = Constructor( Nil, false, "pure" )
     case class Parameter( name : String, `type` : String, internalType : String ) extends Abi.Parameter
   }
-  final case class Constructor( inputs : immutable.Seq[Function.Parameter], payable : Boolean, stateMutability : String )
+  final case class Constructor( inputs : immutable.Seq[Constructor.Parameter], payable : Boolean, stateMutability : String )
 
   final object Event {
     final case class Parameter( name : String, `type` : String, indexed : Boolean, internalType : String ) extends Abi.Parameter
@@ -40,9 +40,9 @@ final object Abi {
 
   private final object StandardSort {
     import Ordering.Implicits._
-    implicit val Ordering_FunctionParameter = Ordering.by( (fp : Function.Parameter) => (fp.name, fp.`type`) )
-    implicit val Ordering_ConstructorParameter = Ordering.by( (cp : Constructor.Parameter) => (cp.name, cp.`type`) )
-    implicit val Ordering_EventParameter = Ordering.by( (ep : Event.Parameter) => (ep.name, ep.`type`, ep.indexed) )
+    implicit val Ordering_FunctionParameter = Ordering.by( (fp : Function.Parameter) => (fp.name, fp.`type`, fp.internalType) )
+    implicit val Ordering_ConstructorParameter = Ordering.by( (cp : Constructor.Parameter) => (cp.name, cp.`type`, cp.internalType) )
+    implicit val Ordering_EventParameter = Ordering.by( (ep : Event.Parameter) => (ep.name, ep.`type`, ep.internalType, ep.indexed) )
     implicit val Ordering_Function = Ordering.by( (fcn : Function) => ( fcn.name, fcn.inputs, fcn.outputs, fcn.constant, fcn.payable, fcn.stateMutability ) )
     implicit val Ordering_Constructor = Ordering.by( (ctor : Constructor) => ( ctor.inputs, ctor.payable, ctor.stateMutability ) )
     implicit val Ordering_Event = Ordering.by( (ev : Event) => ( ev.name, ev.inputs, ev.anonymous ) )
@@ -57,7 +57,7 @@ final case class Abi(
   receive : Option[Abi.Receive],
   fallback : Option[Abi.Fallback]
 ) extends MaybeEmpty {
-  def isEmpty : Boolean = functions.isEmpty && events.isEmpty && constructors.isEmpty
+  def isEmpty : Boolean = functions.isEmpty && events.isEmpty && constructors.isEmpty && receive == null && fallback == null
   def withStandardSort : Abi = Abi.StandardSort.apply( this )
 }
 

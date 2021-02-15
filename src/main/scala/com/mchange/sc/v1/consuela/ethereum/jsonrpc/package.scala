@@ -11,6 +11,8 @@ import scala.util.control.NonFatal
 
 package object jsonrpc {
 
+  final class BadAbiException( message : String, cause : Throwable = null ) extends ConsuelaException( message, cause )
+
   private[jsonrpc] def encodeQuantity( quantity : BigInt )  : JsString = JsString( "0x" + quantity.toString(16) )
 
   private[jsonrpc] def decodeQuantity( encoded : JsString ) : BigInt = decodeQuantity( encoded.value )
