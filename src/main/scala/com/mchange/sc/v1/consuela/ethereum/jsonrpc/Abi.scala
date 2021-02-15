@@ -5,7 +5,7 @@ import play.api.libs.json._
 
 final object Abi {
   def apply( json : String ) : Abi = Json.parse( json ).as[Abi]
-  val empty = Abi( immutable.Seq.empty, immutable.Seq.empty, immutable.Seq.empty, None )
+  val empty = Abi( immutable.Seq.empty, immutable.Seq.empty, immutable.Seq.empty, None, None )
 
   final object Function {
     case class Parameter( name : String, `type` : String, internalType : String ) extends Abi.Parameter
@@ -22,6 +22,10 @@ final object Abi {
     final case class Parameter( name : String, `type` : String, indexed : Boolean, internalType : String ) extends Abi.Parameter
   }
   final case class Event( name : String, inputs : immutable.Seq[Event.Parameter], anonymous : Boolean )
+
+  final case class Receive( stateMutability : String ) {
+    require( stateMutability == "payable", s"Receive functions should always have stateMutability 'payable', found '${stateMutability}'." )
+  }
 
   final case class Fallback( payable : Boolean, stateMutability : String ) {
     def this( payable : Boolean ) = this( payable, if (payable) "payable" else "nonpayable" )
@@ -43,13 +47,14 @@ final object Abi {
     implicit val Ordering_Constructor = Ordering.by( (ctor : Constructor) => ( ctor.inputs, ctor.payable, ctor.stateMutability ) )
     implicit val Ordering_Event = Ordering.by( (ev : Event) => ( ev.name, ev.inputs, ev.anonymous ) )
 
-    def apply( abi : Abi ) : Abi = Abi( abi.functions.sorted, abi.events.sorted, abi.constructors.sorted, abi.fallback )
+    def apply( abi : Abi ) : Abi = Abi( abi.functions.sorted, abi.events.sorted, abi.constructors.sorted, abi.receive, abi.fallback )
   }
 }
 final case class Abi(
   functions : immutable.Seq[Abi.Function],
   events : immutable.Seq[Abi.Event],
   constructors : immutable.Seq[Abi.Constructor],
+  receive : Option[Abi.Receive],
   fallback : Option[Abi.Fallback]
 ) extends MaybeEmpty {
   def isEmpty : Boolean = functions.isEmpty && events.isEmpty && constructors.isEmpty

@@ -275,6 +275,7 @@ package object jsonrpc {
   implicit val AbiEventFormat                = rd( "name" -> None, "inputs" -> None, "anonymous" -> DefaultFalse, "type" -> None )                  ( Json.format[Abi.Event]                 )
   implicit val AbiConstructorParameterFormat = new RestrictTransformingFormat( Seq( restrictTransformAbiConstructorParameterValue ) )               ( Json.format[Abi.Constructor.Parameter] )
   implicit val AbiConstructorFormat          = rd( "inputs" -> None, "payable" -> DefaultTrue, "stateMutability" -> DefaultPayable, "type" -> None )( Json.format[Abi.Constructor]           )
+  implicit val AbiReceiveFormat              = rd( "stateMutability" -> DefaultPayable, "type" -> None )                                            ( Json.format[Abi.Receive]               )
   implicit val AbiFallbackFormat             = rd( "payable" -> DefaultTrue, "stateMutability" -> DefaultPayable, "type" -> None )                  ( Json.format[Abi.Fallback]              )
 
   implicit val UserMethodInfoFormat          = Json.format[Compilation.Doc.User.MethodInfo]
@@ -287,39 +288,45 @@ package object jsonrpc {
     def reads( jsv : JsValue ) : JsResult[Abi] = {
       jsv match {
         case jsa : JsArray => {
-          val ( functions, events, constructors, fallback, message ) = {
+          val ( functions, events, constructors, receive, fallback, message ) = {
             def accumulate(
-              tuple : Tuple5[List[JsValue],List[JsValue],List[JsValue],Option[JsValue],Option[String]],
+              tuple : Tuple6[List[JsValue],List[JsValue],List[JsValue],Option[JsValue],Option[JsValue],Option[String]],
               elem : JsValue
-            ) : Tuple5[List[JsValue],List[JsValue],List[JsValue],Option[JsValue],Option[String]] = {
-              val ( fs, es, cs, fb, m ) = tuple
+            ) : Tuple6[List[JsValue],List[JsValue],List[JsValue],Option[JsValue],Option[JsValue],Option[String]] = {
+              val ( fs, es, cs, r, fb, m ) = tuple
               m match {
-                case Some( _ ) => ( fs, es, cs, fb, m )
+                case Some( _ ) => ( fs, es, cs, r, fb, m )
                 case None      => {
                   try {
                     (elem \ "type").get.as[String] match {
-                      case "function"    => ( elem :: fs, es, cs, fb, m )
-                      case "event"       => ( fs, elem :: es, cs, fb, m )
-                      case "constructor" => ( fs, es, elem :: cs, fb, m )
-                      case "fallback"    => {
-                        fb match {
-                          case Some( _ ) => ( fs, es, cs, fb, Some( s"Two fallbacks found, only one permitted: $jsa" ) )
-                          case None      => ( fs, es, cs, Some( elem ), m )
+                      case "function"    => ( elem :: fs, es, cs, r, fb, m )
+                      case "event"       => ( fs, elem :: es, cs, r, fb, m )
+                      case "constructor" => ( fs, es, elem :: cs, r, fb, m )
+                      case "receive"    => {
+                        r match {
+                          case Some( _ ) => ( fs, es, cs, r, fb, Some( s"Two receives found, only one permitted: $jsa" ) )
+                          case None      => ( fs, es, cs, Some( elem ), fb, m )
                         }
                       }
-                      case unexpected    => ( fs, es, cs, fb, Some( s"Unexpected element type in ABI: $unexpected" ) )
+                      case "fallback"    => {
+                        fb match {
+                          case Some( _ ) => ( fs, es, cs, r, fb, Some( s"Two fallbacks found, only one permitted: $jsa" ) )
+                          case None      => ( fs, es, cs, r, Some( elem ), m )
+                        }
+                      }
+                      case unexpected    => ( fs, es, cs, r, fb, Some( s"Unexpected element type in ABI: $unexpected" ) )
                     }
                   } catch {
-                    case nse : NoSuchElementException => ( elem :: fs, es, cs, fb, m ) // spec says default is function
+                    case nse : NoSuchElementException => ( elem :: fs, es, cs, r, fb, m ) // spec says default is function
                   }
                 }
               }
             }
-            jsa.value.foldLeft( ( Nil, Nil, Nil, None, None ) : Tuple5[List[JsValue],List[JsValue],List[JsValue],Option[JsValue],Option[String]] ) ( accumulate )
+            jsa.value.foldLeft( ( Nil, Nil, Nil, None, None, None ) : Tuple6[List[JsValue],List[JsValue],List[JsValue],Option[JsValue],Option[JsValue],Option[String]] ) ( accumulate )
           }
           message match {
             case None => {
-              val abi = Abi( functions.reverse.map( _.as[Abi.Function] ), events.reverse.map( _.as[Abi.Event] ), constructors.reverse.map( _.as[Abi.Constructor] ), fallback.map( _.as[Abi.Fallback] ) )
+              val abi = Abi( functions.reverse.map( _.as[Abi.Function] ), events.reverse.map( _.as[Abi.Event] ), constructors.reverse.map( _.as[Abi.Constructor] ), receive.map( _.as[Abi.Receive] ), fallback.map( _.as[Abi.Fallback] ) )
               JsSuccess( abi )
             }
             case Some( words ) => JsError( words )
@@ -332,9 +339,10 @@ package object jsonrpc {
       def makeFunction( abif : Abi.Function )       = Json.toJson(abif).asInstanceOf[JsObject] + ( "type", JsString("function") )
       def makeEvent( abie : Abi.Event )             = Json.toJson(abie).asInstanceOf[JsObject] + ( "type", JsString("event") )
       def makeConstructor( abic : Abi.Constructor ) = Json.toJson(abic).asInstanceOf[JsObject] + ( "type", JsString("constructor") )
+      def makeReceive( abir : Abi.Receive )         = Json.toJson(abir).asInstanceOf[JsObject] + ( "type", JsString("receive") )
       def makeFallback( abifb : Abi.Fallback )      = Json.toJson(abifb).asInstanceOf[JsObject] + ( "type", JsString("fallback") )
       JsArray(
-        immutable.Seq.empty[JsValue] ++ definition.functions.map( makeFunction ) ++ definition.events.map( makeEvent ) ++ definition.constructors.map( makeConstructor ) ++ definition.fallback.toSeq.map( makeFallback )
+        immutable.Seq.empty[JsValue] ++ definition.functions.map( makeFunction ) ++ definition.events.map( makeEvent ) ++ definition.constructors.map( makeConstructor ) ++ definition.receive.toSeq.map( makeReceive )++ definition.fallback.toSeq.map( makeFallback )
       )
     }
   }
