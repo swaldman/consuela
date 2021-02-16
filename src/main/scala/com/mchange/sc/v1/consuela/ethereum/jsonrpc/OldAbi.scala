@@ -4,7 +4,7 @@ import scala.collection._
 import play.api.libs.json._
 import com.mchange.sc.v2.playjson._
 
-final object TightAbi {
+final object OldAbi {
 
   /*
    *  The defaults here are meant to fill in for attributes not emitted by earlier versions of the solidity compiler.
@@ -160,18 +160,18 @@ final object TightAbi {
 
   private def rd[T]( spec : (String,Option[JsValue])* )( inner : Format[T] ) : Format[T] = new RestrictingDefaultingFormat( spec.toMap )( inner )
 
-  implicit val TightAbiFunctionParameterFormat    = new RestrictTransformingFormat( Seq( restrictTransformAbiFunctionParameterValue ) )                  ( Json.format[TightAbi.Function.Parameter]    )
-  implicit val TightAbiFunctionFormat             = new RestrictTransformingFormat( Seq( restrictTransformAbiFunctionValue ) )                           ( Json.format[TightAbi.Function]              )
-  implicit val TightAbiEventParameterFormat       = new RestrictTransformingFormat( Seq( restrictTransformAbiEventParameterValue ) )                     ( Json.format[TightAbi.Event.Parameter]       )
-  implicit val TightAbiEventFormat                = rd( "name" -> None, "inputs" -> None, "anonymous" -> DefaultFalse, "type" -> None )                  ( Json.format[TightAbi.Event]                 )
-  implicit val TightAbiConstructorParameterFormat = new RestrictTransformingFormat( Seq( restrictTransformAbiConstructorParameterValue ) )               ( Json.format[TightAbi.Constructor.Parameter] )
-  implicit val TightAbiConstructorFormat          = rd( "inputs" -> None, "payable" -> DefaultTrue, "stateMutability" -> DefaultPayable, "type" -> None )( Json.format[TightAbi.Constructor]           )
-  implicit val TightAbiReceiveFormat              = rd( "stateMutability" -> DefaultPayable, "type" -> None )                                            ( Json.format[TightAbi.Receive]               )
-  implicit val TightAbiFallbackFormat             = rd( "payable" -> DefaultTrue, "stateMutability" -> DefaultPayable, "type" -> None )                  ( Json.format[TightAbi.Fallback]              )
+  implicit val OldAbiFunctionParameterFormat    = new RestrictTransformingFormat( Seq( restrictTransformAbiFunctionParameterValue ) )                  ( Json.format[OldAbi.Function.Parameter]    )
+  implicit val OldAbiFunctionFormat             = new RestrictTransformingFormat( Seq( restrictTransformAbiFunctionValue ) )                           ( Json.format[OldAbi.Function]              )
+  implicit val OldAbiEventParameterFormat       = new RestrictTransformingFormat( Seq( restrictTransformAbiEventParameterValue ) )                     ( Json.format[OldAbi.Event.Parameter]       )
+  implicit val OldAbiEventFormat                = rd( "name" -> None, "inputs" -> None, "anonymous" -> DefaultFalse, "type" -> None )                  ( Json.format[OldAbi.Event]                 )
+  implicit val OldAbiConstructorParameterFormat = new RestrictTransformingFormat( Seq( restrictTransformAbiConstructorParameterValue ) )               ( Json.format[OldAbi.Constructor.Parameter] )
+  implicit val OldAbiConstructorFormat          = rd( "inputs" -> None, "payable" -> DefaultTrue, "stateMutability" -> DefaultPayable, "type" -> None )( Json.format[OldAbi.Constructor]           )
+  implicit val OldAbiReceiveFormat              = rd( "stateMutability" -> DefaultPayable, "type" -> None )                                            ( Json.format[OldAbi.Receive]               )
+  implicit val OldAbiFallbackFormat             = rd( "payable" -> DefaultTrue, "stateMutability" -> DefaultPayable, "type" -> None )                  ( Json.format[OldAbi.Fallback]              )
 
   // these we'll have to do ourselves
-  implicit val TightAbiFormat : Format[TightAbi] = new Format[TightAbi] {
-    def reads( jsv : JsValue ) : JsResult[TightAbi] = {
+  implicit val OldAbiFormat : Format[OldAbi] = new Format[OldAbi] {
+    def reads( jsv : JsValue ) : JsResult[OldAbi] = {
       jsv match {
         case jsa : JsArray => {
           val ( functions, events, constructors, receive, fallback, message ) = {
@@ -212,7 +212,7 @@ final object TightAbi {
           }
           message match {
             case None => {
-              val abi = TightAbi( functions.reverse.map( _.as[TightAbi.Function] ), events.reverse.map( _.as[TightAbi.Event] ), constructors.reverse.map( _.as[TightAbi.Constructor] ), receive.map( _.as[TightAbi.Receive] ), fallback.map( _.as[TightAbi.Fallback] ) )
+              val abi = OldAbi( functions.reverse.map( _.as[OldAbi.Function] ), events.reverse.map( _.as[OldAbi.Event] ), constructors.reverse.map( _.as[OldAbi.Constructor] ), receive.map( _.as[OldAbi.Receive] ), fallback.map( _.as[OldAbi.Fallback] ) )
               JsSuccess( abi )
             }
             case Some( words ) => JsError( words )
@@ -221,12 +221,12 @@ final object TightAbi {
         case _ => JsError( s"abi is expected as a JsArray, found ${jsv}" )
       }
     }
-    def writes( definition : TightAbi ) : JsValue = {
-      def makeFunction( abif : TightAbi.Function )       = Json.toJson(abif).asInstanceOf[JsObject] + ( "type", JsString("function") )
-      def makeEvent( abie : TightAbi.Event )             = Json.toJson(abie).asInstanceOf[JsObject] + ( "type", JsString("event") )
-      def makeConstructor( abic : TightAbi.Constructor ) = Json.toJson(abic).asInstanceOf[JsObject] + ( "type", JsString("constructor") )
-      def makeReceive( abir : TightAbi.Receive )         = Json.toJson(abir).asInstanceOf[JsObject] + ( "type", JsString("receive") )
-      def makeFallback( abifb : TightAbi.Fallback )      = Json.toJson(abifb).asInstanceOf[JsObject] + ( "type", JsString("fallback") )
+    def writes( definition : OldAbi ) : JsValue = {
+      def makeFunction( abif : OldAbi.Function )       = Json.toJson(abif).asInstanceOf[JsObject] + ( "type", JsString("function") )
+      def makeEvent( abie : OldAbi.Event )             = Json.toJson(abie).asInstanceOf[JsObject] + ( "type", JsString("event") )
+      def makeConstructor( abic : OldAbi.Constructor ) = Json.toJson(abic).asInstanceOf[JsObject] + ( "type", JsString("constructor") )
+      def makeReceive( abir : OldAbi.Receive )         = Json.toJson(abir).asInstanceOf[JsObject] + ( "type", JsString("receive") )
+      def makeFallback( abifb : OldAbi.Fallback )      = Json.toJson(abifb).asInstanceOf[JsObject] + ( "type", JsString("fallback") )
       JsArray(
         immutable.Seq.empty[JsValue] ++ definition.functions.map( makeFunction ) ++ definition.events.map( makeEvent ) ++ definition.constructors.map( makeConstructor ) ++ definition.receive.toSeq.map( makeReceive )++ definition.fallback.toSeq.map( makeFallback )
       )
@@ -234,22 +234,22 @@ final object TightAbi {
   }
 
 
-  def apply( json : String ) : TightAbi = Json.parse( json ).as[TightAbi]
-  val empty = TightAbi( immutable.Seq.empty, immutable.Seq.empty, immutable.Seq.empty, None, None )
+  def apply( json : String ) : OldAbi = Json.parse( json ).as[OldAbi]
+  val empty = OldAbi( immutable.Seq.empty, immutable.Seq.empty, immutable.Seq.empty, None, None )
 
   final object Function {
-    case class Parameter( name : String, `type` : String, internalType : String ) extends TightAbi.Parameter
+    case class Parameter( name : String, `type` : String, internalType : String ) extends OldAbi.Parameter
   }
   final case class Function( name : String, inputs : immutable.Seq[Function.Parameter], outputs : immutable.Seq[Function.Parameter], constant : Boolean, payable : Boolean, stateMutability : String )
 
   final object Constructor {
     val noArgNoEffect = Constructor( Nil, false, "pure" )
-    case class Parameter( name : String, `type` : String, internalType : String ) extends TightAbi.Parameter
+    case class Parameter( name : String, `type` : String, internalType : String ) extends OldAbi.Parameter
   }
   final case class Constructor( inputs : immutable.Seq[Constructor.Parameter], payable : Boolean, stateMutability : String )
 
   final object Event {
-    final case class Parameter( name : String, `type` : String, indexed : Boolean, internalType : String ) extends TightAbi.Parameter
+    final case class Parameter( name : String, `type` : String, indexed : Boolean, internalType : String ) extends OldAbi.Parameter
   }
   final case class Event( name : String, inputs : immutable.Seq[Event.Parameter], anonymous : Boolean )
 
@@ -277,17 +277,17 @@ final object TightAbi {
     implicit val Ordering_Constructor = Ordering.by( (ctor : Constructor) => ( ctor.inputs, ctor.payable, ctor.stateMutability ) )
     implicit val Ordering_Event = Ordering.by( (ev : Event) => ( ev.name, ev.inputs, ev.anonymous ) )
 
-    def apply( abi : TightAbi ) : TightAbi = TightAbi( abi.functions.sorted, abi.events.sorted, abi.constructors.sorted, abi.receive, abi.fallback )
+    def apply( abi : OldAbi ) : OldAbi = OldAbi( abi.functions.sorted, abi.events.sorted, abi.constructors.sorted, abi.receive, abi.fallback )
   }
 }
-final case class TightAbi(
-  functions : immutable.Seq[TightAbi.Function],
-  events : immutable.Seq[TightAbi.Event],
-  constructors : immutable.Seq[TightAbi.Constructor],
-  receive : Option[TightAbi.Receive],
-  fallback : Option[TightAbi.Fallback]
+final case class OldAbi(
+  functions : immutable.Seq[OldAbi.Function],
+  events : immutable.Seq[OldAbi.Event],
+  constructors : immutable.Seq[OldAbi.Constructor],
+  receive : Option[OldAbi.Receive],
+  fallback : Option[OldAbi.Fallback]
 ) extends MaybeEmpty {
   def isEmpty : Boolean = functions.isEmpty && events.isEmpty && constructors.isEmpty && receive == null && fallback == null
-  def withStandardSort : TightAbi = TightAbi.StandardSort.apply( this )
+  def withStandardSort : OldAbi = OldAbi.StandardSort.apply( this )
 }
 
