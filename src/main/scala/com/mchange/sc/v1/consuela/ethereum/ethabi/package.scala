@@ -130,7 +130,7 @@ package object ethabi {
 
     def constructorAsFunction( ctor : Abi.Constructor ) : Abi.Function = {
       val inputs = ctor.inputs.map( ci => Abi.Function.Parameter( name=ci.name, `type`= ci.`type`, internalType=ci.internalType ) )
-      Abi.Function( "<bullshit-arbitrary-constructor-name>", inputs, Nil, false, false, "nonpayable" )
+      Abi.Function( "<bullshit-arbitrary-constructor-name>", inputs, Nil, "nonpayable" )
     }
 
     if ( abi.constructors.isEmpty ) {

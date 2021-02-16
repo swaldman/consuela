@@ -69,10 +69,10 @@ object Generator {
 
   private def expandArgs( inputs : immutable.Seq[Abi.Function.Parameter] ) : immutable.Seq[Abi.Function.Parameter] = {
     inputs.zip( Stream.from(1) ).map { case ( param, index ) =>
-      if ( param.name.length > 0 ) param else param.copy( name=s"arg$index" )
+      if ( param.name.length > 0 ) param else param.withName( s"arg$index" )
     }
   }
-  private def fillMissingInputArgs( fcn : Abi.Function ) = fcn.copy( inputs = expandArgs( fcn.inputs ) )
+  private def fillMissingInputArgs( fcn : Abi.Function ) = fcn.withInputs( expandArgs( fcn.inputs ) )
 
   private val ExtraArgListArgs = immutable.Set("sender")
 
@@ -86,10 +86,10 @@ object Generator {
       val avoidSet = (origNameSet - param.name) ++ synthNameSet
       var goodName = param.name
       while ( avoidSet( goodName ) ) goodName = s"_${goodName}"
-      param.copy( name = goodName )
+      param.withName( goodName )
     }
 
-    filledFunction.copy( inputs = filledFunction.inputs.map( uniquify ) )
+    filledFunction.withInputs( filledFunction.inputs.map( uniquify ) )
   }
 
   private def eventsNoEvents[T]( abi : Abi )( ifEvents : =>T, ifNoEvents : =>T ) = {
