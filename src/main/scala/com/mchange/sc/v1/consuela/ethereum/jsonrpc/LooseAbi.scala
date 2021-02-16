@@ -13,6 +13,18 @@ final object LooseAbi {
   implicit val Ordering_Constructor          = Ordering.by( (ctor : Constructor)         => (ctor.inputs, ctor.payable, ctor.stateMutability)                                   )
   implicit val Ordering_Event                = Ordering.by( (ev : Event)                 => (ev.name, ev.inputs, ev.anonymous)                                                  )
 
+  implicit val LooseAbiFormat : Format[LooseAbi] = new Format[LooseAbi] {
+    def reads( jsv : JsValue ) : JsResult[LooseAbi] = {
+      try {
+        JsSuccess( LooseAbi(jsv) )
+      }
+      catch {
+        case bae : BadAbiException => JsError( bae.getMessage() )
+      }
+    }
+    def writes( abi : LooseAbi ) : JsValue = abi.json
+  }
+
   def apply( json : JsValue ) : LooseAbi = {
     json match {
       case jsa : JsArray => apply( jsa )
@@ -163,7 +175,7 @@ final object LooseAbi {
 
     lazy val sorted = {
       val sortedInputs  = JsArray( inputs.map( _.sorted ).sorted.map( _.json ) )
-      Function( JsObject( ( SortedMap.empty[String,JsValue] ++ json.value + ("inputs" -> sortedInputs) ).toSeq ) )
+      Constructor( JsObject( ( SortedMap.empty[String,JsValue] ++ json.value + ("inputs" -> sortedInputs) ).toSeq ) )
     }
   }
   final object Event {
@@ -183,7 +195,7 @@ final object LooseAbi {
 
     lazy val sorted = {
       val sortedInputs  = JsArray( inputs.map( _.sorted ).sorted.map( _.json ) )
-      Function( JsObject( ( SortedMap.empty[String,JsValue] ++ json.value + ("inputs" -> sortedInputs) ).toSeq ) )
+      Event( JsObject( ( SortedMap.empty[String,JsValue] ++ json.value + ("inputs" -> sortedInputs) ).toSeq ) )
     }
   }
   final case class Receive( json : JsObject ) {
@@ -196,6 +208,8 @@ final object LooseAbi {
     private val _stateMutability : Option[String]  = json.value.get("stateMutability").map( _.as[String] )
 
     lazy val ( payable, stateMutability ) = resolvePayableStateMutability( json, "fallback",  _payable, _stateMutability )
+
+    lazy val sorted = Fallback( JsObject( ( SortedMap.empty[String,JsValue] ++ json.value ).toSeq ) )
   }
 
   private def resolvePayableStateMutability( json : JsObject, in : String,  _payable : Option[Boolean], _stateMutability : Option[String] ) : ( Boolean, Option[String] ) = {
@@ -300,8 +314,8 @@ case class LooseAbi( json : JsArray ) extends MaybeEmpty {
           functions.map( _.sorted ).sorted.map( _.json )    ++
           events.map( _.sorted).sorted.map( _.json )        ++
           constructors.map( _.sorted ).sorted.map( _.json ) ++
-          receive.map( _.json )                             ++
-          fallback.map( _.json )                            ++
+          receive.map( _.sorted.json )                      ++
+          fallback.map( _.sorted.json )                     ++
           unexpected
       )
     )
