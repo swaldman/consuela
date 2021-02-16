@@ -27,23 +27,23 @@ final object LooseAbi {
 
   final object Function {
     case class Parameter( json : JsObject ) {
-      lazy val name         : String         = requireRetrieve( json, "name", "function parameter" ).as[String]
-      lazy val `type`       : String         = requireRetrieve( json, "type", "function parameter" ).as[String]
-      lazy val internalType : Option[String] = json.value.get( "internalType" ).map( _.as[String] )
+      val name         : String         = requireRetrieve( json, "name", "function parameter" ).as[String]
+      val `type`       : String         = requireRetrieve( json, "type", "function parameter" ).as[String]
+      val internalType : Option[String] = json.value.get( "internalType" ).map( _.as[String] )
 
       lazy val sorted = Function.Parameter( JsObject( SortedMap.empty[String,JsValue] ++ json.value ) )
     }
   }
   final case class Function( json : JsObject ) {
-    lazy val name            : String                            = requireRetrieve( json, "name", "function" ).as[String]
-    lazy val inputs          : immutable.Seq[Function.Parameter] = requireRetrieve( json, "inputs", "function" ).as[JsArray].value.map( jsv => Function.Parameter( jsv.as[JsObject] ) ).toList
-    lazy val outputs         : immutable.Seq[Function.Parameter] = requireRetrieve( json, "outputs", "function" ).as[JsArray].value.map( jsv => Function.Parameter( jsv.as[JsObject] ) ).toList
+    val name            : String                            = requireRetrieve( json, "name", "function" ).as[String]
+    val inputs          : immutable.Seq[Function.Parameter] = requireRetrieve( json, "inputs", "function" ).as[JsArray].value.map( jsv => Function.Parameter( jsv.as[JsObject] ) ).toList
+    val outputs         : immutable.Seq[Function.Parameter] = requireRetrieve( json, "outputs", "function" ).as[JsArray].value.map( jsv => Function.Parameter( jsv.as[JsObject] ) ).toList
 
-    private lazy val _constant        : Option[Boolean]                   = json.value.get( "constant" ).map( _.as[Boolean] )
-    private lazy val _payable         : Option[Boolean]                   = json.value.get( "payable" ).map( _.as[Boolean] )
-    private lazy val _stateMutability : Option[String]                    = json.value.get( "stateMutability" ).map( _.as[String] )
+    private val _constant        : Option[Boolean]                   = json.value.get( "constant" ).map( _.as[Boolean] )
+    private val _payable         : Option[Boolean]                   = json.value.get( "payable" ).map( _.as[Boolean] )
+    private val _stateMutability : Option[String]                    = json.value.get( "stateMutability" ).map( _.as[String] )
 
-    lazy val ( constant, payable, stateMutability ) = resolveStateMutabilities
+    val ( constant, payable, stateMutability ) = resolveStateMutabilities
 
     def resolveStateMutabilities : (Boolean, Boolean, Option[String] ) = {
       ( _constant, _payable, _stateMutability ) match {
@@ -146,20 +146,20 @@ final object LooseAbi {
   final object Constructor {
     val noArgNoEffect : Constructor = this.apply( JsObject( "inputs" -> JsArray.empty :: "stateMutability" -> JsString("nonpayable") :: Nil ) )
     final case class Parameter( json : JsObject ) {
-      lazy val name         : String         = requireRetrieve( json, "name", "constructor parameter" ).as[String]
-      lazy val `type`       : String         = requireRetrieve( json, "type", "constructor parameter" ).as[String]
-      lazy val internalType : Option[String] = json.value.get( "internalType" ).map( _.as[String] )
+      val name         : String         = requireRetrieve( json, "name", "constructor parameter" ).as[String]
+      val `type`       : String         = requireRetrieve( json, "type", "constructor parameter" ).as[String]
+      val internalType : Option[String] = json.value.get( "internalType" ).map( _.as[String] )
 
       lazy val sorted = Constructor.Parameter( JsObject( ( SortedMap.empty[String,JsValue] ++ json.value ).toSeq ) )
     }
   }
   final case class Constructor( json : JsObject ) {
-    lazy val inputs          : immutable.Seq[Constructor.Parameter] = requireRetrieve( json, "inputs", "constructor" ).as[JsArray].value.map( jsv => Constructor.Parameter( jsv.as[JsObject] ) ).toList
+    val inputs          : immutable.Seq[Constructor.Parameter] = requireRetrieve( json, "inputs", "constructor" ).as[JsArray].value.map( jsv => Constructor.Parameter( jsv.as[JsObject] ) ).toList
 
-    lazy val _payable         : Option[Boolean] = json.value.get("payable").map( _.as[Boolean] )
-    lazy val _stateMutability : Option[String]  = json.value.get("stateMutability").map( _.as[String] )
+    private val _payable         : Option[Boolean] = json.value.get("payable").map( _.as[Boolean] )
+    private val _stateMutability : Option[String]  = json.value.get("stateMutability").map( _.as[String] )
 
-    lazy val ( payable, stateMutability ) = resolvePayableStateMutability( json,  "constructor", _payable, _stateMutability )
+    val ( payable, stateMutability ) = resolvePayableStateMutability( json,  "constructor", _payable, _stateMutability )
 
     lazy val sorted = {
       val sortedInputs  = JsArray( inputs.map( _.sorted ).sorted.map( _.json ) )
@@ -168,18 +168,18 @@ final object LooseAbi {
   }
   final object Event {
     final case class Parameter( json : JsObject ) {
-      lazy val name         : String         = requireRetrieve( json, "name", "event parameter" ).as[String]
-      lazy val `type`       : String         = requireRetrieve( json, "type", "event parameter" ).as[String]
-      lazy val indexed      : Boolean        = json.value.get("indexed").map( _.as[Boolean] ).getOrElse( false )
-      lazy val internalType : Option[String] = json.value.get("internalType").map( _.as[String] )
+      val name         : String         = requireRetrieve( json, "name", "event parameter" ).as[String]
+      val `type`       : String         = requireRetrieve( json, "type", "event parameter" ).as[String]
+      val indexed      : Boolean        = json.value.get("indexed").map( _.as[Boolean] ).getOrElse( false )
+      val internalType : Option[String] = json.value.get("internalType").map( _.as[String] )
 
       lazy val sorted = Event.Parameter( JsObject( ( SortedMap.empty[String,JsValue] ++ json.value ).toSeq ) )
     }
   }
   final case class Event( json : JsObject ) {
-    lazy val name      : String                         = requireRetrieve( json, "name", "event" ).as[String]
-    lazy val inputs    : immutable.Seq[Event.Parameter] = requireRetrieve( json, "inputs", "event" ).as[JsArray].value.map( jsv => Event.Parameter( jsv.as[JsObject] ) ).toList
-    lazy val anonymous : Boolean                        = json.value.get("anonymous").map( _.as[Boolean] ).getOrElse(false) // defaults to false because very old ABIs omitted, anonymous events had not yet been defined 
+    val name      : String                         = requireRetrieve( json, "name", "event" ).as[String]
+    val inputs    : immutable.Seq[Event.Parameter] = requireRetrieve( json, "inputs", "event" ).as[JsArray].value.map( jsv => Event.Parameter( jsv.as[JsObject] ) ).toList
+    val anonymous : Boolean                        = json.value.get("anonymous").map( _.as[Boolean] ).getOrElse(false) // defaults to false because very old ABIs omitted, anonymous events had not yet been defined 
 
     lazy val sorted = {
       val sortedInputs  = JsArray( inputs.map( _.sorted ).sorted.map( _.json ) )
@@ -187,13 +187,13 @@ final object LooseAbi {
     }
   }
   final case class Receive( json : JsObject ) {
-    lazy val stateMutability : Option[String] = json.value.get("stateMutability").map( _.as[String] )
+    val stateMutability : Option[String] = json.value.get("stateMutability").map( _.as[String] )
 
     lazy val sorted = Receive( JsObject( ( SortedMap.empty[String,JsValue] ++ json.value ).toSeq ) )
   }
   final case class Fallback( json : JsObject ) {
-    lazy val _payable         : Option[Boolean] = json.value.get("payable").map( _.as[Boolean] )
-    lazy val _stateMutability : Option[String]  = json.value.get("stateMutability").map( _.as[String] )
+    private val _payable         : Option[Boolean] = json.value.get("payable").map( _.as[Boolean] )
+    private val _stateMutability : Option[String]  = json.value.get("stateMutability").map( _.as[String] )
 
     lazy val ( payable, stateMutability ) = resolvePayableStateMutability( json, "fallback",  _payable, _stateMutability )
   }
@@ -276,7 +276,7 @@ case class LooseAbi( json : JsArray ) extends MaybeEmpty {
     }
   }
 
-  lazy val ( functions, events, constructors, receive, fallback, unexpected ) = {
+  val ( functions, events, constructors, receive, fallback, unexpected ) = {
     import LooseAbi._
     val ( f, e, c, r, fb, u ) = segregateByType( json.value, 0, Nil, Nil, Nil, Nil, Nil, Nil )
     if ( r.size > 1  ) throw new BadAbiException( s"Only one 'receive' element permitted, ${r.size} found: ${JsArray(r.toVector)}"    )
