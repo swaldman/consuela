@@ -5,6 +5,10 @@ import scala.collection._
 import play.api.libs.json._
 
 final object Abi {
+
+  // older versions of the Play JSON library don't support JsArray.empty
+  private val EmptyJsArray = JsArray( Vector.empty )
+
   import Ordering.Implicits._
   implicit val Ordering_FunctionParameter    = Ordering.by( (fp : Function.Parameter)    => (fp.name, fp.`type`, fp.internalType)                                               )
   implicit val Ordering_ConstructorParameter = Ordering.by( (cp : Constructor.Parameter) => (cp.name, cp.`type`, cp.internalType)                                               )
@@ -33,7 +37,7 @@ final object Abi {
   }
   def apply( json : String ) : Abi = apply( Json.parse( json ) )
 
-  lazy val empty : Abi = Abi( JsArray.empty )
+  lazy val empty : Abi = Abi( EmptyJsArray )
 
   private final def requireRetrieve( json : JsObject, key : String, in : String ) : JsValue = json.value.getOrElse( key, throw new BadAbiException( s"No 'name' field in ${in} JSON: ${json}" ) )
 
@@ -169,7 +173,7 @@ final object Abi {
     }
   }
   final object Constructor {
-    val noArgNoEffect : Constructor = this.apply( JsObject( "inputs" -> JsArray.empty :: "stateMutability" -> JsString("nonpayable") :: Nil ) )
+    val noArgNoEffect : Constructor = this.apply( JsObject( "inputs" -> EmptyJsArray :: "stateMutability" -> JsString("nonpayable") :: Nil ) )
     final object Parameter {
       def apply( name : String, `type` : String, internalType : Option[String] ) : Parameter = Parameter( JsObject( "name"->JsString(name) :: "type"->JsString(`type`) :: internalType.toList.map( it => "internalType" -> JsString(it) ) ) )
     }
@@ -312,7 +316,7 @@ case class Abi( json : JsArray ) extends MaybeEmpty {
 
   val ( functions, events, constructors, receive, fallback, unexpected ) = {
     import Abi._
-    val ( f, e, c, r, fb, u ) = segregateByType( json.value, 0, Nil, Nil, Nil, Nil, Nil, Nil )
+    val ( f, e, c, r, fb, u ) = segregateByType( json.value.toVector, 0, Nil, Nil, Nil, Nil, Nil, Nil )
     if ( r.size > 1  ) throw new BadAbiException( s"Only one 'receive' element permitted, ${r.size} found: ${JsArray(r.toVector)}"    )
     if ( fb.size > 1 ) throw new BadAbiException( s"Only one 'fallback' element permitted, ${fb.size} found: ${JsArray(fb.toVector)}" )
 
