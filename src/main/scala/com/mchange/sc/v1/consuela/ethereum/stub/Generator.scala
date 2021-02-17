@@ -67,6 +67,8 @@ object Generator {
 
   private val AnonymousEventName = "Anonymous"
 
+  private val TQ = "\"\"\""
+
   private def expandArgs( inputs : immutable.Seq[Abi.Function.Parameter] ) : immutable.Seq[Abi.Function.Parameter] = {
     inputs.zip( Stream.from(1) ).map { case ( param, index ) =>
       if ( param.name.length > 0 ) param else param.withName( s"arg$index" )
@@ -768,7 +770,7 @@ object Generator {
     if (!event.anonymous) {
       iw.println( "val abiEvent = solidityEvent.abiEvent" )
       iw.println( "val solidityEventSignatureTopic = SolidityEvent.computeIdentifierTopic( abiEvent )" )
-      iw.println( s"""require( solidityEventSignatureTopic == ${anyEventSignatureTopicValName( overloadedEvents, event )}, s"${resolvedEventName} represents the following ABI event: '${event}' SolidityEvent '$${solidityEvent}' represents an ABI event that does not match." )""" )
+      iw.println( s"""require( solidityEventSignatureTopic == ${anyEventSignatureTopicValName( overloadedEvents, event )}, s${TQ}${resolvedEventName} represents the following ABI event: '${event}' SolidityEvent '$${solidityEvent}' represents an ABI event that does not match.${TQ} )""" )
     }
     iw.println( "this.apply (" )
     iw.upIndent()
