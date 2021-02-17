@@ -32,7 +32,7 @@ publishTo := {
   }
 }
 
-val restrictedTypeVersion = "0.0.6"
+val restrictedTypeVersion = "0.0.7-SNAPSHOT"
 val failableVersion       = "0.0.5"
 
 libraryDependencies ++= Seq(
@@ -43,8 +43,8 @@ libraryDependencies ++= Seq(
   "com.mchange"             %% "yinyang"                         % "0.0.2",
   "com.mchange"             %% "mchange-commons-scala"           % "0.4.16",
   "com.mchange"             %% "literal"                         % "0.1.0",
-  "com.mchange"             %% "mchange-play-json-util"          % "0.0.4",
-  "com.mchange"             %% "jsonrpc-client"                  % "0.0.9",
+  "com.mchange"             %% "mchange-play-json-util"          % "0.0.5-SNAPSHOT",
+  "com.mchange"             %% "jsonrpc-client"                  % "0.0.10-SNAPSHOT",
   "org.reactivestreams"     %  "reactive-streams"                % "1.0.1",
   "com.typesafe"            %  "config"                          % "1.3.0",
   "org.bouncycastle"        %  "bcprov-jdk15on"                  % "1.66",
