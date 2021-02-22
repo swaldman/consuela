@@ -277,18 +277,19 @@ object Client {
     final class Exchanger( exchanger : com.mchange.sc.v2.jsonrpc.Exchanger ) extends Client {
       def extractBigInt( success : Response.Success ) : BigInt = decodeQuantity( success.result.as[String] )
 
-      def responseHandler[T]( onSuccess : Response.Success => T ) : Response => T = { result =>
+      def responseHandler[T]( methodDescriptor : String )( onSuccess : Response.Success => T ) : Response => T = { result =>
         result match {
           case Yang( success ) => onSuccess( success )
-          case Yin( error )    => error.vomit
+          case Yin( error )    => throw ClientException(methodDescriptor, error.error)
         }
       }
 
       override def toString() : String = s"jsonrpc.Client.Implementation.Exchanger( ${exchanger} )"
 
       private def doExchange[T]( methodName : String, params : Seq[JsValue] )( successHandler : Response.Success => T )( implicit ec : ExecutionContext ) : Future[T] = {
-        TRACE.log( s"methodName = ${methodName}; params = ${params}" )
-        exchanger.exchange( methodName, JsArray( params ) ).map( responseHandler( successHandler ) )
+        val methodDescriptor = s"methodName = ${methodName}; params = ${params}"
+        TRACE.log( methodDescriptor )
+        exchanger.exchange( methodName, JsArray( params ) ).map( responseHandler( methodDescriptor )( successHandler ) )
       }
 
       final object ExchangerEth extends Client.eth {
@@ -384,8 +385,8 @@ object Client {
           // geth 1.8.0 returns an undocumented error response, rather than a null success, on an unknown or pending transaction hash
           // we recover from this case. See https://github.com/ethereum/go-ethereum/issues/16092#issuecomment-366871447
 
-          raw recover { case e : JsonrpcException =>
-            if ( e.code == -32000 && e.message == "unknown transaction" ) None else throw e
+          raw recover { case e : ClientException =>
+            if ( e.errorCode == Some(-32000) && e.errorMessage == Some("unknown transaction") ) None else throw e
           }
         }
         def sendRawTransaction( bytes : Seq[Byte] )( implicit ec : ExecutionContext ) : Future[EthHash] = {

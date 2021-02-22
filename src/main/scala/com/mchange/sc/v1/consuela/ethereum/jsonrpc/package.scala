@@ -3,15 +3,89 @@ package com.mchange.sc.v1.consuela.ethereum
 import play.api.libs.json._
 
 import com.mchange.sc.v1.consuela._
+import com.mchange.sc.v1.consuela.ethereum.ethabi.{decodeFunctionCall,Decoded}
 import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact32,Unsigned256}
 import com.mchange.sc.v2.playjson._
+import com.mchange.sc.v3.failable._
+
+import com.mchange.sc.v2.jsonrpc.{Response => JsonrpcResponse}
 
 import scala.collection._
 import scala.util.control.NonFatal
 
 package object jsonrpc {
 
+  // DON'T define JsonrpcException here, it would shadow the Exception of the same name in JsonRpcClient
+
   final class BadAbiException( message : String, cause : Throwable = null ) extends ConsuelaException( message, cause )
+
+  final object ClientException {
+
+    final val ShadowAbi = Abi("""[{"name":"Error","inputs":[{"name":"message","type":"string"}],"outputs":[],"type":"function","stateMutability":"pure"}]""")
+
+    def apply( methodDescriptor : String, report : JsonrpcResponse.Error.Report ) : ClientException = {
+      val errorCode    = Some( report.code )
+      val errorMessage = Some( report.message )
+      val errorData    = report.data
+
+      val ( errorDataParseFailureMessage, decodedRevertMessage ) = {
+
+        def extractRevertMessage( fcn : Abi.Function, values : immutable.Seq[Decoded.Value] ) : Failable[String] = Failable.flatCreate {
+          if (fcn.name != "Error") {
+            Failable.fail(s"Decoded unexpected function from errorData: ${fcn}", includeStackTrace=false)
+          }
+          else {
+            val messages = values.filter( _.parameter.name == "message" )
+            require( messages.size == 1, s"Expected precisely one 'message' parameter, found ${messages.size}: " + messages.mkString(",") )
+            Failable.succeed( messages.head.stringRep )
+          }
+        }
+
+        errorData match {
+          case Some( jss : JsString ) => {
+            val f_message = {
+              for {
+                hexBytes        <- Failable( jss.value.decodeHexAsSeq )
+                ( fcn, values ) <- decodeFunctionCall( ShadowAbi, hexBytes )
+                message         <- extractRevertMessage( fcn, values )
+              }
+              yield {
+                message
+              }
+            }
+            f_message match {
+              case Succeeded( message ) => ( None, Some( message ) )
+              case Failed( source )     => ( Some( source.toString ), None )
+            }
+          }
+          case Some( other ) => {
+            ( Some(s"Expected JSON String as error data, found: ${other}"), None ) 
+          }
+          case None => {
+            ( None, None )
+          }
+        }
+      }
+      def optionalItem[T]( name : String, item : Option[T] ) = "; " + item.fold("")(i => name + "->" + i)
+      val message = {
+        decodedRevertMessage.fold("")(m => s"Revert, with message: ${m} -- ") +
+        s"Received jsonrpc error response from ${methodDescriptor}"           +
+        optionalItem("errorCode", errorCode)                                  +
+        optionalItem("errorMessage", errorMessage)                            +
+        optionalItem("errorData", errorData)                                  +
+        optionalItem("errorDataParseFailureMessage", errorDataParseFailureMessage)
+      }
+      new ClientException( errorCode, errorMessage, errorData, decodedRevertMessage, message )
+    }
+  }
+  final case class ClientException private (
+    val errorCode : Option[Int] = None,
+    val errorMessage : Option[String] = None,
+    val errorData : Option[JsValue] = None,
+    val decodedRevertMessage : Option[String],
+    val message : String,
+    val cause : Throwable = null
+  ) extends ConsuelaException( message, cause )
 
   private[jsonrpc] def encodeQuantity( quantity : BigInt )  : JsString = JsString( "0x" + quantity.toString(16) )
 
