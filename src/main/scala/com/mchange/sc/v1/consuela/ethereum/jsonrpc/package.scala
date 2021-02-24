@@ -41,11 +41,23 @@ package object jsonrpc {
           }
         }
 
+        def toHexBytes( s : String ) : Failable[immutable.Seq[Byte]] = Failable.flatCreate {
+          if ( s.isEmpty ) {
+            Failable.fail( "(Error data was an empty string.)" )
+          }
+          else {
+            Failable( s.decodeHexAsSeq ).recoverWith {
+              case Failed( nfe : NumberFormatException ) => Failable.fail( s"(Error data '${s}' was not a decodable hex string.)" )
+              case other                                 => other
+            }
+          }
+        }
+
         errorData match {
           case Some( jss : JsString ) => {
             val f_message = {
               for {
-                hexBytes        <- Failable( jss.value.decodeHexAsSeq )
+                hexBytes        <- toHexBytes( jss.value )
                 ( fcn, values ) <- decodeFunctionCall( ShadowAbi, hexBytes )
                 message         <- extractRevertMessage( fcn, values )
               }
@@ -66,15 +78,12 @@ package object jsonrpc {
           }
         }
       }
-      def optionalItem[T]( name : String, item : Option[T] ) = "; " + item.fold("")(i => name + "->" + i)
-      val message = {
-        decodedRevertMessage.fold("")(m => s"Revert, with message: ${m} -- ") +
-        s"Received jsonrpc error response from ${methodDescriptor}"           +
-        optionalItem("errorCode", errorCode)                                  +
-        optionalItem("errorMessage", errorMessage)                            +
-        optionalItem("errorData", errorData)                                  +
-        optionalItem("errorDataParseFailureMessage", errorDataParseFailureMessage)
-      }
+      def optionalItem[T]( name : String, item : Option[T] ) = item.map(i => name + "=" + i)
+      val basePart = errorMessage.getOrElse("(No error message)")
+      val items = optionalItem("decodedRevertMessage", decodedRevertMessage) :: optionalItem( "errorCode", errorCode) :: optionalItem( "rawErrorData", errorData ) :: optionalItem("errorDataParseFailureMessage", errorDataParseFailureMessage) :: Nil
+      val itemsPart = " -- " + items.collect{ case Some(s) => s }.mkString("; ")
+      val message = basePart + itemsPart + s"; ${methodDescriptor}"
+
       new ClientException( errorCode, errorMessage, errorData, decodedRevertMessage, message )
     }
   }
