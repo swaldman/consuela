@@ -167,8 +167,8 @@ final object Abi {
 
 
     lazy val sorted = {
-      val sortedInputs  = JsArray( inputs.map( _.sorted ).sorted.map( _.json ) )
-      val sortedOutputs = JsArray( outputs.map( _.sorted ).sorted.map( _.json ) )
+      val sortedInputs  = JsArray( inputs.map( _.sorted.json ) )  // we can sort the items of parameters, BUT NOT THE ORDERING OF PARAMETERS
+      val sortedOutputs = JsArray( outputs.map( _.sorted.json ) ) // we can sort the items of parameters, BUT NOT THE ORDERING OF PARAMETERS
       Function( JsObject( ( SortedMap.empty[String,JsValue] ++ json.value + ("inputs" -> sortedInputs) + ("outputs" -> sortedOutputs) ).toSeq ) )
     }
   }
@@ -196,7 +196,7 @@ final object Abi {
     val ( payable, stateMutability ) = resolvePayableStateMutability( json,  "constructor", _payable, _stateMutability )
 
     lazy val sorted = {
-      val sortedInputs  = JsArray( inputs.map( _.sorted ).sorted.map( _.json ) )
+      val sortedInputs  = JsArray( inputs.map( _.sorted.json ) ) // we can sort the items of parameters, BUT NOT THE ORDERING OF PARAMETERS
       Constructor( JsObject( ( SortedMap.empty[String,JsValue] ++ json.value + ("inputs" -> sortedInputs) ).toSeq ) )
     }
   }
@@ -218,7 +218,7 @@ final object Abi {
     val anonymous : Boolean                        = json.value.get("anonymous").map( _.as[Boolean] ).getOrElse(false) // defaults to false because very old ABIs omitted, anonymous events had not yet been defined 
 
     lazy val sorted = {
-      val sortedInputs  = JsArray( inputs.map( _.sorted ).sorted.map( _.json ) )
+      val sortedInputs  = JsArray( inputs.map( _.sorted.json ) ) // we can sort the items of parameters, BUT NOT THE ORDERING OF PARAMETERS
       Event( JsObject( ( SortedMap.empty[String,JsValue] ++ json.value + ("inputs" -> sortedInputs) ).toSeq ) )
     }
   }
