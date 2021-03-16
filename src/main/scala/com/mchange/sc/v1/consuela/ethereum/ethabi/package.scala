@@ -244,6 +244,7 @@ package object ethabi {
   
 
   private [ethabi] val TypeAliases : Map[String,String] = Map (
+    "byte"   -> "bytes1",
     "uint"   -> "uint256",
     "int"    -> "int256",
     "fixed"  -> "fixed128x128",
