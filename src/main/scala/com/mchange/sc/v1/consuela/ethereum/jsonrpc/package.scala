@@ -23,6 +23,29 @@ package object jsonrpc {
 
     final val ShadowAbi = Abi("""[{"name":"Error","inputs":[{"name":"message","type":"string"}],"outputs":[],"type":"function","stateMutability":"pure"}]""")
 
+    // some clients do things like "Reverted. 0x..."
+    private val PrefixedHexBytes = """.*?(?:0x)?(\p{XDigit}+)""".r
+
+    def toErrorHexBytes( s : String ) : Failable[immutable.Seq[Byte]] = Failable.flatCreate {
+      def giveUp( extra : String = "") = Failable.fail( s"(Error data '${s}' was not a decodable hex string.${extra})" )
+
+      if ( s.isEmpty ) {
+        Failable.fail( "(Error data was an empty string.)" )
+      }
+      else {
+        Failable( s.decodeHexAsSeq ).recoverWith {
+          case Failed( nfe : NumberFormatException ) => {
+            s match {
+              case PrefixedHexBytes( hexPart ) if (hexPart.length % 2 == 0) => Failable( hexPart.decodeHexAsSeq )
+              case PrefixedHexBytes( hexPart )                              => giveUp(s" The tail of the string has an odd number of hex digits.")
+              case _                                                        => giveUp()
+            }
+          }
+          case other => other
+        }
+      }
+    }
+
     def apply( methodDescriptor : String, report : JsonrpcResponse.Error.Report ) : ClientException = {
       val errorCode    = Some( report.code )
       val errorMessage = Some( report.message )
@@ -41,23 +64,11 @@ package object jsonrpc {
           }
         }
 
-        def toHexBytes( s : String ) : Failable[immutable.Seq[Byte]] = Failable.flatCreate {
-          if ( s.isEmpty ) {
-            Failable.fail( "(Error data was an empty string.)" )
-          }
-          else {
-            Failable( s.decodeHexAsSeq ).recoverWith {
-              case Failed( nfe : NumberFormatException ) => Failable.fail( s"(Error data '${s}' was not a decodable hex string.)" )
-              case other                                 => other
-            }
-          }
-        }
-
         errorData match {
           case Some( jss : JsString ) => {
             val f_message = {
               for {
-                hexBytes        <- toHexBytes( jss.value )
+                hexBytes        <- toErrorHexBytes( jss.value )
                 ( fcn, values ) <- decodeFunctionCall( ShadowAbi, hexBytes )
                 message         <- extractRevertMessage( fcn, values )
               }
