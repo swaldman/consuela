@@ -15,6 +15,10 @@ import scala.io.Codec
 import com.mchange.sc.v1.log.MLevel._
 
 package object ethabi {
+  class EthabiException( message : String, cause : Throwable = null ) extends ConsuelaException( message, cause )
+
+  final class NoSuchIdentifierException( identifier : immutable.Seq[Byte], abi : Abi, cause : Throwable = null ) extends EthabiException( s"Function identifier '${identifier.hex0x}' not found in given ABI.", cause ) 
+
   implicit lazy val logger = mlogger( this )
 
   val IdentifierLength = 4
@@ -153,7 +157,7 @@ package object ethabi {
       }.toMap
     }
     val ( identifier, paramBytes ) = encodedMessage.splitAt( IdentifierLength )
-    val fcn = identifiersMap( identifier )
+    val fcn = identifiersMap.getOrElse( identifier, throw new NoSuchIdentifierException( identifier, abi ) )
 
     val f_decoded = decodeParameters( fcn.inputs, paramBytes )
     f_decoded.map( values => ( fcn, values ) )
