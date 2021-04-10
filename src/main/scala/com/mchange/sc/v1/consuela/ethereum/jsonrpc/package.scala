@@ -21,7 +21,9 @@ package object jsonrpc {
 
   final object ClientException {
 
-    final val ShadowAbi = Abi("""[{"name":"Error","inputs":[{"name":"message","type":"string"}],"outputs":[],"type":"function","stateMutability":"pure"}]""")
+    private final val ShadowAbi = {
+      Abi("""[{"name":"Error","inputs":[{"name":"message","type":"string"}],"outputs":[],"type":"function","stateMutability":"pure"},{"name":"Panic","inputs":[{"name":"code","type":"uint256"}],"outputs":[],"type":"function","stateMutability":"pure"}]""")
+    }
 
     // some clients do things like "Reverted. 0x..."
     private val PrefixedHexBytes = """.*?(?:0x)?(\p{XDigit}+)""".r
@@ -51,58 +53,72 @@ package object jsonrpc {
       val errorMessage = Some( report.message )
       val errorData    = report.data
 
-      val ( errorDataParseFailureMessage, decodedRevertMessage ) = {
+      val ( errorDataParseFailure, decodedRevertMessage, decodedPanicCode ) = {
 
-        def extractRevertMessage( fcn : Abi.Function, values : immutable.Seq[Decoded.Value] ) : Failable[String] = Failable.flatCreate {
-          if (fcn.name != "Error") {
-            Failable.fail(s"Decoded unexpected function from errorData: ${fcn}", includeStackTrace=false)
-          }
-          else {
+        def extractRevertInfo( fcn : Abi.Function, values : immutable.Seq[Decoded.Value] ) : Failable[Either[String,BigInt]] = Failable.flatCreate {
+          if (fcn.name == "Error") {
             val messages = values.filter( _.parameter.name == "message" )
             require( messages.size == 1, s"Expected precisely one 'message' parameter, found ${messages.size}: " + messages.mkString(",") )
-            Failable.succeed( messages.head.stringRep )
+            Failable.succeed( Left(messages.head.stringRep) )
+          }
+          else if (fcn.name == "Panic") {
+            val codes = values.filter( _.parameter.name == "code" )
+            require( codes.size == 1, s"Expected precisely one 'code' parameter, found ${codes.size}: " + codes.mkString(",") )
+            Failable.succeed( Right(codes.head.value.asInstanceOf[BigInt]) )
+          }
+          else {
+            Failable.fail(s"Decoded unexpected function from errorData: ${fcn}", includeStackTrace=false)
           }
         }
 
         errorData match {
           case Some( jss : JsString ) => {
-            val f_message = {
+            val f_either = {
               for {
                 hexBytes        <- toErrorHexBytes( jss.value )
                 ( fcn, values ) <- decodeFunctionCall( ShadowAbi, hexBytes )
-                message         <- extractRevertMessage( fcn, values )
+                either          <- extractRevertInfo( fcn, values )
               }
               yield {
-                message
+                either
               }
             }
-            f_message match {
-              case Succeeded( message ) => ( None, Some( message ) )
-              case Failed( source )     => ( Some( source.toString ), None )
+            f_either match {
+              case Succeeded( Left(message) ) => ( None, Some( message ), None )
+              case Succeeded( Right(code) )   => ( None, None, Some(code) )
+              case Failed( source )     => ( Some( source.toString ), None, None )
             }
           }
           case Some( other ) => {
-            ( Some(s"Expected JSON String as error data, found: ${other}"), None ) 
+            ( Some(s"Expected JSON String as error data, found: ${other}"), None, None ) 
           }
           case None => {
-            ( None, None )
+            ( None, None, None )
           }
         }
       }
       def optionalItem[T]( name : String, item : Option[T] ) = item.map(i => name + "=" + i)
       val basePart = errorMessage.getOrElse("(No error message)")
-      val items = optionalItem("decodedRevertMessage", decodedRevertMessage) :: optionalItem( "errorCode", errorCode) :: optionalItem( "rawErrorData", errorData ) :: optionalItem("errorDataParseFailureMessage", errorDataParseFailureMessage) :: Nil
+      val items = {
+        optionalItem("decodedRevertMessage", decodedRevertMessage) ::
+        optionalItem("decodedPanicCode", decodedPanicCode.map(c=>"0x"+c.toString(16))) ::
+        optionalItem("errorCode", errorCode) ::
+        optionalItem("rawErrorData", errorData) ::
+        optionalItem("errorDataParseFailure", errorDataParseFailure) ::
+        Nil
+      }
       val itemsPart = " -- " + items.collect{ case Some(s) => s }.mkString("; ")
       val message = basePart + itemsPart + s"; ${methodDescriptor}"
 
-      new ClientException( errorCode, errorMessage, errorData, decodedRevertMessage, message )
+      new ClientException( errorCode, errorMessage, errorData, decodedRevertMessage, decodedPanicCode, message )
     }
   }
-  final case class ClientException private (
+  final class ClientException private (
     val errorCode : Option[Int] = None,
     val errorMessage : Option[String] = None,
     val errorData : Option[JsValue] = None,
     val decodedRevertMessage : Option[String],
+    val decodedPanicCode : Option[BigInt],
     val message : String,
     val cause : Throwable = null
   ) extends ConsuelaException( message, cause )
