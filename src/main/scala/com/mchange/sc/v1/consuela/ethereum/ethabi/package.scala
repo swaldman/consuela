@@ -129,26 +129,40 @@ package object ethabi {
    * - we generate a fake "function" as the constructor,
    * - use callDataForAbiFunction(...)
    * - then drop the meaningles identifier
-   */ 
+   * 
+   * TODO: Refactor call data extraction in terms of Abi.Inputs rather than only functions, 
+   *       Refactor handling of both constructors and functions.
+   */
+
+  @deprecated("Use constructorCallDataFromStringArgs", "consuela v0.5.0")
   def constructorCallData( args : Seq[String], abi : Abi ) : Failable[immutable.Seq[Byte]] = {
-
-    def constructorAsFunction( ctor : Abi.Constructor ) : Abi.Function = {
-      val inputs = ctor.inputs.map( ci => Abi.Function.Parameter( name=ci.name, `type`= ci.`type`, internalType=ci.internalType ) )
-      Abi.Function( "<bullshit-arbitrary-constructor-name>", inputs, Nil, "nonpayable" )
-    }
-
+    constructorCallDataFromStringArgs( args : Seq[String], abi : Abi )
+  }
+  def constructorCallDataFromStringArgs( args : Seq[String], abi : Abi ) : Failable[immutable.Seq[Byte]] = {
+    constructorCallDataFromSource( callDataForAbiFunctionFromStringArgs( args, _ ), abi )
+  }
+  def constructorCallDataFromEncoderRepresentations( reps : Seq[Any], abi : Abi ) : Failable[immutable.Seq[Byte]] = {
+    constructorCallDataFromSource( callDataForAbiFunctionFromEncoderRepresentations( reps, _ ), abi )
+  }
+  private def constructorCallDataFromSource( source : Abi.Function=>Failable[immutable.Seq[Byte]], abi : Abi ) = {
     if ( abi.constructors.isEmpty ) {
       Failable.succeed( Nil )
     } else {
       for {
         _                  <- (abi.constructors.length == 1).toFailable(s"The ABI contains multiple constructors, but constructor overloading is not currently supported (or legal in solidity): ${abi.constructors})")
-        ctorAsFunction     <- Failable.succeed( constructorAsFunction( abi.constructors.head ) )
-        asFunctionCallData <- callDataForAbiFunctionFromStringArgs( args, ctorAsFunction )
+        ctorAsFunction     <- Failable.succeed( constructorAsBullshitFunction( abi.constructors.head ) )
+        asFunctionCallData <- source(ctorAsFunction)
       } yield {
         asFunctionCallData.drop( IdentifierLength )
       }
     }
   }
+  private def constructorAsBullshitFunction( ctor : Abi.Constructor ) : Abi.Function = {
+    val inputs = ctor.inputs.map( ci => Abi.Function.Parameter( name=ci.name, `type`= ci.`type`, internalType=ci.internalType ) )
+    Abi.Function( "<bullshit-arbitrary-constructor-name>", inputs, Nil, "nonpayable" )
+  }
+
+  /* end constructor ugliness */
 
   def decodeFunctionCall( abi : Abi, encodedMessage : immutable.Seq[Byte] ) : Failable[ ( Abi.Function, immutable.Seq[Decoded.Value] ) ] = Failable {
     val identifiersMap = {

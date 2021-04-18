@@ -9,6 +9,10 @@ final object Abi {
   // older versions of the Play JSON library don't support JsArray.empty
   private val EmptyJsArray = JsArray( Vector.empty )
 
+  trait Inputs {
+    def inputs : immutable.Seq[Abi.Parameter]
+  }
+
   import Ordering.Implicits._
   implicit val Ordering_FunctionParameter    = Ordering.by( (fp : Function.Parameter)    => (fp.name, fp.`type`, fp.internalType)                                               )
   implicit val Ordering_ConstructorParameter = Ordering.by( (cp : Constructor.Parameter) => (cp.name, cp.`type`, cp.internalType)                                               )
@@ -61,7 +65,7 @@ final object Abi {
       apply( JsObject( "name"->JsString(name) :: "inputs"->JsArray( inputs.map( _.json ).toVector ) :: "outputs"->JsArray( outputs.map( _.json ).toVector ) :: "stateMutability" -> JsString(stateMutability) :: Nil ) )
     }
   }
-  final case class Function( json : JsObject ) {
+  final case class Function( json : JsObject ) extends Inputs {
     val name            : String                            = requireRetrieve( json, "name", "function" ).as[String]
     val inputs          : immutable.Seq[Function.Parameter] = requireRetrieve( json, "inputs", "function" ).as[JsArray].value.map( jsv => Function.Parameter( jsv.as[JsObject] ) ).toList
     val outputs         : immutable.Seq[Function.Parameter] = requireRetrieve( json, "outputs", "function" ).as[JsArray].value.map( jsv => Function.Parameter( jsv.as[JsObject] ) ).toList
@@ -187,7 +191,7 @@ final object Abi {
       def withName( name : String ) : Parameter = Parameter( JsObject( json.value + ("name" -> JsString(name) ) ) )
     }
   }
-  final case class Constructor( json : JsObject ) {
+  final case class Constructor( json : JsObject ) extends Inputs {
     val inputs          : immutable.Seq[Constructor.Parameter] = requireRetrieve( json, "inputs", "constructor" ).as[JsArray].value.map( jsv => Constructor.Parameter( jsv.as[JsObject] ) ).toList
 
     private val _payable         : Option[Boolean] = json.value.get("payable").map( _.as[Boolean] )
@@ -212,7 +216,7 @@ final object Abi {
       def withName( name : String ) : Parameter = Parameter( JsObject( json.value + ("name" -> JsString(name) ) ) )
     }
   }
-  final case class Event( json : JsObject ) {
+  final case class Event( json : JsObject ) extends Inputs {
     val name      : String                         = requireRetrieve( json, "name", "event" ).as[String]
     val inputs    : immutable.Seq[Event.Parameter] = requireRetrieve( json, "inputs", "event" ).as[JsArray].value.map( jsv => Event.Parameter( jsv.as[JsObject] ) ).toList
     val anonymous : Boolean                        = json.value.get("anonymous").map( _.as[Boolean] ).getOrElse(false) // defaults to false because very old ABIs omitted, anonymous events had not yet been defined 

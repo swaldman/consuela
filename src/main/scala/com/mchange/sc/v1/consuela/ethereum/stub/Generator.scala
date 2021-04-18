@@ -6,6 +6,7 @@ import com.mchange.sc.v1.consuela.ethereum.ethabi.SolidityEvent
 import com.mchange.sc.v1.consuela.ethereum.jsonrpc.Abi
 
 import scala.collection._
+import scala.util.control.NonFatal
 
 import java.io.{File,StringWriter}
 
@@ -226,7 +227,7 @@ object Generator {
     }
   }
 
-  def regenerateStubClasses( destDir : File, baseClassName : String, fullyQualifiedPackageName : String, abi : Abi, abiTimestamp : Option[Long] ) : immutable.Set[Regenerated] = {
+  def regenerateStubClasses( destDir : File, baseClassName : String, fullyQualifiedPackageName : String, abi : Abi, abiTimestamp : Option[Long], mbBytecode : Option[String] = None ) : immutable.Set[Regenerated] = {
     def f( className : String ) : File = new File( destDir, className + ".scala" )
     def regenerated( targetFile : File, generator : => Generated ) : Regenerated = if ( shouldRegenerate( targetFile, abiTimestamp ) ) Regenerated.updated( targetFile, generator ) else Regenerated.unchanged( targetFile )
 
@@ -235,15 +236,15 @@ object Generator {
     val syncStubFile = f( baseClassName )
 
     immutable.Set(
-      regenerated( stubUtilitiesFile, generateStubUtilities( baseClassName, abi, fullyQualifiedPackageName ) ),
+      regenerated( stubUtilitiesFile, generateStubUtilities( baseClassName, abi, fullyQualifiedPackageName, mbBytecode ) ),
       regenerated( asyncStubFile, generateContractStub( baseClassName, abi, true, fullyQualifiedPackageName ) ),
       regenerated( syncStubFile, generateContractStub( baseClassName, abi, false, fullyQualifiedPackageName ) )
     )
   }
 
-  def generateStubClasses( baseClassName : String, abi : Abi, fullyQualifiedPackageName : String ) : immutable.Set[Generated] = {
+  def generateStubClasses( baseClassName : String, abi : Abi, fullyQualifiedPackageName : String, mbBytecode : Option[String] = None ) : immutable.Set[Generated] = {
     immutable.Set(
-      generateStubUtilities( baseClassName, abi, fullyQualifiedPackageName ),
+      generateStubUtilities( baseClassName, abi, fullyQualifiedPackageName, mbBytecode ),
       generateContractStub( baseClassName, abi, true, fullyQualifiedPackageName ),
       generateContractStub( baseClassName, abi, false, fullyQualifiedPackageName )
     )
@@ -262,7 +263,7 @@ object Generator {
     iw.println( comment )
   }
 
-  private def generateStubUtilities( baseClassName : String, abi : Abi, fullyQualifiedPackageName : String ) : Generated = {
+  private def generateStubUtilities( baseClassName : String, abi : Abi, fullyQualifiedPackageName : String, mbBytecode : Option[String] ) : Generated = {
 
     val className = stubUtilitiesClassName( baseClassName )
 
@@ -298,11 +299,57 @@ object Generator {
         generateTopLevelEventAndFactory( className, overloadedEvents, abi, iw )
       }
 
+      mbBytecode.foreach { bytecode =>
+        try bytecode.decodeHexAsSeq
+        catch {
+          case NonFatal(t) => throw new StubException( s"Could not decode bytecode '${bytecode}' as hex.", t )
+        }
+
+        iw.println( s"""val DeployBytecode = "${bytecode}".decodeHexAsSeq""" )
+        iw.println()
+        generateDeployMethods( abi, iw )
+      }
+
       iw.downIndent()
       iw.println(  "}" )
     }
 
     Generated( className, sw.toString )
+  }
+
+  private def generateDeployMethods( abi : Abi, iw : IndentedWriter ) : Unit = {
+    val ctor = {
+      val allCtors = abi.constructors
+      allCtors.size match {
+        case 0 => Abi.Constructor.noArgNoEffect
+        case 1 => allCtors.head
+        case _ => {
+          WARNING.log("Generation of stub contract deployers for ABIs with (currently forbidden) multiple constructors is not supported. Skipping.")
+          return;
+        }
+      }
+    }
+
+    val mainCtorSynthetics = ctorSyntheticArgSet( ctor )
+    val overloadCtorSynthetics = overloadArgSets( mainCtorSynthetics )
+    val ctorParams = ctor.inputs.map( scalaSignatureParam )
+    iw.println("def asyncDeployNoStub( " + ctorParams.mkString("",", ",", ") + mainCtorSynthetics.map( _.inSignature).mkString(", ") + " )( implicit sender : stub.Sender.Signing, scontext : stub.Context) : Future[EthHash] = {")
+    iw.upIndent()
+    iw.println(  """implicit val icontext = scontext.icontext""" )
+    if ( ctor.payable ) {
+      iw.println( """val valueInWei = payment.amountInWei""" )
+    }
+    else {
+      iw.println( """val valueInWei = stub.Zero256""" )
+    }
+    iw.println(  """val forceNonce = nonce.toOption""" )
+    iw.println(  """val signer = sender.findSigner()""" ) 
+    iw.println( s"""val reps = immutable.Seq[Any]( ${ctor.inputs.map( toRepLambda ).mkString(", ")} )""" )
+    iw.println(  """val callData = ethabi.constructorCallDaraFromEncoderRepresentations( reps, abi ).get""" )
+    iw.println(  """val init = DeployBytecode ++ callData""" )
+    iw.println(  """jsonrpc.Invoker.transaction.createContract( signer, valueInWei, init, forceNonce )""" )
+    iw.downIndent()
+    iw.println("}")
   }
 
   private def asyncClassName( baseClassName : String ) : String = {
@@ -860,13 +907,13 @@ object Generator {
     iw.println()
   }
 
-  private def writeFunction( className : String, stubUtilitiesClassName : String, fcn : Abi.Function, constantSection : Boolean, async : Boolean, syntheticArgs : immutable.SortedSet[SyntheticArg], iw : IndentedWriter ) : Unit = {
-    def toRepLambda( param : Abi.Function.Parameter ) : String = {
-      val tpe = param.`type`
-      val helper = forceHelper( tpe )
-      helper.inConversionGen( param.name )
-    }
+  private def toRepLambda( param : Abi.Parameter ) : String = {
+    val tpe = param.`type`
+    val helper = forceHelper( tpe )
+    helper.inConversionGen( param.name )
+  }
 
+  private def writeFunction( className : String, stubUtilitiesClassName : String, fcn : Abi.Function, constantSection : Boolean, async : Boolean, syntheticArgs : immutable.SortedSet[SyntheticArg], iw : IndentedWriter ) : Unit = {
     iw.println( functionSignature( fcn, constantSection, async, syntheticArgs ) + " = {" )
     iw.upIndent()
 
@@ -939,6 +986,14 @@ object Generator {
       case ( false, false ) => immutable.SortedSet( SyntheticArg.Nonce )
     }
   }
+
+  private def ctorSyntheticArgSet( ctor : Abi.Constructor ) : immutable.SortedSet[SyntheticArg] = {
+    ctor.payable match {
+      case true  => immutable.SortedSet( SyntheticArg.Payment, SyntheticArg.Nonce )
+      case false => immutable.SortedSet( SyntheticArg.Nonce )
+    }
+  }
+  
 
   private def overloadArgSets( mainArgSet : immutable.SortedSet[SyntheticArg] ) : immutable.Set[immutable.SortedSet[SyntheticArg]] = mainArgSet.subsets.toSet - mainArgSet
 
