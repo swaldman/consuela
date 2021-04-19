@@ -55,7 +55,7 @@ object Generator {
     "com.mchange.sc.v1.consuela.ethereum.ethabi.Encoder.ArrayRep",
     "com.mchange.sc.v1.consuela.ethereum.ethabi.{Decoded,SolidityEvent}",
     "com.mchange.sc.v1.consuela.ethereum.stub",
-    "com.mchange.sc.v1.consuela.ethereum.stub.{sol,Nonce,Payment,UnexpectedEventException}",
+    "com.mchange.sc.v1.consuela.ethereum.stub.{sol,Nonce,Payment,StubException,UnexpectedEventException}",
     "com.mchange.sc.v1.consuela.ethereum.stub.Utilities._",
     "com.mchange.sc.v1.consuela.ethereum.jsonrpc",
     "com.mchange.sc.v1.consuela.ethereum.jsonrpc.{Abi,Client}",
@@ -199,7 +199,7 @@ object Generator {
     iw.println( ")( efactory, poller, scheduler )")
     iw.downIndent()
     iw.println( "}")
-    iw.print( s"new ${className}( implicitly[EthAddress.Source[T]].toEthAddress( contractAddress ) )( scontext )" )
+    iw.println( s"new ${className}( implicitly[EthAddress.Source[T]].toEthAddress( contractAddress ) )( scontext )" )
     iw.downIndent()
     iw.println( "}" )
   }
@@ -237,16 +237,16 @@ object Generator {
 
     immutable.Set(
       regenerated( stubUtilitiesFile, generateStubUtilities( baseClassName, abi, fullyQualifiedPackageName, mbBytecode ) ),
-      regenerated( asyncStubFile, generateContractStub( baseClassName, abi, true, fullyQualifiedPackageName ) ),
-      regenerated( syncStubFile, generateContractStub( baseClassName, abi, false, fullyQualifiedPackageName ) )
+      regenerated( asyncStubFile, generateContractStub( baseClassName, abi, true, fullyQualifiedPackageName, mbBytecode ) ),
+      regenerated( syncStubFile, generateContractStub( baseClassName, abi, false, fullyQualifiedPackageName, mbBytecode ) )
     )
   }
 
   def generateStubClasses( baseClassName : String, abi : Abi, fullyQualifiedPackageName : String, mbBytecode : Option[String] = None ) : immutable.Set[Generated] = {
     immutable.Set(
       generateStubUtilities( baseClassName, abi, fullyQualifiedPackageName, mbBytecode ),
-      generateContractStub( baseClassName, abi, true, fullyQualifiedPackageName ),
-      generateContractStub( baseClassName, abi, false, fullyQualifiedPackageName )
+      generateContractStub( baseClassName, abi, true, fullyQualifiedPackageName, mbBytecode ),
+      generateContractStub( baseClassName, abi, false, fullyQualifiedPackageName, mbBytecode )
     )
   }
 
@@ -261,6 +261,12 @@ object Generator {
           | */""".stripMargin
     }
     iw.println( comment )
+  }
+
+  private def ifBytecode[T](mbBytecode : Option[String])( op : String => T ) : Option[T] = {
+    mbBytecode.flatMap { bytecode =>
+      if ( bytecode.length > 0 ) Some( op(bytecode) ) else None
+    }
   }
 
   private def generateStubUtilities( baseClassName : String, abi : Abi, fullyQualifiedPackageName : String, mbBytecode : Option[String] ) : Generated = {
@@ -299,7 +305,7 @@ object Generator {
         generateTopLevelEventAndFactory( className, overloadedEvents, abi, iw )
       }
 
-      mbBytecode.foreach { bytecode =>
+      ifBytecode(mbBytecode) { bytecode =>
         try bytecode.decodeHexAsSeq
         catch {
           case NonFatal(t) => throw new StubException( s"Could not decode bytecode '${bytecode}' as hex.", t )
@@ -307,7 +313,7 @@ object Generator {
 
         iw.println( s"""val DeployBytecode = "${bytecode}".decodeHexAsSeq""" )
         iw.println()
-        generateDeployMethods( abi, iw )
+        generateUtilityDeployMethods( abi, iw )
       }
 
       iw.downIndent()
@@ -317,47 +323,119 @@ object Generator {
     Generated( className, sw.toString )
   }
 
-  private def generateDeployMethods( abi : Abi, iw : IndentedWriter ) : Unit = {
-    val ctor = {
-      val allCtors = abi.constructors
-      allCtors.size match {
-        case 0 => Abi.Constructor.noArgNoEffect
-        case 1 => allCtors.head
-        case _ => {
-          WARNING.log("Generation of stub contract deployers for ABIs with (currently forbidden) multiple constructors is not supported. Skipping.")
-          return;
-        }
+  private def extractConstructor( abi : Abi ) : Option[Abi.Constructor] = {
+    val allCtors = abi.constructors
+    allCtors.size match {
+      case 0 => Some(Abi.Constructor.noArgNoEffect)
+      case 1 => Some(allCtors.head)
+      case _ => {
+        WARNING.log("Generation of stub contract deployers for ABIs with (currently forbidden) multiple constructors is not supported. Skipping.")
+        None
       }
     }
-
-    val mainCtorSynthetics = ctorSyntheticArgSet( ctor )
-    val overloadCtorSynthetics = overloadArgSets( mainCtorSynthetics )
-    val ctorParams = ctor.inputs.map( scalaSignatureParam )
-    iw.println("def asyncDeployNoStub( " + ctorParams.mkString("",", ",", ") + mainCtorSynthetics.map( _.inSignature).mkString(", ") + " )( implicit sender : stub.Sender.Signing, scontext : stub.Context) : Future[EthHash] = {")
-    iw.upIndent()
-    iw.println(  """implicit val icontext = scontext.icontext""" )
-    if ( ctor.payable ) {
-      iw.println( """val valueInWei = payment.amountInWei""" )
-    }
-    else {
-      iw.println( """val valueInWei = stub.Zero256""" )
-    }
-    iw.println(  """val forceNonce = nonce.toOption""" )
-    iw.println(  """val signer = sender.findSigner()""" ) 
-    iw.println( s"""val reps = immutable.Seq[Any]( ${ctor.inputs.map( toRepLambda ).mkString(", ")} )""" )
-    iw.println(  """val callData = ethabi.constructorCallDaraFromEncoderRepresentations( reps, abi ).get""" )
-    iw.println(  """val init = DeployBytecode ++ callData""" )
-    iw.println(  """jsonrpc.Invoker.transaction.createContract( signer, valueInWei, init, forceNonce )""" )
-    iw.downIndent()
-    iw.println("}")
   }
+
+  private def generateUtilityDeployMethods( abi : Abi, iw : IndentedWriter ) : Unit = {
+    extractConstructor(abi).foreach { ctor => 
+      val mainCtorSynthetics = ctorSyntheticArgSet( ctor )
+      val ctorParams = ctor.inputs.map( scalaSignatureParam )
+      val allSignatureParamsStr = (ctorParams ++ mainCtorSynthetics.map( _.inSignature)).mkString(", ")
+      val allCallParamsStr = (ctor.inputs.map( _.name ) ++ mainCtorSynthetics.map( _.inCall )).mkString(", ")
+      iw.println("def asyncDeployToEthHash( " + allSignatureParamsStr + " )( implicit sender : stub.Sender.Signing, scontext : stub.Context) : Future[EthHash] = {")
+      iw.upIndent()
+      iw.println(  """implicit val icontext = scontext.icontext""" )
+      if ( ctor.payable ) {
+        iw.println( """val valueInWei = payment.amountInWei""" )
+      }
+      else {
+        iw.println( """val valueInWei = sol.UInt256(0)""" )
+      }
+      iw.println(  """val forceNonce = nonce.toOption""" )
+      iw.println(  """val signer = sender.findSigner()""" )
+      iw.println( s"""val reps = immutable.Seq[Any]( ${ctor.inputs.map( toRepLambda ).mkString(", ")} )""" )
+      iw.println(  """val callData = ethabi.constructorCallDataFromEncoderRepresentations( reps, ContractAbi ).get""" )
+      iw.println(  """val init = DeployBytecode ++ callData""" )
+      iw.println(  """jsonrpc.Invoker.transaction.createContract( signer, valueInWei, init, forceNonce )""" )
+      iw.downIndent()
+      iw.println("}")
+      iw.println("def asyncDeployToTransactionReceipt( " + allSignatureParamsStr + " )( implicit sender : stub.Sender.Signing, scontext : stub.Context) : Future[Client.TransactionReceipt] = {")
+      iw.upIndent()
+      iw.println( "implicit val econtext = scontext.icontext.econtext" )
+      iw.println( "implicit val icontext = scontext.icontext" )
+      iw.println( "asyncDeployToEthHash( " + allCallParamsStr + " ).flatMap( jsonrpc.Invoker.futureTransactionReceipt )" )
+      iw.downIndent()
+      iw.println("}")
+      iw.println("def asyncDeployToEthAddress( " + allSignatureParamsStr + " )( implicit sender : stub.Sender.Signing, scontext : stub.Context) : Future[EthAddress] = {")
+      iw.upIndent()
+      iw.println( "implicit val econtext = scontext.icontext.econtext" )
+      iw.println( "asyncDeployToTransactionReceipt( " + allCallParamsStr + """ ).map( r => r.contractAddress.getOrElse( throw new StubException("No contract address found in transaction receipt for deployment: " + r) ) )""" )
+      iw.downIndent()
+      iw.println("}")
+    }
+  }
+
+  private def generateCompanionDeployMethods( baseClassName : String, className : String, async : Boolean, abi : Abi, iw : IndentedWriter ) : Unit = {
+    extractConstructor(abi).foreach { ctor =>
+      val mainCtorSynthetics = ctorSyntheticArgSet( ctor )
+      val overloadCtorSynthetics = overloadArgSets( mainCtorSynthetics )
+      val ctorParams = ctor.inputs.map( scalaSignatureParam )
+
+      def deploySignatureParamsStr( synthetics : immutable.SortedSet[SyntheticArg] ) = (ctorParams ++ synthetics.map( _.inSignature)).mkString(", ")
+      def deploySignature( synthetics : immutable.SortedSet[SyntheticArg] ) = {
+        val retval = if (async) s"Future[${className}]" else className
+        "def deploy( " + deploySignatureParamsStr(synthetics) + " )( implicit sender : stub.Sender.Signing, scontext : stub.Context) : " + retval
+      }
+
+      val allCallParamsStr = (ctor.inputs.map( _.name ) ++ mainCtorSynthetics.map( _.inCall )).mkString(", ")
+
+      iw.println(deploySignature( mainCtorSynthetics ) + " = {")
+      iw.upIndent()
+      iw.println( "implicit val econtext = scontext.icontext.econtext" )
+      iw.println( s"val f_address = ${stubUtilitiesClassName( baseClassName )}.asyncDeployToEthAddress( ${allCallParamsStr} )" )
+      iw.println( s"val f_stub = f_address.map( this.apply[EthAddress] )" )
+      if (async) {
+        iw.println("f_stub")
+      }
+      else {
+        iw.println( s"""Await.result( f_stub, Duration.Inf )""" )
+      }
+      iw.downIndent()
+      iw.println("}")
+
+
+      def writeSyntheticArgumentDeployOverload( overloadArgSet : immutable.SortedSet[SyntheticArg] ) : Unit = {
+        val sig = deploySignature( overloadArgSet )
+
+        def findCallValue( arg : SyntheticArg ) = if ( overloadArgSet( arg ) ) arg.inCall else arg.defaultValue
+
+        val synthCallArgs = mainCtorSynthetics.toSeq.map( findCallValue ) // if we don't "toSeq" it first, it re-sorts by a String ordering... grrrr.
+        val callArgs = ctor.inputs.map( _.name ) ++ synthCallArgs
+        val callArgsStr = callArgs.mkString( ", " )
+        val call = s"deploy( ${callArgsStr} )( sender, scontext )"
+
+        iw.println( s"${sig} = {" )
+        iw.upIndent()
+        iw.println( call )
+        iw.downIndent()
+        iw.println(  "}")
+      }
+
+      overloadCtorSynthetics.foreach { set =>
+        iw.println()
+        writeSyntheticArgumentDeployOverload( set )
+      }
+    }
+  }
+
+
+  
 
   private def asyncClassName( baseClassName : String ) : String = {
     val alwaysCapitalized = baseClassName(0).toString.toUpperCase + baseClassName.substring(1)
     s"Async${alwaysCapitalized}"
   }
 
-  private def generateContractStub( baseClassName : String, abi : Abi, async : Boolean, fullyQualifiedPackageName : String ) : Generated = {
+  private def generateContractStub( baseClassName : String, abi : Abi, async : Boolean, fullyQualifiedPackageName : String, mbBytecode : Option[String] ) : Generated = {
 
     val className = if ( async ) asyncClassName( baseClassName ) else baseClassName
 
@@ -382,6 +460,10 @@ object Generator {
         iw.println()
       }
       generateFactoryMethods( className, abi, iw )
+      ifBytecode(mbBytecode){ bytecode =>
+        iw.println()
+        generateCompanionDeployMethods( baseClassName, className, async, abi, iw )
+      }
       iw.downIndent()
       iw.println(  "}" )
       val mbExtends = eventsNoEvents( abi )( s" extends Publisher[${className}.Event]", "" )
