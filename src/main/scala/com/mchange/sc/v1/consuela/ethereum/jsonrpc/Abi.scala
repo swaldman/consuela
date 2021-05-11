@@ -17,9 +17,11 @@ final object Abi {
   implicit val Ordering_FunctionParameter    = Ordering.by( (fp : Function.Parameter)    => (fp.name, fp.`type`, fp.internalType)                                               )
   implicit val Ordering_ConstructorParameter = Ordering.by( (cp : Constructor.Parameter) => (cp.name, cp.`type`, cp.internalType)                                               )
   implicit val Ordering_EventParameter       = Ordering.by( (ep : Event.Parameter)       => (ep.name, ep.`type`, ep.internalType, ep.indexed)                                   )
+  implicit val Ordering_ErrorParameter       = Ordering.by( (erp : Error.Parameter)      => (erp.name, erp.`type`, erp.internalType)                                   )
   implicit val Ordering_Function             = Ordering.by( (fcn : Function)             => (fcn.name, fcn.inputs, fcn.outputs, fcn.constant, fcn.payable, fcn.stateMutability) )
   implicit val Ordering_Constructor          = Ordering.by( (ctor : Constructor)         => (ctor.inputs, ctor.payable, ctor.stateMutability)                                   )
   implicit val Ordering_Event                = Ordering.by( (ev : Event)                 => (ev.name, ev.inputs, ev.anonymous)                                                  )
+  implicit val Ordering_Error                = Ordering.by( (err : Error)                => (err.name, err.inputs)                                                  )
 
   implicit val AbiFormat : Format[Abi] = new Format[Abi] {
     def reads( jsv : JsValue ) : JsResult[Abi] = {
@@ -239,6 +241,24 @@ final object Abi {
 
     lazy val sorted = Fallback( JsObject( ( SortedMap.empty[String,JsValue] ++ json.value ).toSeq ) )
   }
+  final object Error {
+    final case class Parameter( json : JsObject ) extends Abi.Parameter {
+      val name         : String         = requireRetrieve( json, "name", "error parameter" ).as[String]
+      val `type`       : String         = requireRetrieve( json, "type", "error parameter" ).as[String]
+      val internalType : Option[String] = json.value.get("internalType").map( _.as[String] )
+
+      lazy val sorted = Error.Parameter( JsObject( ( SortedMap.empty[String,JsValue] ++ json.value ).toSeq ) )
+    }
+  }
+  final case class Error( json : JsObject ) extends Inputs {
+    val name      : String                         = requireRetrieve( json, "name", "error" ).as[String]
+    val inputs    : immutable.Seq[Error.Parameter] = requireRetrieve( json, "inputs", "error" ).as[JsArray].value.map( jsv => Error.Parameter( jsv.as[JsObject] ) ).toList
+
+    lazy val sorted = {
+      val sortedInputs  = JsArray( inputs.map( _.sorted.json ) ) // we can sort the items of parameters, BUT NOT THE ORDERING OF PARAMETERS
+      Error( JsObject( ( SortedMap.empty[String,JsValue] ++ json.value + ("inputs" -> sortedInputs) ).toSeq ) )
+    }
+  }
 
   private def resolvePayableStateMutability( json : JsObject, in : String,  _payable : Option[Boolean], _stateMutability : Option[String] ) : ( Boolean, Option[String] ) = {
     ( _payable, _stateMutability ) match {
@@ -294,33 +314,35 @@ case class Abi( json : JsArray ) extends MaybeEmpty {
     c   : List[JsObject],
     r   : List[JsObject],
     fb  : List[JsObject],
+    err : List[JsObject],
     u   : List[JsValue]
-  ) : Tuple6[List[JsObject],List[JsObject],List[JsObject],List[JsObject],List[JsObject],List[JsValue]] = {
+  ) : Tuple7[List[JsObject],List[JsObject],List[JsObject],List[JsObject],List[JsObject],List[JsObject],List[JsValue]] = {
     if (i == src.length) {
-      ( f, e, c, r, fb, u )
+      ( f, e, c, r, fb, err, u )
     }
     else {
       src(i) match {
         case jso : JsObject => {
           jso.value.get("type").map( _.as[String] ) match {
-            case Some( "function"    ) => segregateByType( src, i+1, jso :: f, e, c, r, fb, u )
-            case Some( "event"       ) => segregateByType( src, i+1, f, jso :: e, c, r, fb, u )
-            case Some( "constructor" ) => segregateByType( src, i+1, f, e, jso :: c, r, fb, u )
-            case Some( "receive"     ) => segregateByType( src, i+1, f, e, c, jso :: r, fb, u )
-            case Some( "fallback"    ) => segregateByType( src, i+1, f, e, c, r, jso :: fb, u )
-            case _                     => segregateByType( src, i+1, f, e, c, r, fb, jso :: u )
+            case Some( "function"    ) => segregateByType( src, i+1, jso :: f, e, c, r, fb, err, u )
+            case Some( "event"       ) => segregateByType( src, i+1, f, jso :: e, c, r, fb, err, u )
+            case Some( "constructor" ) => segregateByType( src, i+1, f, e, jso :: c, r, fb, err, u )
+            case Some( "receive"     ) => segregateByType( src, i+1, f, e, c, jso :: r, fb, err, u )
+            case Some( "fallback"    ) => segregateByType( src, i+1, f, e, c, r, jso :: fb, err, u )
+            case Some( "error"       ) => segregateByType( src, i+1, f, e, c, r, fb, jso :: err, u )
+            case _                     => segregateByType( src, i+1, f, e, c, r, fb, err, jso :: u )
           }
         }
         case other => {
-          segregateByType( src, i+1, f, e, c, r, fb, other :: u )
+          segregateByType( src, i+1, f, e, c, r, fb, err, other :: u )
         }
       }
     }
   }
 
-  val ( functions, events, constructors, receive, fallback, unexpected ) = {
+  val ( functions, events, constructors, receive, fallback, errors, unexpected ) = {
     import Abi._
-    val ( f, e, c, r, fb, u ) = segregateByType( json.value.toVector, 0, Nil, Nil, Nil, Nil, Nil, Nil )
+    val ( f, e, c, r, fb, err, u ) = segregateByType( json.value.toVector, 0, Nil, Nil, Nil, Nil, Nil, Nil, Nil )
     if ( r.size > 1  ) throw new BadAbiException( s"Only one 'receive' element permitted, ${r.size} found: ${JsArray(r.toVector)}"    )
     if ( fb.size > 1 ) throw new BadAbiException( s"Only one 'fallback' element permitted, ${fb.size} found: ${JsArray(fb.toVector)}" )
 
@@ -332,7 +354,7 @@ case class Abi( json : JsArray ) extends MaybeEmpty {
       }
     }
 
-    ( f.map( Function.apply ), e.map( Event.apply ), c.map( Constructor.apply ), opt( r.map( Receive.apply ) ), opt( fb.map( Fallback.apply ) ), u.toIndexedSeq )
+    ( f.map( Function.apply ), e.map( Event.apply ), c.map( Constructor.apply ), opt( r.map( Receive.apply ) ), opt( fb.map( Fallback.apply ) ), err.map( Error.apply ), u.toIndexedSeq )
   }
 
   lazy val sorted = {
@@ -344,6 +366,7 @@ case class Abi( json : JsArray ) extends MaybeEmpty {
           constructors.map( _.sorted ).sorted.map( _.json ) ++
           receive.map( _.sorted.json )                      ++
           fallback.map( _.sorted.json )                     ++
+          errors.map( _.sorted).sorted.map( _.json )        ++
           unexpected
       )
     )
