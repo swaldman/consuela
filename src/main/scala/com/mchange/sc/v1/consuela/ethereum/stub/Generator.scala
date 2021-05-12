@@ -351,11 +351,12 @@ object Generator {
         iw.println( """val valueInWei = sol.UInt256(0)""" )
       }
       iw.println(  """val forceNonce = nonce.toOption""" )
+      iw.println( s"""val abiErrors = this.ContractAbi.errors""" )
       iw.println(  """val signer = sender.findSigner()""" )
       iw.println( s"""val reps = immutable.Seq[Any]( ${ctor.inputs.map( toRepLambda ).mkString(", ")} )""" )
       iw.println(  """val callData = ethabi.constructorCallDataFromEncoderRepresentations( reps, ContractAbi ).get""" )
       iw.println(  """val init = DeployBytecode ++ callData""" )
-      iw.println(  """jsonrpc.Invoker.transaction.createContract( signer, valueInWei, init, forceNonce )""" )
+      iw.println(  """jsonrpc.Invoker.transaction.createContract( signer, valueInWei, init, forceNonce, errors = abiErrors )""" )
       iw.downIndent()
       iw.println("}")
       iw.println("def asyncDeployToTransactionReceipt( " + allSignatureParamsStr + " )( implicit sender : stub.Sender.Signing, scontext : stub.Context) : Future[Client.TransactionReceipt] = {")
@@ -1006,9 +1007,10 @@ object Generator {
     iw.println( s"""val fcn = ${stubUtilitiesClassName}.${functionValName(fcn)}""" )
     iw.println( s"""val reps = immutable.Seq[Any]( ${fcn.inputs.map( toRepLambda ).mkString(", ")} )""" )
     iw.println(  """val callData = ethabi.callDataForAbiFunctionFromEncoderRepresentations( reps, fcn ).get""" )
+    iw.println( s"""val abiErrors = ${stubUtilitiesClassName}.ContractAbi.errors""" )
 
     if ( constantSection ) {
-      iw.println( """val futRetBytes = jsonrpc.Invoker.constant.sendMessage( sender.address, contractAddress, payment.amountInWei, callData )""" )
+      iw.println( """val futRetBytes = jsonrpc.Invoker.constant.sendMessage( sender.address, contractAddress, payment.amountInWei, callData, errors = abiErrors )""" )
       iw.println( """val futDecodedReturnValues = futRetBytes.map( bytes => ethabi.decodeReturnValuesForFunction( bytes, fcn ) )""" )
       iw.println( """val futDecodedReps = futDecodedReturnValues.map( _.get.map( _.value  ).toVector )""" )
 
@@ -1036,7 +1038,7 @@ object Generator {
         iw.println( s"""Await.result( futOut, Duration.Inf )""" )
       }
     } else {
-      iw.println( """val futHash = jsonrpc.Invoker.transaction.sendMessage( sender.findSigner(), contractAddress, payment.amountInWei, callData, nonce.toOption )""" )
+      iw.println( """val futHash = jsonrpc.Invoker.transaction.sendMessage( sender.findSigner(), contractAddress, payment.amountInWei, callData, nonce.toOption, errors = abiErrors )""" )
       iw.println( """futHash.onComplete( onTransactionSubmitted )""" )
       iw.println( """val futTransactionInfoAsync = futHash.map( hash => stub.TransactionInfo.Async.fromClientTransactionReceipt( hash, jsonrpc.Invoker.futureTransactionReceipt( hash ) ) )""" )
       if ( async ) {
