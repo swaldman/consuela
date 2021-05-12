@@ -382,7 +382,7 @@ object Invoker {
       }
     }
 
-    def sendSignedTransaction( signed : EthTransaction.Signed, errors : immutable.Seq[Abi.Error] )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
+    def sendSignedTransaction( signed : EthTransaction.Signed, errors : immutable.Seq[Abi.Error] = Nil )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
       borrow( newClient( icontext ) ) { case NewClient(client, url) =>
         _sendSignedTransaction( client, url, errors )( signed, immutable.Set.empty )( icontext )
       }
