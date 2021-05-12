@@ -164,13 +164,15 @@ package object ethabi {
 
   /* end constructor ugliness */
 
-  def decodeError( abi : Abi, encodedError : immutable.Seq[Byte] ) : Failable[ ( Abi.Error, immutable.Seq[Decoded.Value] ) ] = Failable.flatCreate {
+  def decodeError( abi : Abi, encodedError : immutable.Seq[Byte] ) : Failable[ ( Abi.Error, immutable.Seq[Decoded.Value] ) ] = decodeError( abi.errors, encodedError )
+
+  def decodeError( abiErrors : immutable.Seq[Abi.Error], encodedError : immutable.Seq[Byte] ) : Failable[ ( Abi.Error, immutable.Seq[Decoded.Value] ) ] = Failable.flatCreate {
     import play.api.libs.json._
 
     val (errorPseudoAbi, fcnErrMap) = {
-      val errFunctions = abi.errors.map { error => JsObject( error.json.value + Tuple2("type", JsString("function")) ) }
+      val errFunctions = abiErrors.map { error => JsObject( error.json.value + Tuple2("type", JsString("function")) ) }
       val pseudoabi = Abi( JsArray( errFunctions ) )
-      ( pseudoabi, pseudoabi.functions.zip( abi.errors ).toMap )
+      ( pseudoabi, pseudoabi.functions.zip( abiErrors ).toMap )
     }
     decodeFunctionCall( errorPseudoAbi, encodedError ).map { case (fcn, values) =>
       (fcnErrMap(fcn), values)
