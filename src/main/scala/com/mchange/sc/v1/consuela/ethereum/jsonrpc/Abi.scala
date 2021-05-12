@@ -45,7 +45,7 @@ final object Abi {
 
   lazy val empty : Abi = Abi( EmptyJsArray )
 
-  private final def requireRetrieve( json : JsObject, key : String, in : String ) : JsValue = json.value.getOrElse( key, throw new BadAbiException( s"No 'name' field in ${in} JSON: ${json}" ) )
+  private final def requireRetrieve( json : JsObject, key : String, in : String ) : JsValue = json.value.getOrElse( key, throw new BadAbiException( s"No '${key}' field in ${in} JSON: ${json}" ) )
 
   type Parameter = AbiParameter
 

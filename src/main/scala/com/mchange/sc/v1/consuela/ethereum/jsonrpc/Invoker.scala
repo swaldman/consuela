@@ -206,13 +206,17 @@ object Invoker {
     from       : EthAddress,
     to         : Option[EthAddress],
     valueInWei : Unsigned256,
-    data       : immutable.Seq[Byte]
+    data       : immutable.Seq[Byte],
+    errors     : immutable.Seq[Abi.Error]
   )(implicit icontext : Invoker.Context ) : Future[ComputedGas] = {
 
     implicit val econtext = icontext.econtext
 
     def fDefaultGasPrice = client.eth.gasPrice()
-    def fDefaultGasLimit = client.eth.estimateGas( Some( from ), to, None, None, Some( valueInWei.widen ), Some ( data ) );
+
+    def fDefaultGasLimit = client.eth.estimateGas( Some( from ), to, None, None, Some( valueInWei.widen ), Some ( data ) ).recover {
+      case ce : ClientException => ContractError.decodeIfPossibleAndThrow(ce, errors)
+    }
 
     val fEffectiveGasPrice : Future[BigInt] = {
       icontext.gasPriceTweak match {
@@ -350,7 +354,7 @@ object Invoker {
 
       borrow( newClient( icontext ) ) { case NewClient(client, url) =>
         for {
-          unsigned <- _prepareSendMessage( client, url )( senderSigner.address, to, valueInWei, data, forceNonce )( icontext )
+          unsigned <- _prepareSendMessage( client, url )( senderSigner.address, to, valueInWei, data, forceNonce, errors )( icontext )
           ( signed, preapproved ) <- approveSign( icontext.transactionApprover, unsigned, senderSigner, icontext.chainId )
           hash   <- _sendSignedTransaction( client, url, errors )( signed, preapproved )( icontext )
         }
@@ -372,7 +376,7 @@ object Invoker {
 
       borrow( newClient( icontext ) ) { case NewClient(client, url) =>
         for {
-          unsigned <- _prepareCreateContract( client, url )( creatorSigner.address, valueInWei, init, forceNonce )( icontext )
+          unsigned <- _prepareCreateContract( client, url )( creatorSigner.address, valueInWei, init, forceNonce, errors )( icontext )
           ( signed, preapproved ) <- approveSign( icontext.transactionApprover, unsigned, creatorSigner, icontext.chainId )
           hash   <- _sendSignedTransaction( client, url, errors )( signed, preapproved )( icontext )
         }
@@ -392,9 +396,10 @@ object Invoker {
       sender        : EthAddress,
       to            : EthAddress,
       valueInWei    : Unsigned256,
-      forceNonce    : Option[Unsigned256] = None
+      forceNonce    : Option[Unsigned256] = None,
+      errors        : immutable.Seq[Abi.Error] = Nil
     )( implicit icontext : Invoker.Context ) : Future[EthTransaction.Unsigned] = {
-      prepareSendMessage( sender, to, valueInWei, immutable.Seq.empty[Byte], forceNonce)( icontext )
+      prepareSendMessage( sender, to, valueInWei, immutable.Seq.empty[Byte], forceNonce, errors)( icontext )
     }
 
     def prepareSendMessage(
@@ -402,10 +407,11 @@ object Invoker {
       to            : EthAddress,
       valueInWei    : Unsigned256,
       data          : immutable.Seq[Byte],
-      forceNonce    : Option[Unsigned256] = None
+      forceNonce    : Option[Unsigned256] = None,
+      errors        : immutable.Seq[Abi.Error] = Nil
     )(implicit icontext : Invoker.Context ) : Future[EthTransaction.Unsigned] = {
       borrow( newClient( icontext ) ) { case NewClient(client, url) =>
-        _prepareSendMessage( client, url )( sender, to, valueInWei, data, forceNonce )( icontext )
+        _prepareSendMessage( client, url )( sender, to, valueInWei, data, forceNonce, errors )( icontext )
       }
     }
 
@@ -413,10 +419,11 @@ object Invoker {
       creator       : EthAddress,
       valueInWei    : Unsigned256,
       init          : immutable.Seq[Byte],
-      forceNonce    : Option[Unsigned256] = None
+      forceNonce    : Option[Unsigned256] = None,
+      errors        : immutable.Seq[Abi.Error] = Nil
     )(implicit icontext : Invoker.Context ) : Future[EthTransaction.Unsigned] = {
       borrow( newClient( icontext ) ) { case NewClient(client, url) =>
-        _prepareCreateContract( client, url )( creator, valueInWei, init, forceNonce )
+        _prepareCreateContract( client, url )( creator, valueInWei, init, forceNonce, errors )
       }
     }
 
@@ -425,12 +432,13 @@ object Invoker {
       to            : EthAddress,
       valueInWei    : Unsigned256,
       data          : immutable.Seq[Byte],
-      forceNonce    : Option[Unsigned256] = None
+      forceNonce    : Option[Unsigned256] = None,
+      errors        : immutable.Seq[Abi.Error] = Nil
     )(implicit icontext : Invoker.Context ) : Future[EthTransaction.Unsigned] = {
 
       implicit val econtext = icontext.econtext
 
-      val fComputedGas = computedGas( client, from, Some(to), valueInWei, data )
+      val fComputedGas = computedGas( client, from, Some(to), valueInWei, data, errors )
       val fNextNonce = {
         forceNonce match {
           case Some( nonce ) => Future.successful( nonce )
@@ -451,13 +459,14 @@ object Invoker {
       creator       : EthAddress,
       valueInWei    : Unsigned256,
       init          : immutable.Seq[Byte],
-      forceNonce    : Option[Unsigned256] = None
+      forceNonce    : Option[Unsigned256] = None,
+      errors        : immutable.Seq[Abi.Error] = Nil
     )(implicit icontext : Invoker.Context ) : Future[EthTransaction.Unsigned] = {
       implicit val econtext = icontext.econtext
 
       val from = creator
 
-      val fComputedGas = computedGas( client, from, None, valueInWei, init )
+      val fComputedGas = computedGas( client, from, None, valueInWei, init, errors )
       val fNextNonce = {
         forceNonce match {
           case Some( nonce ) => Future.successful( nonce )
@@ -475,23 +484,18 @@ object Invoker {
     }
 
     private def _sendSignedTransaction( client : Client, url : URL, errors : immutable.Seq[Abi.Error] )( signed : EthTransaction.Signed, preapproved : immutable.Set[TransactionApprover.Inputs] )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
-      try {
-        implicit val econtext = icontext.econtext
+      implicit val econtext = icontext.econtext
 
-        val taInputs = TransactionApprover.Inputs( signed.unsignedTransaction, signed.sender, signed.signature.mbChainId )
+      val taInputs = TransactionApprover.Inputs( signed.unsignedTransaction, signed.sender, signed.signature.mbChainId )
 
-        def approveIfNecessary : Future[Unit] = if ( preapproved( taInputs ) ) futureUnit else icontext.transactionApprover( taInputs )
+      def approveIfNecessary : Future[Unit] = if ( preapproved( taInputs ) ) futureUnit else icontext.transactionApprover( taInputs )
 
-        for {
-          _ <- approveIfNecessary
-          hash <- client.eth.sendSignedTransaction( signed )
-        } yield {
-          TransactionLogger.log( icontext.transactionLogger, hash, signed, url.toExternalForm )
-          hash
-        }
-      }
-      catch {
-        case ce : ClientException => ContractError.decodeIfPossibleAndThrow(ce, errors)
+      for {
+        _ <- approveIfNecessary
+        hash <- client.eth.sendSignedTransaction( signed ).recover { case ce : ClientException => ContractError.decodeIfPossibleAndThrow(ce, errors) }
+      } yield {
+        TransactionLogger.log( icontext.transactionLogger, hash, signed, url.toExternalForm )
+        hash
       }
     }
   }
@@ -505,21 +509,16 @@ object Invoker {
       strict     : Boolean,
       errors     : immutable.Seq[Abi.Error]
     )( implicit icontext : Invoker.Context ) : Future[immutable.Seq[Byte]] = {
-      try {
-        implicit val ( poller, econtext ) = ( icontext.poller, icontext.econtext )
+      implicit val ( poller, econtext ) = ( icontext.poller, icontext.econtext )
 
-        borrow( newClient( icontext ) ) { case NewClient(client, url) =>
-          val fComputedGas = computedGas( client, from, Some(to), valueInWei, data )
-          for {
-            cg <- fComputedGas
-            outBytes <- client.eth.call( Some( from ), Some( to ), Some( cg.gasLimit ), if (strict) Some( cg.gasPrice ) else None, Some( valueInWei.widen ), Some( data ) )
-          } yield {
-            outBytes
-          }
+      borrow( newClient( icontext ) ) { case NewClient(client, url) =>
+        val fComputedGas = computedGas( client, from, Some(to), valueInWei, data, errors )
+        for {
+          cg <- fComputedGas
+          outBytes <- client.eth.call( Some( from ), Some( to ), Some( cg.gasLimit ), if (strict) Some( cg.gasPrice ) else None, Some( valueInWei.widen ), Some( data ) ).recover { case ce : ClientException => ContractError.decodeIfPossibleAndThrow(ce, errors) }
+        } yield {
+          outBytes
         }
-      }
-      catch {
-        case ce : ClientException => ContractError.decodeIfPossibleAndThrow(ce, errors)
       }
     }
     def sendMessage(

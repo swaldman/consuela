@@ -15,10 +15,12 @@ import com.mchange.sc.v1.log.MLevel._
 final object ContractError {
   private implicit lazy val logger = mlogger( this )
 
-  def message( err : Abi.Error, values : immutable.Seq[Decoded.Value] ) : String = {
+  def message( err : Abi.Error, values : immutable.Seq[Decoded.Value], methodDescriptor : Option[String] ) : String = {
     def param( value : Decoded.Value ) : String = s"${value.parameter.name}->${value.stringRep}"
-    val params = values.map(param).mkString(", ")
-    s"ContractError: ${err.name}; Params: ${params}"
+    def params = values.map(param).mkString(", ")
+    def paramsPart = if (values.nonEmpty) s", with parameters: ${params}" else ""
+    def mdPart = if (methodDescriptor.nonEmpty) s" -- ${methodDescriptor.get}" else ""
+    s"The contract reported an error of type ${err.name}${paramsPart}${mdPart}"
   }
 
   def fromClientException( ce : ClientException, errors : immutable.Seq[Abi.Error] ) : Option[ContractError] = {
@@ -31,7 +33,7 @@ final object ContractError {
               ( err, values ) <- decodeError( errors, errorBytes )
             }
             yield {
-              new ContractError( err, values )
+              new ContractError( err, values, ce.methodDescriptor )
             }
           }
           failable.xdebug("Failure converting ClientException to ContractError: ").toOption
@@ -50,4 +52,4 @@ final object ContractError {
   def decodeIfPossibleAndThrow( ce : ClientException, errors : immutable.Seq[Abi.Error] ) : Nothing = throw fromClientException( ce, errors ).getOrElse( ce )
 }
 
-final class ContractError( err : Abi.Error, values : immutable.Seq[Decoded.Value], cause : Throwable = null ) extends ConsuelaException( ContractError.message(err, values), cause )
+final class ContractError( err : Abi.Error, values : immutable.Seq[Decoded.Value], methodDescriptor : Option[String], cause : Throwable = null ) extends ConsuelaException( ContractError.message(err, values, methodDescriptor), cause )

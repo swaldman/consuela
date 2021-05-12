@@ -78,7 +78,7 @@ final object ClientException {
     val itemsPart = " -- " + items.collect{ case Some(s) => s }.mkString("; ")
     val message = basePart + itemsPart + s"; ${methodDescriptor}"
 
-    new ClientException( errorCode, errorMessage, errorData, decodedRevertMessage, decodedPanicCode, message )
+    new ClientException( errorCode, errorMessage, errorData, decodedRevertMessage, decodedPanicCode, Some(methodDescriptor), message )
   }
 }
 final class ClientException private (
@@ -87,6 +87,7 @@ final class ClientException private (
   val errorData : Option[JsValue] = None,
   val decodedRevertMessage : Option[String],
   val decodedPanicCode : Option[BigInt],
+  val methodDescriptor : Option[String],
   val message : String,
   val cause : Throwable = null
 ) extends ConsuelaException( message, cause )

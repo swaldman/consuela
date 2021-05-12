@@ -170,7 +170,7 @@ package object ethabi {
     import play.api.libs.json._
 
     val (errorPseudoAbi, fcnErrMap) = {
-      val errFunctions = abiErrors.map { error => JsObject( error.json.value + Tuple2("type", JsString("function")) ) }
+      val errFunctions = abiErrors.map { error => JsObject( error.json.value ++ immutable.Map("type"->JsString("function"), "outputs"->JsArray(Vector.empty), "stateMutability"->JsString("pure")) ) }
       val pseudoabi = Abi( JsArray( errFunctions ) )
       ( pseudoabi, pseudoabi.functions.zip( abiErrors ).toMap )
     }
