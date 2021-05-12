@@ -22,7 +22,7 @@ final object ContractError {
   }
 
   def fromClientException( ce : ClientException, errors : immutable.Seq[Abi.Error] ) : Option[ContractError] = {
-    if (ce.errorData.nonEmpty && ce.decodedRevertMessage.isEmpty && ce.decodedPanicCode.isEmpty) {
+    if (errors.nonEmpty && ce.errorData.nonEmpty && ce.decodedRevertMessage.isEmpty && ce.decodedPanicCode.isEmpty) {
       ce.errorData match {
         case Some( jss : JsString ) => {
           val failable = {

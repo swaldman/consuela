@@ -332,9 +332,10 @@ object Invoker {
       senderSigner  : EthSigner,
       to            : EthAddress,
       valueInWei    : Unsigned256,
-      forceNonce    : Option[Unsigned256] = None
+      forceNonce    : Option[Unsigned256] = None,
+      errors        : immutable.Seq[Abi.Error] = Nil
     )( implicit icontext : Invoker.Context ) : Future[EthHash] = {
-      sendMessage( senderSigner, to, valueInWei, immutable.Seq.empty[Byte], forceNonce)( icontext )
+      sendMessage( senderSigner, to, valueInWei, immutable.Seq.empty[Byte], forceNonce, errors)( icontext )
     }
 
     def sendMessage(
@@ -342,7 +343,8 @@ object Invoker {
       to            : EthAddress,
       valueInWei    : Unsigned256,
       data          : immutable.Seq[Byte],
-      forceNonce    : Option[Unsigned256] = None
+      forceNonce    : Option[Unsigned256] = None,
+      errors        : immutable.Seq[Abi.Error] = Nil
     )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
       implicit val econtext = icontext.econtext
 
@@ -350,7 +352,7 @@ object Invoker {
         for {
           unsigned <- _prepareSendMessage( client, url )( senderSigner.address, to, valueInWei, data, forceNonce )( icontext )
           ( signed, preapproved ) <- approveSign( icontext.transactionApprover, unsigned, senderSigner, icontext.chainId )
-          hash   <- _sendSignedTransaction( client, url )( signed, preapproved )( icontext )
+          hash   <- _sendSignedTransaction( client, url, errors )( signed, preapproved )( icontext )
         }
         yield {
           hash
@@ -362,7 +364,8 @@ object Invoker {
       creatorSigner : EthSigner,
       valueInWei    : Unsigned256,
       init          : immutable.Seq[Byte],
-      forceNonce    : Option[Unsigned256] = None
+      forceNonce    : Option[Unsigned256] = None,
+      errors        : immutable.Seq[Abi.Error] = Nil
     )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
 
       implicit val econtext = icontext.econtext
@@ -371,7 +374,7 @@ object Invoker {
         for {
           unsigned <- _prepareCreateContract( client, url )( creatorSigner.address, valueInWei, init, forceNonce )( icontext )
           ( signed, preapproved ) <- approveSign( icontext.transactionApprover, unsigned, creatorSigner, icontext.chainId )
-          hash   <- _sendSignedTransaction( client, url )( signed, preapproved )( icontext )
+          hash   <- _sendSignedTransaction( client, url, errors )( signed, preapproved )( icontext )
         }
         yield {
           hash
@@ -379,9 +382,9 @@ object Invoker {
       }
     }
 
-    def sendSignedTransaction( signed : EthTransaction.Signed )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
+    def sendSignedTransaction( signed : EthTransaction.Signed, errors : immutable.Seq[Abi.Error] )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
       borrow( newClient( icontext ) ) { case NewClient(client, url) =>
-        _sendSignedTransaction( client, url )( signed, immutable.Set.empty )( icontext )
+        _sendSignedTransaction( client, url, errors )( signed, immutable.Set.empty )( icontext )
       }
     }
 
@@ -471,19 +474,24 @@ object Invoker {
       }
     }
 
-    private def _sendSignedTransaction( client : Client, url : URL )( signed : EthTransaction.Signed, preapproved : immutable.Set[TransactionApprover.Inputs] )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
-      implicit val econtext = icontext.econtext
+    private def _sendSignedTransaction( client : Client, url : URL, errors : immutable.Seq[Abi.Error] )( signed : EthTransaction.Signed, preapproved : immutable.Set[TransactionApprover.Inputs] )(implicit icontext : Invoker.Context ) : Future[EthHash] = {
+      try {
+        implicit val econtext = icontext.econtext
 
-      val taInputs = TransactionApprover.Inputs( signed.unsignedTransaction, signed.sender, signed.signature.mbChainId )
+        val taInputs = TransactionApprover.Inputs( signed.unsignedTransaction, signed.sender, signed.signature.mbChainId )
 
-      def approveIfNecessary : Future[Unit] = if ( preapproved( taInputs ) ) futureUnit else icontext.transactionApprover( taInputs )
-      
-      for {
-        _ <- approveIfNecessary
-        hash <- client.eth.sendSignedTransaction( signed )
-      } yield {
-        TransactionLogger.log( icontext.transactionLogger, hash, signed, url.toExternalForm )
-        hash
+        def approveIfNecessary : Future[Unit] = if ( preapproved( taInputs ) ) futureUnit else icontext.transactionApprover( taInputs )
+
+        for {
+          _ <- approveIfNecessary
+          hash <- client.eth.sendSignedTransaction( signed )
+        } yield {
+          TransactionLogger.log( icontext.transactionLogger, hash, signed, url.toExternalForm )
+          hash
+        }
+      }
+      catch {
+        case ce : ClientException => ContractError.decodeIfPossibleAndThrow(ce, errors)
       }
     }
   }
@@ -494,35 +502,43 @@ object Invoker {
       to         : EthAddress,
       valueInWei : Unsigned256,
       data       : immutable.Seq[Byte],
-      strict     : Boolean
+      strict     : Boolean,
+      errors     : immutable.Seq[Abi.Error]
     )( implicit icontext : Invoker.Context ) : Future[immutable.Seq[Byte]] = {
-      implicit val ( poller, econtext ) = ( icontext.poller, icontext.econtext )
+      try {
+        implicit val ( poller, econtext ) = ( icontext.poller, icontext.econtext )
 
-      borrow( newClient( icontext ) ) { case NewClient(client, url) =>
-        val fComputedGas = computedGas( client, from, Some(to), valueInWei, data )
-        for {
-          cg <- fComputedGas
-          outBytes <- client.eth.call( Some( from ), Some( to ), Some( cg.gasLimit ), if (strict) Some( cg.gasPrice ) else None, Some( valueInWei.widen ), Some( data ) )
-        } yield {
-          outBytes
+        borrow( newClient( icontext ) ) { case NewClient(client, url) =>
+          val fComputedGas = computedGas( client, from, Some(to), valueInWei, data )
+          for {
+            cg <- fComputedGas
+            outBytes <- client.eth.call( Some( from ), Some( to ), Some( cg.gasLimit ), if (strict) Some( cg.gasPrice ) else None, Some( valueInWei.widen ), Some( data ) )
+          } yield {
+            outBytes
+          }
         }
+      }
+      catch {
+        case ce : ClientException => ContractError.decodeIfPossibleAndThrow(ce, errors)
       }
     }
     def sendMessage(
       from       : EthAddress,
       to         : EthAddress,
       valueInWei : Unsigned256,
-      data       : immutable.Seq[Byte]
+      data       : immutable.Seq[Byte],
+      errors     : immutable.Seq[Abi.Error] = Nil
     )( implicit icontext : Invoker.Context ) : Future[immutable.Seq[Byte]] = {
-      _sendMessage( from, to, valueInWei, data, false )
+      _sendMessage( from, to, valueInWei, data, false, errors )
     }
     def sendMessageStrict(
       from       : EthAddress,
       to         : EthAddress,
       valueInWei : Unsigned256,
-      data       : immutable.Seq[Byte]
+      data       : immutable.Seq[Byte],
+      errors     : immutable.Seq[Abi.Error] = Nil
     )( implicit icontext : Invoker.Context ) : Future[immutable.Seq[Byte]] = {
-      _sendMessage( from, to, valueInWei, data, true )
+      _sendMessage( from, to, valueInWei, data, true, errors )
     }
   }
 }
