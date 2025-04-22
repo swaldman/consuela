@@ -7,6 +7,8 @@ import com.mchange.sc.v1.consuela.ethereum.specification.Types.{ByteSeqExact20,B
 
 import com.mchange.sc.v2.collection.immutable.ImmutableArraySeq
 
+import play.api.libs.json._
+
 import org.specs2._
 
 object SolidityEventSpec {
@@ -28,10 +30,10 @@ object SolidityEventSpec {
     )
   }
   val exAbiParam = {
-    Abi.Event.Parameter("payload","string",false,"string")
+    Abi.Event.Parameter(Json.obj("name"->"payload","type"->"string","indexed"->false,"internalType"->"string"))
   }
   val exAbiEvent = {
-    Abi.Event("Pinged",List( exAbiParam ),false)
+    Abi.Event(Json.obj("name"->"Pinged","inputs"->Json.arr( exAbiParam.json ),"anonymous"->false))
   }
   val UTF8 = scala.io.Codec.UTF8.charSet
 }
